@@ -124,7 +124,7 @@ nav{
 .sec-num{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--border2);}
 .sec-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;}
 .sec-tag{font-size:11px;color:var(--muted);letter-spacing:0.1em;margin-left:auto;}
-section{margin-bottom:64px;}
+section{margin-bottom:64px;scroll-margin-top:60px;}
 
 /* overview metrics */
 .metrics-grid{
@@ -551,17 +551,17 @@ section{margin-bottom:64px;}
 
 <nav>
   <div class="nav-logo">💳 PAYMENT SYSTEM</div>
-  <div class="nav-item active" onclick="scrollTo('overview')">Overview</div>
-  <div class="nav-item" onclick="scrollTo('architecture')">Architecture</div>
-  <div class="nav-item" onclick="scrollTo('statemachine')">State Machine</div>
-  <div class="nav-item" onclick="scrollTo('flows')">Data Flows</div>
-  <div class="nav-item" onclick="scrollTo('ledger')">Ledger</div>
-  <div class="nav-item" onclick="scrollTo('outbox')">Outbox</div>
-  <div class="nav-item" onclick="scrollTo('databases')">Database Design</div>
-  <div class="nav-item" onclick="scrollTo('scalability')">Scalability</div>
-  <div class="nav-item" onclick="scrollTo('availability')">Availability</div>
-  <div class="nav-item" onclick="scrollTo('tradeoffs')">Tradeoffs</div>
-  <div class="nav-item" onclick="scrollTo('pitfalls')">Pitfalls</div>
+  <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
+  <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
+  <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollToSection('ledger')">Ledger</div>
+  <div class="nav-item" onclick="scrollToSection('outbox')">Outbox</div>
+  <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollToSection('availability')">Availability</div>
+  <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
+  <div class="nav-item" onclick="scrollToSection('pitfalls')">Pitfalls</div>
 </nav>
 
 <div class="overlay" id="overlay" onclick="closePanel()"></div>
@@ -1875,7 +1875,7 @@ function toggleDb(id) {
   document.getElementById(id).classList.toggle('open');
 }
 
-function scrollTo(id) {
+function scrollToSection(id) {
   document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   event.target.classList.add('active');

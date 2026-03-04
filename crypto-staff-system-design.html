@@ -138,7 +138,7 @@ nav{
   border:1px solid var(--border2);color:var(--muted);
 }
 
-section{margin-bottom:64px;}
+section{margin-bottom:64px;scroll-margin-top:60px;}
 
 /* arch diagram */
 .arch-wrap{
@@ -568,12 +568,12 @@ section{animation:fadeSlide 0.5s ease 0.1s both;}
 
 <nav>
   <div class="nav-logo">CRYPTO SYS DESIGN</div>
-  <div class="nav-item active" onclick="scrollTo('architecture')">Architecture</div>
-  <div class="nav-item" onclick="scrollTo('flows')">Data Flows</div>
-  <div class="nav-item" onclick="scrollTo('edgecases')">Edge Cases</div>
-  <div class="nav-item" onclick="scrollTo('scalability')">Scalability</div>
-  <div class="nav-item" onclick="scrollTo('databases')">Database Design</div>
-  <div class="nav-item" onclick="scrollTo('tradeoffs')">Tradeoffs</div>
+  <div class="nav-item active" onclick="scrollToSection('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollToSection('edgecases')">Edge Cases</div>
+  <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
 </nav>
 
 <div class="overlay" id="overlay" onclick="closePanel()"></div>
@@ -2066,7 +2066,7 @@ function toggleFlow(id) {
   document.getElementById(id).classList.toggle('open');
 }
 
-function scrollTo(id) {
+function scrollToSection(id) {
   document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelectorAll('.nav-item').forEach((el, i) => {
     el.classList.remove('active');
