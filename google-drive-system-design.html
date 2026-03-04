@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Drive System Design — Staff Engineer Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --teal: #00d4aa;
+  --blue: #3b82f6;
+  --blue2: #60a5fa;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --orange: #f97316;
+  --green: #22c55e;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;
+  line-height:1.6;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999;
+}
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:var(--blue);
+  letter-spacing:0.05em;
+  padding:14px 24px 14px 0;
+  border-right:1px solid var(--border);
+  margin-right:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-item{
+  padding:14px 16px;
+  font-size:11px;
+  color:var(--muted2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color 0.15s;
+  border-bottom:2px solid transparent;
+  flex-shrink:0;
+}
+.nav-item:hover,.nav-item.active{color:var(--blue);border-bottom-color:var(--blue);}
+.page{max-width:1320px;margin:0 auto;padding:48px 28px 80px;}
+
+/* hero */
+.hero{
+  padding:64px 0 48px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:48px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-60px;right:-80px;
+  width:480px;height:480px;
+  background:radial-gradient(circle,rgba(59,130,246,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-tag{
+  font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--blue);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-tag::before{content:'';width:32px;height:1px;background:var(--blue);}
+.hero-title{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(28px,4vw,44px);
+  font-weight:800;
+  line-height:1.1;
+  color:#fff;
+  margin-bottom:10px;
+}
+.hero-title span{color:var(--blue);}
+.hero-sub{
+  font-size:12px;color:var(--muted2);
+  margin-bottom:32px;
+}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.pill{
+  font-size:10px;padding:4px 12px;
+  border:1px solid var(--border2);
+  border-radius:2px;
+  color:var(--muted);
+}
+.pill.hi{border-color:rgba(59,130,246,0.4);color:var(--blue);}
+
+/* section headers */
+.sec-head{
+  display:flex;align-items:baseline;gap:16px;
+  margin-bottom:24px;padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.sec-num{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--border2);}
+.sec-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:#fff;}
+.sec-tag{font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-left:auto;}
+section{margin-bottom:64px;}
+
+/* overview metrics */
+.metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:2px;
+  margin-bottom:32px;
+}
+.metric{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+}
+.metric-val{
+  font-family:'Syne',sans-serif;
+  font-size:20px;font-weight:800;
+  color:var(--blue);
+  margin-bottom:4px;
+}
+.metric-label{font-size:10px;color:var(--muted);letter-spacing:0.05em;}
+
+/* principle cards */
+.principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:8px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--blue);
+}
+.principle-title{
+  font-size:12px;font-weight:600;color:var(--blue);
+  margin-bottom:6px;
+}
+.principle-desc{font-size:11px;color:var(--muted2);line-height:1.6;}
+
+/* layers */
+.layer{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.layer-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.layer-hd:hover{background:var(--s2);}
+.l-accent{width:3px;height:32px;border-radius:2px;flex-shrink:0;}
+.l-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.l-scale{font-size:10px;color:var(--muted);margin-left:8px;}
+.l-chevron{margin-left:auto;color:var(--muted);font-size:10px;transition:transform 0.2s;}
+.layer.open .l-chevron{transform:rotate(90deg);}
+.layer-bd{display:none;border-top:1px solid var(--border);padding:20px 18px;}
+.layer.open .layer-bd{display:block;}
+.comp-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:2px;
+}
+.comp{
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:14px 16px;
+  cursor:pointer;
+  transition:border-color 0.15s,background 0.15s;
+  border-radius:3px;
+}
+.comp:hover{border-color:var(--border2);background:var(--s2);}
+.comp-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.comp-icon{font-size:16px;}
+.comp-name{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;}
+.comp-role{font-size:10px;color:var(--blue);margin-bottom:6px;letter-spacing:0.05em;}
+.comp-detail{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* state machine */
+.state-machine{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:24px;
+  overflow-x:auto;
+  margin-bottom:16px;
+}
+.sm-title{
+  font-family:'Syne',sans-serif;font-size:14px;font-weight:700;
+  color:#fff;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
+}
+.sm-flow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:0;
+  align-items:flex-start;
+}
+.sm-col{
+  display:flex;flex-direction:column;
+  align-items:center;gap:0;
+}
+.state{
+  display:inline-flex;flex-direction:column;align-items:center;
+  padding:10px 16px;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  background:var(--bg);
+  min-width:140px;
+  text-align:center;
+}
+.state-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;}
+.state-desc{font-size:9px;color:var(--muted);}
+.state.terminal{border-color:rgba(239,68,68,0.4);}
+.state.terminal .state-name{color:var(--red);}
+.state.success{border-color:rgba(34,197,94,0.4);}
+.state.success .state-name{color:var(--green);}
+.state.warning{border-color:rgba(240,180,41,0.4);}
+.state.warning .state-name{color:var(--gold);}
+.state.active{border-color:rgba(59,130,246,0.4);}
+.state.active .state-name{color:var(--blue);}
+.sm-arrow{
+  font-size:18px;color:var(--muted);
+  padding:4px;text-align:center;
+}
+.sm-arrow.right{padding:0 8px;}
+.sm-branch{
+  display:flex;align-items:center;gap:4px;
+  margin:4px 0;
+}
+.branch-label{font-size:9px;color:var(--muted);letter-spacing:0.05em;}
+
+/* data flow */
+.flow-block{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.flow-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.flow-hd:hover{background:var(--s2);}
+.flow-num{
+  font-family:'Syne',sans-serif;font-size:11px;font-weight:800;
+  color:var(--blue);
+  background:rgba(59,130,246,0.1);
+  border:1px solid rgba(59,130,246,0.2);
+  padding:3px 10px;border-radius:2px;
+  flex-shrink:0;
+}
+.flow-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;}
+.flow-meta{font-size:10px;color:var(--muted);margin-left:auto;}
+.flow-chevron{color:var(--muted);font-size:10px;transition:transform 0.2s;flex-shrink:0;}
+.flow-block.open .flow-chevron{transform:rotate(90deg);}
+.flow-bd{
+  display:none;
+  border-top:1px solid var(--border);
+}
+.flow-block.open .flow-bd{display:block;}
+.flow-steps{
+  display:flex;flex-direction:column;
+  gap:0;
+}
+.flow-step{
+  display:grid;
+  grid-template-columns:48px 140px 1fr 160px;
+  gap:0;
+  border-bottom:1px solid var(--border);
+}
+.flow-step:last-child{border-bottom:none;}
+.fs-num{
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:800;
+  color:var(--muted);
+  border-right:1px solid var(--border);
+  padding:12px 8px;
+}
+.fs-svc{
+  display:flex;align-items:center;
+  padding:12px 14px;
+  font-size:11px;font-weight:600;color:var(--blue);
+  border-right:1px solid var(--border);
+}
+.fs-action{
+  padding:12px 16px;
+  font-size:11px;color:var(--text);
+}
+.fs-note{
+  padding:12px 14px;
+  font-size:10px;color:var(--muted);
+  border-left:1px solid var(--border);
+  font-style:italic;
+}
+
+/* code blocks */
+.code-block{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:16px 18px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  color:var(--text);
+  overflow-x:auto;
+  margin-bottom:12px;
+  line-height:1.7;
+}
+.code-block .kw{color:var(--blue);}
+.code-block .str{color:var(--green);}
+.code-block .cm{color:var(--muted);}
+.code-block .fn{color:var(--gold);}
+.code-block .num{color:var(--orange);}
+.code-label{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--blue);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+}
+.code-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* db section */
+.db-grid{display:flex;flex-direction:column;gap:3px;}
+.db-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;cursor:pointer;
+  transition:border-color 0.15s;
+}
+.db-card:hover,.db-card.open{border-color:var(--border2);}
+.db-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+}
+.db-icon{font-size:18px;flex-shrink:0;}
+.db-title-wrap{flex:1;}
+.db-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.db-meta-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px;}
+.db-badge{font-size:10px;padding:2px 8px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);}
+.db-badge.pg{border-color:rgba(59,130,246,0.4);color:var(--blue);}
+.db-badge.redis{border-color:rgba(239,68,68,0.4);color:var(--red);}
+.db-badge.kafka{border-color:rgba(240,180,41,0.4);color:var(--gold);}
+.db-badge.es{border-color:rgba(139,92,246,0.4);color:var(--purple);}
+.db-badge.cass{border-color:rgba(249,115,22,0.4);color:var(--orange);}
+.db-badge.s3{border-color:rgba(34,197,94,0.4);color:var(--green);}
+.db-scale-tag{margin-left:auto;font-size:10px;padding:2px 10px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);flex-shrink:0;}
+.db-bd{display:none;border-top:1px solid var(--border);}
+.db-card.open .db-bd{display:block;}
+.db-inner{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:900px){.db-inner{grid-template-columns:1fr;}}
+.db-schema{border-right:1px solid var(--border);padding:20px 18px;background:var(--bg);}
+.db-schema:last-child{border-right:none;}
+.db-sec-label{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--blue);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.db-sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.schema-block{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:14px 16px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;}
+.schema-table{font-size:11px;font-weight:600;color:var(--gold2);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.schema-table span{font-size:10px;font-weight:400;color:var(--muted);}
+.schema-col{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:11px;}
+.schema-col:last-child{border-bottom:none;}
+.col-name{color:var(--text);}
+.col-name.pk{color:var(--gold);}
+.col-name.fk{color:var(--blue);}
+.col-name.idx{color:var(--blue);}
+.col-type{color:var(--muted);font-size:10px;}
+.col-note{color:var(--purple);font-size:10px;}
+.schema-indexes{margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--muted2);line-height:1.7;}
+.schema-indexes strong{color:var(--muted);}
+.db-notes-list{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.db-notes-list li{font-size:12px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.db-notes-list li::before{content:'>';position:absolute;left:0;color:var(--blue);font-size:13px;line-height:1.5;}
+.db-notes-list li strong{color:var(--text);}
+.db-full{padding:20px 18px;background:var(--bg);}
+
+/* tradeoff matrix */
+.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2px;}
+.matrix-card{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:20px;}
+.mc-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;margin-bottom:14px;}
+.mc-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.mc-label{font-size:10px;color:var(--muted);width:140px;flex-shrink:0;}
+.mc-val{display:flex;gap:3px;}
+.bar{width:16px;height:8px;border-radius:1px;}
+.bar.fill{background:var(--blue);}
+.bar.empty{background:var(--border2);}
+.mc-verdict{
+  margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--border);
+  font-size:11px;color:var(--muted2);line-height:1.6;
+}
+.mc-verdict strong{color:var(--blue);}
+
+/* pitfalls */
+.pitfall-grid{display:flex;flex-direction:column;gap:3px;}
+.pitfall-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;
+}
+.pf-hd{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:16px 18px;
+}
+.pf-q{
+  flex:1;
+  font-size:12px;color:var(--gold2);line-height:1.5;
+  font-style:italic;
+}
+.pf-bd{
+  border-top:1px solid var(--border);
+  padding:16px 18px;
+  background:var(--bg);
+}
+.pf-ans{font-size:11px;color:var(--muted2);line-height:1.7;}
+.pf-ans strong{color:var(--blue);}
+.pf-steps{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.pf-steps li{font-size:11px;color:var(--muted2);padding-left:14px;position:relative;}
+.pf-steps li::before{content:'>';position:absolute;left:0;color:var(--blue);}
+.pf-steps li strong{color:var(--text);}
+
+/* detail panel */
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.6);
+  z-index:200;backdrop-filter:blur(4px);
+}
+.overlay.show{display:block;}
+.detail-panel{
+  position:fixed;right:0;top:0;bottom:0;
+  width:min(560px,90vw);
+  background:var(--s1);
+  border-left:1px solid var(--border);
+  z-index:300;
+  transform:translateX(100%);
+  transition:transform 0.25s cubic-bezier(0.2,0,0,1);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.detail-panel.open{transform:translateX(0);}
+.dp-header{
+  padding:24px 24px 18px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.dp-close{
+  position:absolute;top:18px;right:18px;
+  width:28px;height:28px;
+  border:1px solid var(--border2);
+  background:var(--bg);
+  color:var(--muted2);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;border-radius:2px;
+  transition:color 0.15s;
+}
+.dp-close:hover{color:#fff;}
+.dp-icon{font-size:28px;margin-bottom:8px;}
+.dp-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px;}
+.dp-subtitle{font-size:11px;color:var(--muted);}
+.dp-body{flex:1;overflow-y:auto;padding:20px 24px;}
+.dp-section{margin-bottom:20px;}
+.dp-sec-title{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--blue);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.dp-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.dp-text{font-size:12px;color:var(--muted2);line-height:1.7;}
+.dp-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.dp-list li{font-size:12px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.dp-list li::before{content:'>';position:absolute;left:0;color:var(--blue);}
+.dp-code{
+  background:var(--bg);border:1px solid var(--border);border-radius:3px;
+  padding:12px 14px;font-size:11px;color:var(--text);
+  overflow-x:auto;line-height:1.7;margin-top:8px;
+}
+
+/* key-principles callout */
+.key-principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:2px;
+  margin-bottom:24px;
+}
+.kp{
+  background:var(--s1);border:1px solid var(--border);
+  border-left:3px solid var(--blue);
+  padding:14px 16px;
+}
+.kp-title{font-size:11px;font-weight:600;color:var(--blue2);margin-bottom:4px;}
+.kp-body{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* scale table */
+.scale-table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+.scale-table th{
+  background:var(--s2);
+  padding:10px 14px;
+  text-align:left;
+  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:2px solid var(--border);
+}
+.scale-table td{
+  padding:10px 14px;
+  font-size:11px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+.scale-table td:first-child{color:var(--gold2);font-weight:600;}
+.scale-table td:nth-child(2){color:var(--blue);}
+.scale-table tr:last-child td{border-bottom:none;}
+.scale-table tr:hover td{background:var(--s2);}
+
+/* api contract section */
+.api-group{
+  background:var(--s1);border:1px solid var(--border);border-radius:4px;
+  margin-bottom:3px;overflow:hidden;
+}
+.api-group-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;cursor:pointer;transition:background 0.15s;
+}
+.api-group-hd:hover{background:var(--s2);}
+.api-group.open .api-chevron{transform:rotate(90deg);}
+.api-chevron{margin-left:auto;color:var(--muted);font-size:10px;transition:transform 0.2s;flex-shrink:0;}
+.api-group-bd{display:none;border-top:1px solid var(--border);padding:20px 18px;}
+.api-group.open .api-group-bd{display:block;}
+.api-endpoint{margin-bottom:20px;}
+.api-endpoint:last-child{margin-bottom:0;}
+.api-sig{
+  font-size:12px;font-weight:600;margin-bottom:10px;
+  display:flex;align-items:center;gap:10px;
+}
+.api-method{
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:2px;
+  letter-spacing:0.05em;
+}
+.api-method.get{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);}
+.api-method.post{background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.3);}
+.api-method.put{background:rgba(249,115,22,0.15);color:var(--orange);border:1px solid rgba(249,115,22,0.3);}
+.api-method.delete{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+.api-path{font-size:11px;color:var(--text);}
+.api-desc{font-size:10px;color:var(--muted);margin-left:auto;}
+.api-rr{display:grid;grid-template-columns:1fr 1fr;gap:2px;}
+@media(max-width:900px){.api-rr{grid-template-columns:1fr;}}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.metrics-grid,.principles{animation:fadeUp 0.4s ease both;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">GOOGLE DRIVE</div>
+  <div class="nav-item active" onclick="scrollTo('overview')">Overview</div>
+  <div class="nav-item" onclick="scrollTo('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollTo('api')">API Contracts</div>
+  <div class="nav-item" onclick="scrollTo('statemachine')">State Machine</div>
+  <div class="nav-item" onclick="scrollTo('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollTo('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollTo('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollTo('tradeoffs')">Tradeoffs</div>
+  <div class="nav-item" onclick="scrollTo('pitfalls')">Pitfalls</div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="dp-header">
+    <button class="dp-close" onclick="closePanel()">X</button>
+    <div class="dp-icon" id="dp-icon"></div>
+    <div class="dp-title" id="dp-title"></div>
+    <div class="dp-subtitle" id="dp-subtitle"></div>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
+</div>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">Staff Engineer Reference v2</div>
+    <div class="hero-title">Google Drive<br><span>System Design</span></div>
+    <div class="hero-sub">APIs + Contracts + State Machine + Data Models + Scalability + Trade-offs + Pitfalls</div>
+    <div class="hero-pills">
+      <span class="pill hi">Content-Addressable Storage</span>
+      <span class="pill hi">Chunked Resumable Uploads</span>
+      <span class="pill hi">Hierarchical ACL</span>
+      <span class="pill hi">Delta Sync</span>
+      <span class="pill">SHA-256 Dedup</span>
+      <span class="pill">Optimistic Concurrency (ETags)</span>
+      <span class="pill">Real-time Collaboration</span>
+      <span class="pill">Append-only Audit Trail</span>
+    </div>
+  </div>
+
+  <!-- 01 OVERVIEW -->
+  <section id="overview">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <span class="sec-title">System Overview</span>
+      <span class="sec-tag">Scale targets + Core principles</span>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-val">2B+</div><div class="metric-label">Files Stored</div></div>
+      <div class="metric"><div class="metric-val">1T+</div><div class="metric-label">Total Objects (chunks)</div></div>
+      <div class="metric"><div class="metric-val">15M</div><div class="metric-label">Daily Active Users</div></div>
+      <div class="metric"><div class="metric-val">2PB+</div><div class="metric-label">Total Storage</div></div>
+      <div class="metric"><div class="metric-val">99.99%</div><div class="metric-label">Availability Target</div></div>
+      <div class="metric"><div class="metric-val">&lt;200ms</div><div class="metric-label">p99 Metadata Latency</div></div>
+      <div class="metric"><div class="metric-val">&lt;500ms</div><div class="metric-label">p99 First-Byte Download</div></div>
+      <div class="metric"><div class="metric-val">50K</div><div class="metric-label">Peak Upload QPS</div></div>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Content-addressable storage (SHA-256 dedup)</div>
+        <div class="principle-desc">Each chunk hashed with SHA-256. Identical chunks share one physical copy. ref_count tracks how many files reference a chunk. Storage savings of 30-50% typical in enterprise.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Chunked resumable uploads</div>
+        <div class="principle-desc">Files split into 4-8MB chunks client-side. Each chunk uploaded independently with retry. Resumable from last successful chunk after network failure. Critical for mobile on spotty connections.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Hierarchical ACL with inheritance</div>
+        <div class="principle-desc">Permissions flow from parent folder to children. Explicit permission overrides inherited. ACL evaluated bottom-up: file own permission > parent folder > grandparent. Cached in Redis for fast checks.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Optimistic concurrency (ETags)</div>
+        <div class="principle-desc">Every file metadata update includes ETag (version hash). PUT /files/{id} with If-Match header. 412 Precondition Failed if stale. No pessimistic locks on metadata reads.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Eventual consistency for sync</div>
+        <div class="principle-desc">Desktop/mobile clients sync via cursor-based delta feed. Changes propagate within seconds but not guaranteed instant. Conflict resolution: last-writer-wins for metadata, fork for content conflicts.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Append-only audit trail</div>
+        <div class="principle-desc">Every file operation logged to immutable activity_log (Cassandra). Never UPDATE or DELETE audit rows. Enables compliance (SOC2, HIPAA), admin investigation, and undo operations.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 ARCHITECTURE -->
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Architecture</span>
+      <span class="sec-tag">Click components for deep dives</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+
+      <div class="layer open" id="l1">
+        <div class="layer-hd" onclick="toggleLayer('l1')">
+          <div class="l-accent" style="background:var(--blue)"></div>
+          <div class="l-name" style="color:var(--blue)">L1 — Client &amp; Edge</div>
+          <div class="l-scale">CDN + API Gateway + Auth + Rate Limiting</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('webclient')">
+              <div class="comp-top"><span class="comp-icon">&#x1F310;</span><span class="comp-name">Mobile / Web Client</span></div>
+              <div class="comp-role">Chunked uploader + local sync engine</div>
+              <div class="comp-detail">Client-side file chunking (4-8MB). SHA-256 per chunk for dedup check before upload. SQLite for local metadata cache. Exponential backoff on retry. Bandwidth throttling.</div>
+            </div>
+            <div class="comp" onclick="openPanel('gateway')">
+              <div class="comp-top"><span class="comp-icon">&#x1F6AA;</span><span class="comp-name">API Gateway</span></div>
+              <div class="comp-role">Auth + Rate limit + Request routing</div>
+              <div class="comp-detail">OAuth2 / JWT validation. Per-user + per-IP rate limits. Routes to appropriate service based on path prefix. TLS termination. Request logging.</div>
+            </div>
+            <div class="comp" onclick="openPanel('cdn')">
+              <div class="comp-top"><span class="comp-icon">&#x26A1;</span><span class="comp-name">CDN (CloudFront/Akamai)</span></div>
+              <div class="comp-role">Download acceleration + edge caching</div>
+              <div class="comp-detail">Pre-signed URLs for downloads. Edge caching for popular shared files. Geographic distribution reduces TTFB. Cache invalidation on file update via purge API.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l2">
+        <div class="layer-hd" onclick="toggleLayer('l2')">
+          <div class="l-accent" style="background:var(--green)"></div>
+          <div class="l-name" style="color:var(--green)">L2 — Core Services</div>
+          <div class="l-scale">Metadata + Blob + Sharing + Sync + Search + Collab</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('metadata')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4C4;</span><span class="comp-name">File Metadata Service</span></div>
+              <div class="comp-role">CRUD + tree structure + ownership</div>
+              <div class="comp-detail">Manages file/folder hierarchy, names, sizes, MIME types, ownership. PostgreSQL sharded by owner_id. ETag-based optimistic concurrency. Soft delete with 30-day retention.</div>
+            </div>
+            <div class="comp" onclick="openPanel('blob')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4E6;</span><span class="comp-name">Blob Storage Service</span></div>
+              <div class="comp-role">Chunked upload/download + dedup</div>
+              <div class="comp-detail">Handles resumable uploads (initiate, upload chunk, finalize). SHA-256 dedup: check chunk hash before storing. Pre-signed URL generation for direct S3 upload/download.</div>
+            </div>
+            <div class="comp" onclick="openPanel('sharing')">
+              <div class="comp-top"><span class="comp-icon">&#x1F465;</span><span class="comp-name">Sharing &amp; Permission Service</span></div>
+              <div class="comp-role">ACL + inheritance + link sharing</div>
+              <div class="comp-detail">Hierarchical permission model: OWNER > EDITOR > COMMENTER > VIEWER. Inheritance from parent folders. Public/org-wide link sharing with optional password and expiry.</div>
+            </div>
+            <div class="comp" onclick="openPanel('sync')">
+              <div class="comp-top"><span class="comp-icon">&#x1F504;</span><span class="comp-name">Sync Service</span></div>
+              <div class="comp-role">Delta sync + conflict resolution</div>
+              <div class="comp-detail">Cursor-based change feed. Clients poll with last cursor, receive only deltas. Long-polling or SSE for real-time push. Last-writer-wins for metadata; content conflicts create fork.</div>
+            </div>
+            <div class="comp" onclick="openPanel('search')">
+              <div class="comp-top"><span class="comp-icon">&#x1F50D;</span><span class="comp-name">Search Service</span></div>
+              <div class="comp-role">Full-text + metadata search (Elasticsearch)</div>
+              <div class="comp-detail">Indexes file names, content (OCR for images, text extraction for docs), owner, shared-with, MIME type. Elasticsearch cluster. Permission-filtered results at query time.</div>
+            </div>
+            <div class="comp" onclick="openPanel('collab')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4DD;</span><span class="comp-name">Collaboration Service</span></div>
+              <div class="comp-role">Real-time co-editing + OT/CRDT</div>
+              <div class="comp-detail">WebSocket connections for real-time editing. Operational Transform (Google Docs-style) or CRDT for conflict-free merges. Cursor position broadcast. Presence indicators.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l3">
+        <div class="layer-hd" onclick="toggleLayer('l3')">
+          <div class="l-accent" style="background:var(--gold)"></div>
+          <div class="l-name" style="color:var(--gold)">L3 — Storage Layer</div>
+          <div class="l-scale">S3/GCS + PostgreSQL + Redis + Kafka</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('objectstore')">
+              <div class="comp-top"><span class="comp-icon">&#x1F5C4;</span><span class="comp-name">Object Store (S3/GCS)</span></div>
+              <div class="comp-role">Blob storage + 11 nines durability</div>
+              <div class="comp-detail">Stores file chunks keyed by content hash. Multi-tier: hot (S3 Standard), warm (S3 IA), cold (Glacier). Lifecycle policies auto-tiering based on access patterns.</div>
+            </div>
+            <div class="comp" onclick="openPanel('metadb')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4BE;</span><span class="comp-name">Metadata DB (PostgreSQL)</span></div>
+              <div class="comp-role">Sharded by owner_id + read replicas</div>
+              <div class="comp-detail">Files, versions, permissions, sharing links tables. Sharded by owner_id for data locality. 3-5 read replicas per shard for search/listing queries. PgBouncer for connection pooling.</div>
+            </div>
+            <div class="comp" onclick="openPanel('cache')">
+              <div class="comp-top"><span class="comp-icon">&#x26A1;</span><span class="comp-name">Cache (Redis Cluster)</span></div>
+              <div class="comp-role">ACL cache + metadata hot path + rate limits</div>
+              <div class="comp-detail">Permission results cached with TTL (ACL check is on every API call). File metadata for frequently accessed files. User quota counters. Rate limit sliding windows.</div>
+            </div>
+            <div class="comp" onclick="openPanel('mq')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4E8;</span><span class="comp-name">Message Queue (Kafka)</span></div>
+              <div class="comp-role">Event bus + async job dispatch</div>
+              <div class="comp-detail">Topics: file-events, sync-events, notification-dispatch, audit-log. Partitioned by owner_id. At-least-once delivery. All consumers idempotent.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l4">
+        <div class="layer-hd" onclick="toggleLayer('l4')">
+          <div class="l-accent" style="background:var(--purple)"></div>
+          <div class="l-name" style="color:var(--purple)">L4 — Async Layer</div>
+          <div class="l-scale">Notifications + Thumbnails + Virus Scan + Quota + Audit</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('notify')">
+              <div class="comp-top"><span class="comp-icon">&#x1F514;</span><span class="comp-name">Notification Service</span></div>
+              <div class="comp-role">Email + Push + In-app notifications</div>
+              <div class="comp-detail">Kafka consumer on file-events. Batches notifications (avoid flooding on bulk operations). Respects user notification preferences. Dedup by event_id.</div>
+            </div>
+            <div class="comp" onclick="openPanel('thumbnail')">
+              <div class="comp-top"><span class="comp-icon">&#x1F5BC;</span><span class="comp-name">Thumbnail / Preview Generator</span></div>
+              <div class="comp-role">Async image/doc preview generation</div>
+              <div class="comp-detail">Generates thumbnails for images, PDFs, docs, videos. Multiple sizes (small, medium, large). Cached in CDN. Triggered on file upload completion event.</div>
+            </div>
+            <div class="comp" onclick="openPanel('virus')">
+              <div class="comp-top"><span class="comp-icon">&#x1F6E1;</span><span class="comp-name">Virus Scanner</span></div>
+              <div class="comp-role">ClamAV + heuristic scan on upload</div>
+              <div class="comp-detail">Every uploaded file scanned before ACTIVE status. Quarantine infected files. Scan is async but blocks file from being shared/downloaded until clear. Periodic re-scan of existing files.</div>
+            </div>
+            <div class="comp" onclick="openPanel('quota')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4CA;</span><span class="comp-name">Quota Enforcement</span></div>
+              <div class="comp-role">Storage limits + billing integration</div>
+              <div class="comp-detail">Pre-check before upload initiation. Atomic counter in Redis. Eventual consistency with actual storage (reconciliation job). Dedup-aware: shared chunks counted once per user.</div>
+            </div>
+            <div class="comp" onclick="openPanel('audit')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4DC;</span><span class="comp-name">Audit Logger</span></div>
+              <div class="comp-role">Immutable activity log (Cassandra)</div>
+              <div class="comp-detail">Every file operation: create, read, update, delete, share, unshare. Append-only Cassandra table. Partitioned by owner_id + month. Compliance: SOC2, HIPAA, GDPR audit requirements.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 03 API CONTRACTS -->
+  <section id="api">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <span class="sec-title">API Contracts</span>
+      <span class="sec-tag">REST endpoints with request/response at each service layer</span>
+    </div>
+
+    <!-- File Metadata Service APIs -->
+    <div class="api-group open" id="api1">
+      <div class="api-group-hd" onclick="toggleApi('api1')">
+        <div class="l-accent" style="background:var(--blue)"></div>
+        <div class="l-name" style="color:var(--blue)">File Metadata Service APIs</div>
+        <div class="l-scale">CRUD + tree traversal + copy</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/files</span>
+            <span class="api-desc">Create file/folder metadata</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/files
+<span class="cm">Authorization: Bearer {access_token}</span>
+<span class="cm">Content-Type: application/json</span>
+<span class="cm">Idempotency-Key: {uuid}</span>
+
+{
+  <span class="str">"name"</span>: <span class="str">"quarterly-report.pdf"</span>,
+  <span class="str">"parent_id"</span>: <span class="str">"folder_8a3f..."</span>,
+  <span class="str">"mime_type"</span>: <span class="str">"application/pdf"</span>,
+  <span class="str">"type"</span>: <span class="str">"file"</span>  <span class="cm">// or "folder"</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 201</div>
+              <div class="code-block">{
+  <span class="str">"id"</span>: <span class="str">"file_9b4e..."</span>,
+  <span class="str">"name"</span>: <span class="str">"quarterly-report.pdf"</span>,
+  <span class="str">"parent_id"</span>: <span class="str">"folder_8a3f..."</span>,
+  <span class="str">"owner_id"</span>: <span class="str">"user_1234"</span>,
+  <span class="str">"mime_type"</span>: <span class="str">"application/pdf"</span>,
+  <span class="str">"size"</span>: <span class="num">0</span>,
+  <span class="str">"status"</span>: <span class="str">"CREATING"</span>,
+  <span class="str">"version"</span>: <span class="num">1</span>,
+  <span class="str">"etag"</span>: <span class="str">"W/\"a1b2c3\""</span>,
+  <span class="str">"created_at"</span>: <span class="str">"2025-01-15T10:30:00Z"</span>,
+  <span class="str">"upload_url"</span>: <span class="str">"/api/v1/uploads/resumable"</span>
+}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method get">GET</span>
+            <span class="api-path">/api/v1/files/{fileId}</span>
+            <span class="api-desc">Get file metadata</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">GET</span> /api/v1/files/file_9b4e...
+<span class="cm">Authorization: Bearer {access_token}</span>
+<span class="cm">If-None-Match: W/"a1b2c3"</span>
+<span class="cm">  // Returns 304 if unchanged</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"id"</span>: <span class="str">"file_9b4e..."</span>,
+  <span class="str">"name"</span>: <span class="str">"quarterly-report.pdf"</span>,
+  <span class="str">"parent_id"</span>: <span class="str">"folder_8a3f..."</span>,
+  <span class="str">"owner"</span>: { <span class="str">"id"</span>: <span class="str">"user_1234"</span>, <span class="str">"email"</span>: <span class="str">"alice@co.com"</span> },
+  <span class="str">"size"</span>: <span class="num">2457600</span>,
+  <span class="str">"mime_type"</span>: <span class="str">"application/pdf"</span>,
+  <span class="str">"status"</span>: <span class="str">"ACTIVE"</span>,
+  <span class="str">"version"</span>: <span class="num">3</span>,
+  <span class="str">"etag"</span>: <span class="str">"W/\"d4e5f6\""</span>,
+  <span class="str">"shared"</span>: <span class="kw">true</span>,
+  <span class="str">"capabilities"</span>: { <span class="str">"canEdit"</span>: <span class="kw">true</span>, <span class="str">"canShare"</span>: <span class="kw">true</span> }
+}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method put">PUT</span>
+            <span class="api-path">/api/v1/files/{fileId}</span>
+            <span class="api-desc">Update metadata (rename, move)</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">PUT</span> /api/v1/files/file_9b4e...
+<span class="cm">If-Match: W/"d4e5f6"</span> <span class="cm">// Optimistic lock</span>
+
+{
+  <span class="str">"name"</span>: <span class="str">"Q4-report-final.pdf"</span>,
+  <span class="str">"parent_id"</span>: <span class="str">"folder_new..."</span>  <span class="cm">// move</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 200 / 412 Precondition Failed</div>
+              <div class="code-block"><span class="cm">// 200 OK — updated</span>
+{
+  <span class="str">"id"</span>: <span class="str">"file_9b4e..."</span>,
+  <span class="str">"name"</span>: <span class="str">"Q4-report-final.pdf"</span>,
+  <span class="str">"version"</span>: <span class="num">4</span>,
+  <span class="str">"etag"</span>: <span class="str">"W/\"g7h8i9\""</span>
+}
+<span class="cm">// 412 — ETag mismatch, refetch + retry</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method get">GET</span>
+            <span class="api-path">/api/v1/files/{fileId}/children</span>
+            <span class="api-desc">List folder contents (paginated)</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">GET</span> /api/v1/files/{folderId}/children
+  <span class="cm">?page_size=50</span>
+  <span class="cm">&amp;page_token=eyJsYXN0...</span>
+  <span class="cm">&amp;order_by=name_asc</span>
+  <span class="cm">&amp;type=file</span>  <span class="cm">// filter</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"items"</span>: [
+    { <span class="str">"id"</span>: <span class="str">"file_a..."</span>, <span class="str">"name"</span>: <span class="str">"doc.pdf"</span>, ... },
+    { <span class="str">"id"</span>: <span class="str">"file_b..."</span>, <span class="str">"name"</span>: <span class="str">"img.png"</span>, ... }
+  ],
+  <span class="str">"next_page_token"</span>: <span class="str">"eyJsYXN0..."</span>,
+  <span class="str">"total_count"</span>: <span class="num">1847</span>
+}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Upload/Download Service APIs -->
+    <div class="api-group open" id="api2">
+      <div class="api-group-hd" onclick="toggleApi('api2')">
+        <div class="l-accent" style="background:var(--green)"></div>
+        <div class="l-name" style="color:var(--green)">Upload / Download Service APIs</div>
+        <div class="l-scale">Resumable chunked upload + range downloads</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/uploads/resumable</span>
+            <span class="api-desc">Initiate resumable upload</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/uploads/resumable
+<span class="cm">Content-Type: application/json</span>
+
+{
+  <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>,
+  <span class="str">"total_size"</span>: <span class="num">104857600</span>,  <span class="cm">// 100MB</span>
+  <span class="str">"chunk_size"</span>: <span class="num">8388608</span>,    <span class="cm">// 8MB</span>
+  <span class="str">"checksum_sha256"</span>: <span class="str">"a3f2..."</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"upload_id"</span>: <span class="str">"upl_x7y8z9..."</span>,
+  <span class="str">"upload_url"</span>: <span class="str">"/api/v1/uploads/upl_x7y8z9..."</span>,
+  <span class="str">"chunk_size"</span>: <span class="num">8388608</span>,
+  <span class="str">"total_chunks"</span>: <span class="num">13</span>,
+  <span class="str">"expires_at"</span>: <span class="str">"2025-01-15T22:30:00Z"</span>
+}
+<span class="cm">// Upload session valid for 24h</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method put">PUT</span>
+            <span class="api-path">/api/v1/uploads/{uploadId}</span>
+            <span class="api-desc">Upload chunk (Content-Range)</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">PUT</span> /api/v1/uploads/upl_x7y8z9...
+<span class="cm">Content-Range: bytes 0-8388607/104857600</span>
+<span class="cm">Content-Type: application/octet-stream</span>
+<span class="cm">X-Chunk-SHA256: b4c5d6...</span>
+
+<span class="cm">[binary chunk data]</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200 (chunk) / 201 (final)</div>
+              <div class="code-block"><span class="cm">// 200 — chunk accepted, more expected</span>
+{
+  <span class="str">"upload_id"</span>: <span class="str">"upl_x7y8z9..."</span>,
+  <span class="str">"chunks_received"</span>: <span class="num">1</span>,
+  <span class="str">"bytes_received"</span>: <span class="num">8388608</span>,
+  <span class="str">"dedup_hit"</span>: <span class="kw">false</span>
+}
+<span class="cm">// 201 — final chunk, upload complete</span>
+<span class="cm">// triggers: virus scan, thumbnail gen</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method get">GET</span>
+            <span class="api-path">/api/v1/files/{fileId}/content</span>
+            <span class="api-desc">Download file (Range support)</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">GET</span> /api/v1/files/file_9b4e.../content
+<span class="cm">Range: bytes=0-1048575</span>  <span class="cm">// partial</span>
+<span class="cm">If-None-Match: "checksum..."</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200 / 206 / 302</div>
+              <div class="code-block"><span class="cm">// 302 Redirect to pre-signed CDN URL</span>
+<span class="cm">Location: https://cdn.example.com/...</span>
+<span class="cm">  ?X-Amz-Signature=abc123</span>
+<span class="cm">  &amp;X-Amz-Expires=3600</span>
+
+<span class="cm">// Or 206 Partial Content for Range</span>
+<span class="cm">Content-Range: bytes 0-1048575/104857600</span>
+<span class="cm">Content-Type: application/pdf</span>
+<span class="cm">[binary data]</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Sharing Service APIs -->
+    <div class="api-group" id="api3">
+      <div class="api-group-hd" onclick="toggleApi('api3')">
+        <div class="l-accent" style="background:var(--purple)"></div>
+        <div class="l-name" style="color:var(--purple)">Sharing &amp; Permission Service APIs</div>
+        <div class="l-scale">ACL management + link sharing</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/files/{fileId}/permissions</span>
+            <span class="api-desc">Grant permission</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/files/file_9b4e.../permissions
+
+{
+  <span class="str">"grantee"</span>: {
+    <span class="str">"type"</span>: <span class="str">"user"</span>,  <span class="cm">// user|group|domain|anyone</span>
+    <span class="str">"email"</span>: <span class="str">"bob@company.com"</span>
+  },
+  <span class="str">"role"</span>: <span class="str">"editor"</span>,  <span class="cm">// owner|editor|commenter|viewer</span>
+  <span class="str">"notify"</span>: <span class="kw">true</span>,
+  <span class="str">"message"</span>: <span class="str">"Please review Q4 report"</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 201</div>
+              <div class="code-block">{
+  <span class="str">"permission_id"</span>: <span class="str">"perm_abc..."</span>,
+  <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>,
+  <span class="str">"grantee"</span>: {
+    <span class="str">"type"</span>: <span class="str">"user"</span>,
+    <span class="str">"email"</span>: <span class="str">"bob@company.com"</span>,
+    <span class="str">"id"</span>: <span class="str">"user_5678"</span>
+  },
+  <span class="str">"role"</span>: <span class="str">"editor"</span>,
+  <span class="str">"inherited"</span>: <span class="kw">false</span>,
+  <span class="str">"created_at"</span>: <span class="str">"2025-01-15T10:35:00Z"</span>
+}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/files/{fileId}/sharing-links</span>
+            <span class="api-desc">Create sharing link</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/files/file_9b4e.../sharing-links
+
+{
+  <span class="str">"scope"</span>: <span class="str">"anyone_with_link"</span>,
+  <span class="str">"role"</span>: <span class="str">"viewer"</span>,
+  <span class="str">"password"</span>: <span class="str">"optional-pass"</span>,
+  <span class="str">"expires_at"</span>: <span class="str">"2025-02-15T00:00:00Z"</span>,
+  <span class="str">"allow_download"</span>: <span class="kw">true</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 201</div>
+              <div class="code-block">{
+  <span class="str">"link_id"</span>: <span class="str">"link_xyz..."</span>,
+  <span class="str">"url"</span>: <span class="str">"https://drive.example.com/s/Ax7Bz9"</span>,
+  <span class="str">"scope"</span>: <span class="str">"anyone_with_link"</span>,
+  <span class="str">"role"</span>: <span class="str">"viewer"</span>,
+  <span class="str">"password_protected"</span>: <span class="kw">true</span>,
+  <span class="str">"expires_at"</span>: <span class="str">"2025-02-15T00:00:00Z"</span>
+}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Sync Service APIs -->
+    <div class="api-group" id="api4">
+      <div class="api-group-hd" onclick="toggleApi('api4')">
+        <div class="l-accent" style="background:var(--orange)"></div>
+        <div class="l-name" style="color:var(--orange)">Sync Service APIs</div>
+        <div class="l-scale">Delta sync + change feed</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/sync/changes</span>
+            <span class="api-desc">Get changes since cursor (long-poll / SSE)</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/sync/changes
+<span class="cm">X-Long-Poll-Timeout: 60</span>  <span class="cm">// seconds</span>
+
+{
+  <span class="str">"cursor"</span>: <span class="str">"cursor_abc123..."</span>,
+  <span class="str">"limit"</span>: <span class="num">500</span>
+}
+<span class="cm">// cursor=null for initial full sync</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"changes"</span>: [
+    {
+      <span class="str">"type"</span>: <span class="str">"file_modified"</span>,
+      <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>,
+      <span class="str">"version"</span>: <span class="num">5</span>,
+      <span class="str">"timestamp"</span>: <span class="str">"2025-01-15T11:00:00Z"</span>,
+      <span class="str">"actor"</span>: <span class="str">"user_5678"</span>
+    }
+  ],
+  <span class="str">"cursor"</span>: <span class="str">"cursor_def456..."</span>,
+  <span class="str">"has_more"</span>: <span class="kw">false</span>
+}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/sync/delta</span>
+            <span class="api-desc">Push local changes</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/sync/delta
+
+{
+  <span class="str">"changes"</span>: [
+    {
+      <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>,
+      <span class="str">"action"</span>: <span class="str">"update_content"</span>,
+      <span class="str">"base_version"</span>: <span class="num">4</span>,
+      <span class="str">"new_chunks"</span>: [<span class="str">"sha256:abc..."</span>],
+      <span class="str">"client_timestamp"</span>: <span class="str">"..."</span>
+    }
+  ]
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 200 / 409 Conflict</div>
+              <div class="code-block"><span class="cm">// 200 — accepted</span>
+{
+  <span class="str">"applied"</span>: [{ <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>, <span class="str">"new_version"</span>: <span class="num">5</span> }],
+  <span class="str">"cursor"</span>: <span class="str">"cursor_ghi789..."</span>
+}
+<span class="cm">// 409 — conflict detected</span>
+{
+  <span class="str">"conflicts"</span>: [{
+    <span class="str">"file_id"</span>: <span class="str">"file_9b4e..."</span>,
+    <span class="str">"server_version"</span>: <span class="num">5</span>,
+    <span class="str">"resolution"</span>: <span class="str">"fork"</span>  <span class="cm">// creates conflict copy</span>
+  }]
+}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Search Service APIs -->
+    <div class="api-group" id="api5">
+      <div class="api-group-hd" onclick="toggleApi('api5')">
+        <div class="l-accent" style="background:var(--gold)"></div>
+        <div class="l-name" style="color:var(--gold)">Search Service APIs</div>
+        <div class="l-scale">Full-text + metadata search via Elasticsearch</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method get">GET</span>
+            <span class="api-path">/api/v1/search</span>
+            <span class="api-desc">Search files</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">GET</span> /api/v1/search
+  <span class="cm">?q=quarterly%20report</span>
+  <span class="cm">&amp;type=file</span>          <span class="cm">// file|folder|both</span>
+  <span class="cm">&amp;owner=user_1234</span>
+  <span class="cm">&amp;mime_type=application/pdf</span>
+  <span class="cm">&amp;modified_after=2025-01-01</span>
+  <span class="cm">&amp;shared_with_me=true</span>
+  <span class="cm">&amp;page_size=20</span></div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"results"</span>: [
+    {
+      <span class="str">"id"</span>: <span class="str">"file_9b4e..."</span>,
+      <span class="str">"name"</span>: <span class="str">"<em>quarterly</em> <em>report</em>.pdf"</span>,
+      <span class="str">"snippet"</span>: <span class="str">"...Q4 <em>quarterly</em> revenue <em>report</em>..."</span>,
+      <span class="str">"score"</span>: <span class="num">0.95</span>,
+      <span class="str">"owner"</span>: { <span class="str">"email"</span>: <span class="str">"alice@co.com"</span> },
+      <span class="str">"modified_at"</span>: <span class="str">"2025-01-15T10:30:00Z"</span>
+    }
+  ],
+  <span class="str">"total_hits"</span>: <span class="num">42</span>,
+  <span class="str">"next_page_token"</span>: <span class="str">"..."</span>
+}
+<span class="cm">// Results permission-filtered server-side</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <!-- 04 STATE MACHINE -->
+  <section id="statemachine">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <span class="sec-title">State Machines</span>
+      <span class="sec-tag">File lifecycle + Sync conflict states</span>
+    </div>
+    <div class="state-machine">
+      <div class="sm-title">File Lifecycle States
+        <span style="font-size:10px;font-weight:400;color:var(--muted)">UPDATE files SET status=? WHERE id=? AND status='EXPECTED' AND version=?</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">CREATING</div><div class="state-desc">metadata created</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">UPLOADING</div><div class="state-desc">chunks in progress</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">PROCESSING</div><div class="state-desc">virus scan + thumbnails</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state success"><div class="state-name">ACTIVE</div><div class="state-desc">available to users</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state terminal"><div class="state-name">TRASHED</div><div class="state-desc">soft delete (30 days)</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state terminal"><div class="state-name">DELETED</div><div class="state-desc">hard delete + chunk GC</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);padding:8px 0;border-top:1px dashed var(--border);line-height:1.8;">
+          <strong style="color:var(--text)">Key transitions:</strong>
+          CREATING -> UPLOADING (first chunk received) |
+          UPLOADING -> PROCESSING (all chunks received, checksum verified) |
+          PROCESSING -> ACTIVE (virus scan clean, thumbnails generated) |
+          PROCESSING -> QUARANTINED (virus detected) |
+          ACTIVE -> TRASHED (user deletes, reversible) |
+          TRASHED -> ACTIVE (user restores within 30 days) |
+          TRASHED -> DELETED (30-day TTL expires, GC job runs) |
+          UPLOADING -> EXPIRED (upload session timeout after 24h, cleanup)
+        </div>
+      </div>
+    </div>
+    <div class="state-machine">
+      <div class="sm-title">Sync Conflict States
+        <span style="font-size:10px;font-weight:400;color:var(--muted)">Client-side state machine for desktop sync engine</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="state success"><div class="state-name">IN_SYNC</div><div class="state-desc">local = remote</div></div>
+        <div class="sm-arrow right">-></div>
+        <div class="state active"><div class="state-name">LOCAL_MODIFIED</div><div class="state-desc">pending push</div></div>
+        <div class="sm-arrow right">-></div>
+        <div class="state warning"><div class="state-name">SYNCING</div><div class="state-desc">pushing to server</div></div>
+        <div class="sm-arrow right">-></div>
+        <div class="sm-col">
+          <div class="sm-branch"><span class="branch-label">success</span></div>
+          <div class="state success"><div class="state-name">IN_SYNC</div><div class="state-desc">confirmed</div></div>
+        </div>
+        <div style="padding:0 8px;color:var(--muted);font-size:10px;">or</div>
+        <div class="sm-col">
+          <div class="sm-branch"><span class="branch-label">409 conflict</span></div>
+          <div class="state terminal"><div class="state-name">CONFLICT</div><div class="state-desc">fork created</div></div>
+          <div class="sm-arrow">|</div>
+          <div class="state success"><div class="state-name">RESOLVED</div><div class="state-desc">user picks version</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 DATA FLOWS -->
+  <section id="flows">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <span class="sec-title">Data Flows</span>
+      <span class="sec-tag">Step-by-step for critical paths</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+
+      <div class="flow-block open" id="f1">
+        <div class="flow-hd" onclick="toggleFlow('f1')">
+          <div class="flow-num">F-01</div>
+          <div class="flow-title">Resumable File Upload</div>
+          <div class="flow-meta">Chunked + dedup + virus scan</div>
+          <div class="flow-chevron">></div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Client</div>
+              <div class="fs-action">Split file into 4-8MB chunks. Compute SHA-256 per chunk and full file. Send POST /api/v1/uploads/resumable with file_id + total_size + checksum.</div>
+              <div class="fs-note">Client-side chunking enables resume on failure</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Quota Service</div>
+              <div class="fs-action">Check user quota in Redis: INCRBY user:{id}:quota {total_size}. If exceeds limit, reject with 413. Atomic increment prevents race condition on concurrent uploads.</div>
+              <div class="fs-note">Pre-check avoids wasted upload bandwidth</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Blob Service</div>
+              <div class="fs-action">For each chunk: check if SHA-256 hash exists in chunks table. If exists: increment ref_count (dedup hit, skip upload). If not: upload to S3, insert chunk record.</div>
+              <div class="fs-note">30-50% storage savings from dedup</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Metadata Svc</div>
+              <div class="fs-action">All chunks received: verify full-file SHA-256 matches declared checksum. Update file status UPLOADING -> PROCESSING. Insert file_chunks mapping rows. Publish FILE_UPLOADED to Kafka.</div>
+              <div class="fs-note">Checksum mismatch = reject + cleanup chunks</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Virus Scanner</div>
+              <div class="fs-action">Kafka consumer picks up FILE_UPLOADED event. Download file from S3. Run ClamAV scan. Clean: update status PROCESSING -> ACTIVE. Infected: set QUARANTINED, notify user.</div>
+              <div class="fs-note">Blocks sharing/download until scan completes</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">06</div>
+              <div class="fs-svc">Thumbnail Gen</div>
+              <div class="fs-action">Parallel to virus scan: generate thumbnails (small/medium/large) for supported types. Upload to CDN-backed bucket. Update file metadata with thumbnail URLs.</div>
+              <div class="fs-note">Async, non-blocking for file availability</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f2">
+        <div class="flow-hd" onclick="toggleFlow('f2')">
+          <div class="flow-num">F-02</div>
+          <div class="flow-title">File Download</div>
+          <div class="flow-meta">CDN + pre-signed URL + Range support</div>
+          <div class="flow-chevron">></div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">API Gateway</div>
+              <div class="fs-action">Authenticate user. GET /api/v1/files/{fileId}/content. Rate limit check. Forward to Blob Service.</div>
+              <div class="fs-note">JWT validation at edge, no DB lookup</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Permission Svc</div>
+              <div class="fs-action">Check ACL: does user have VIEWER+ permission on this file? Check Redis cache first (TTL 5min). Cache miss: query permissions table, walk up folder hierarchy for inherited perms.</div>
+              <div class="fs-note">ACL check on every download request</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Blob Service</div>
+              <div class="fs-action">Generate pre-signed S3/GCS URL (TTL=1h). If file is popular (CDN-cached): redirect to CDN edge URL. If Range header present: generate range-specific pre-signed URL.</div>
+              <div class="fs-note">302 redirect avoids proxying bytes through app</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">CDN Edge</div>
+              <div class="fs-action">Serve from edge cache if hit. Cache miss: fetch from S3 origin, cache at edge. Reassemble chunks if needed. Support partial content (206) for video streaming.</div>
+              <div class="fs-note">p99 TTFB &lt;500ms with CDN</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Audit Logger</div>
+              <div class="fs-action">Async log: FILE_DOWNLOADED event with user_id, file_id, IP, timestamp. Written to Cassandra audit log. Used for compliance reporting and admin investigation.</div>
+              <div class="fs-note">Non-blocking, fire-and-forget via Kafka</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f3">
+        <div class="flow-hd" onclick="toggleFlow('f3')">
+          <div class="flow-num">F-03</div>
+          <div class="flow-title">Share File with User</div>
+          <div class="flow-meta">ACL creation + notification + inheritance</div>
+          <div class="flow-chevron">></div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Permission Svc</div>
+              <div class="fs-action">Verify caller has OWNER or EDITOR role. Check if target user already has permission (deduplicate). If sharing a folder: permission will be inherited by all children.</div>
+              <div class="fs-note">Only OWNER can grant OWNER role</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Metadata DB</div>
+              <div class="fs-action">INSERT INTO permissions (file_id, grantee_id, role, inherited). Update file.shared=true flag. Invalidate Redis ACL cache for this file and all children (if folder).</div>
+              <div class="fs-note">Cache invalidation is recursive for folders</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Notification</div>
+              <div class="fs-action">Publish PERMISSION_GRANTED to Kafka. Notification service sends email with file link + custom message. In-app notification badge for target user. Push notification on mobile.</div>
+              <div class="fs-note">Respect user notification preferences</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Sync Service</div>
+              <div class="fs-action">File appears in target user's "Shared with me" view. Sync engine pushes change to target user's connected clients via cursor update. File metadata sent as delta.</div>
+              <div class="fs-note">Near-instant appearance on target devices</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f4">
+        <div class="flow-hd" onclick="toggleFlow('f4')">
+          <div class="flow-num">F-04</div>
+          <div class="flow-title">Delta Sync</div>
+          <div class="flow-meta">Client polls + applies deltas + conflict resolution</div>
+          <div class="flow-chevron">></div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Client</div>
+              <div class="fs-action">POST /api/v1/sync/changes with last cursor. Long-poll (60s timeout). If no changes: server holds connection until change occurs or timeout. On timeout: reconnect immediately.</div>
+              <div class="fs-note">Long-polling reduces unnecessary requests</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Sync Service</div>
+              <div class="fs-action">Query change_log table for entries after cursor. Filter by user's accessible files (ACL). Return batch of deltas: created, modified, deleted, moved, shared files.</div>
+              <div class="fs-note">Cursor is opaque token encoding timestamp + sequence</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Client</div>
+              <div class="fs-action">Apply deltas to local SQLite database. For new/modified files: download content. For deletes: move to local trash. For moves: update local path. Update local cursor.</div>
+              <div class="fs-note">Local DB enables offline access</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Conflict Resolver</div>
+              <div class="fs-action">If local changes conflict with server (same file, different edits): create conflict copy "filename (conflict copy).ext". Both versions preserved. User picks winner manually.</div>
+              <div class="fs-note">Never silently overwrite user data</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f5">
+        <div class="flow-hd" onclick="toggleFlow('f5')">
+          <div class="flow-num">F-05</div>
+          <div class="flow-title">Real-time Collaboration</div>
+          <div class="flow-meta">WebSocket + OT/CRDT + cursor sync</div>
+          <div class="flow-chevron">></div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Client</div>
+              <div class="fs-action">Open file in editor. Establish WebSocket to Collaboration Service. Authenticate via ticket token (short-lived, scoped to file). Receive current document state + active cursors.</div>
+              <div class="fs-note">WebSocket for low-latency bidirectional updates</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Collab Service</div>
+              <div class="fs-action">Register user in session. Broadcast presence (user joined) to other editors. Maintain in-memory document state. Each edit = operation (insert/delete at position).</div>
+              <div class="fs-note">In-memory state with periodic checkpoint to DB</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">OT Engine</div>
+              <div class="fs-action">Client sends local operation. Server transforms against concurrent ops (Operational Transform). Applies transformed op to server state. Broadcasts transformed op to all other clients.</div>
+              <div class="fs-note">OT guarantees convergence across all clients</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Persistence</div>
+              <div class="fs-action">Checkpoint: periodically snapshot full document to blob storage (every 30s or 100 ops). Create new file_version entry. Update file metadata with latest version. Ops log for replay between checkpoints.</div>
+              <div class="fs-note">Checkpoint interval balances durability vs write load</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 06 DATABASE DESIGN -->
+  <section id="databases">
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <span class="sec-title">Database Design</span>
+      <span class="sec-tag">Click to expand schema details</span>
+    </div>
+    <div class="db-grid">
+
+      <div class="db-card open" id="db1">
+        <div class="db-hd" onclick="toggleDb('db1')">
+          <div class="db-icon">&#x1F4C4;</div>
+          <div class="db-title-wrap">
+            <div class="db-name">File Metadata DB</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL sharded by owner_id</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">2B+ rows</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">files <span>-- main metadata</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name">name</span><span class="col-type">VARCHAR(255)</span></div>
+                <div class="schema-col"><span class="col-name fk">parent_id</span><span class="col-type">UUID FK -> files.id</span></div>
+                <div class="schema-col"><span class="col-name idx">owner_id</span><span class="col-type">UUID NOT NULL</span><span class="col-note">shard key</span></div>
+                <div class="schema-col"><span class="col-name">type</span><span class="col-type">ENUM(file, folder)</span></div>
+                <div class="schema-col"><span class="col-name">mime_type</span><span class="col-type">VARCHAR(128)</span></div>
+                <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span><span class="col-note">bytes</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">ENUM(...)</span><span class="col-note">lifecycle state</span></div>
+                <div class="schema-col"><span class="col-name">version</span><span class="col-type">INT</span><span class="col-note">optimistic lock</span></div>
+                <div class="schema-col"><span class="col-name">etag</span><span class="col-type">VARCHAR(64)</span></div>
+                <div class="schema-col"><span class="col-name">checksum_sha256</span><span class="col-type">CHAR(64)</span></div>
+                <div class="schema-col"><span class="col-name">shared</span><span class="col-type">BOOLEAN DEFAULT false</span></div>
+                <div class="schema-col"><span class="col-name">trashed_at</span><span class="col-type">TIMESTAMP NULL</span></div>
+                <div class="schema-col"><span class="col-name idx">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-col"><span class="col-name idx">modified_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>Primary index:</strong> (id) partitioned by owner_id<br>
+                  <strong>Folder listing:</strong> (parent_id, name) for paginated children<br>
+                  <strong>User files:</strong> (owner_id, modified_at DESC) for recent files<br>
+                  <strong>Trash cleanup:</strong> (status='TRASHED', trashed_at) for 30-day GC
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">file_versions <span>-- version history</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span></div>
+                <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">checksum_sha256</span><span class="col-type">CHAR(64)</span></div>
+                <div class="schema-col"><span class="col-name fk">modified_by</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>Index:</strong> (file_id, version_num DESC) for version list<br>
+                  <strong>Retention:</strong> keep last 100 versions per file, age-off after 30 days for non-enterprise
+                </div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Shard by owner_id:</strong> All of a user's files on the same shard. Folder listing = single-shard query. Cross-user operations (shared files) require scatter-gather but are rare.</li>
+                <li><strong>parent_id as FK:</strong> Enables tree traversal. Moving a file = UPDATE parent_id (O(1) instead of path rename). Orphan detection via periodic integrity check.</li>
+                <li><strong>ETag-based optimistic locking:</strong> No pessimistic SELECT FOR UPDATE needed. ETag = SHA-256(id + version + modified_at). Client sends If-Match on every PUT. 412 on stale.</li>
+                <li><strong>Soft delete with TTL:</strong> trashed_at timestamp starts 30-day countdown. Background GC job deletes TRASHED files where trashed_at &lt; now() - 30d. Enables user "undo".</li>
+                <li><strong>version column:</strong> Auto-incremented on every content update. Used for sync cursor comparison and conflict detection. Never decremented.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db2">
+        <div class="db-hd" onclick="toggleDb('db2')">
+          <div class="db-icon">&#x1F465;</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Sharing &amp; ACL DB</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL</span>
+              <span class="db-badge redis">Redis ACL Cache</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~500M rows</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">permissions <span>-- ACL entries</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name idx">grantee_id</span><span class="col-type">UUID</span><span class="col-note">user or group</span></div>
+                <div class="schema-col"><span class="col-name">grantee_type</span><span class="col-type">ENUM(user, group, domain, anyone)</span></div>
+                <div class="schema-col"><span class="col-name">role</span><span class="col-type">ENUM(owner, editor, commenter, viewer)</span></div>
+                <div class="schema-col"><span class="col-name">inherited</span><span class="col-type">BOOLEAN</span><span class="col-note">from parent folder</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>Index:</strong> (file_id, grantee_id) UNIQUE for dedup<br>
+                  <strong>Index:</strong> (grantee_id, role) for "shared with me" queries<br>
+                  <strong>Inheritance:</strong> When sharing a folder, child permissions are computed at query time (not materialized) to avoid write amplification
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">sharing_links <span>-- public/org links</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">token</span><span class="col-type">VARCHAR(32) UNIQUE</span><span class="col-note">short URL slug</span></div>
+                <div class="schema-col"><span class="col-name">scope</span><span class="col-type">ENUM(anyone, org, specific)</span></div>
+                <div class="schema-col"><span class="col-name">role</span><span class="col-type">ENUM(viewer, commenter, editor)</span></div>
+                <div class="schema-col"><span class="col-name">password_hash</span><span class="col-type">VARCHAR NULL</span></div>
+                <div class="schema-col"><span class="col-name">expires_at</span><span class="col-type">TIMESTAMP NULL</span></div>
+                <div class="schema-col"><span class="col-name">allow_download</span><span class="col-type">BOOLEAN DEFAULT true</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Inheritance at query time:</strong> For a folder share, we store ONE permission row on the folder. Children inherit by walking up the tree at query time. This avoids O(N) writes for folders with 10K+ files.</li>
+                <li><strong>Redis ACL cache:</strong> Key: acl:{file_id}:{user_id} -> role. TTL: 5 minutes. Invalidated on permission change (file + all children for folder). 99% of ACL checks hit cache.</li>
+                <li><strong>sharing_links.token:</strong> Cryptographically random 32-char token. Short enough for URLs, long enough to prevent brute force. Rate limited lookups prevent enumeration.</li>
+                <li><strong>Role hierarchy:</strong> OWNER > EDITOR > COMMENTER > VIEWER. Check: user_role >= required_role. OWNER can do anything including delete and transfer ownership.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db3">
+        <div class="db-hd" onclick="toggleDb('db3')">
+          <div class="db-icon">&#x1F4E6;</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Blob Metadata (Chunks)</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL</span>
+              <span class="db-badge s3">S3/GCS Object Store</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">1T+ chunk records</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">chunks <span>-- content-addressable store</span></div>
+                <div class="schema-col"><span class="col-name pk">content_hash</span><span class="col-type">CHAR(64) PK</span><span class="col-note">SHA-256</span></div>
+                <div class="schema-col"><span class="col-name">storage_location</span><span class="col-type">VARCHAR</span><span class="col-note">s3://bucket/key</span></div>
+                <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">ref_count</span><span class="col-type">INT DEFAULT 1</span><span class="col-note">dedup counter</span></div>
+                <div class="schema-col"><span class="col-name">storage_class</span><span class="col-type">ENUM(hot, warm, cold)</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-col"><span class="col-name">last_accessed</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>PK:</strong> content_hash (SHA-256) — content-addressable lookup in O(1)<br>
+                  <strong>GC index:</strong> (ref_count=0, last_accessed) for orphan cleanup<br>
+                  <strong>Tiering:</strong> (storage_class, last_accessed) for lifecycle migration
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">file_chunks <span>-- file-to-chunk mapping</span></div>
+                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span></div>
+                <div class="schema-col"><span class="col-name">chunk_index</span><span class="col-type">INT</span><span class="col-note">ordering</span></div>
+                <div class="schema-col"><span class="col-name fk">content_hash</span><span class="col-type">CHAR(64) FK</span></div>
+                <div class="schema-indexes">
+                  <strong>PK:</strong> (file_id, version_num, chunk_index)<br>
+                  <strong>Download:</strong> ORDER BY chunk_index to reassemble file
+                </div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Content-addressable:</strong> PK = SHA-256 hash of chunk data. Same content = same key. Dedup is automatic: INSERT ON CONFLICT (content_hash) DO UPDATE SET ref_count = ref_count + 1.</li>
+                <li><strong>ref_count for GC:</strong> When a file version is deleted, decrement ref_count for each chunk. When ref_count reaches 0: chunk is orphaned. GC job deletes S3 object + DB row after 7-day grace period.</li>
+                <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on last_accessed. Retrieval from cold adds 3-5h latency.</li>
+                <li><strong>Chunk size choice:</strong> 4-8MB balances: upload resume granularity (smaller=better), dedup efficiency (larger=fewer chunks to track), S3 multipart limits. Variable chunk sizes possible with content-defined chunking (CDC) for better dedup.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db4">
+        <div class="db-hd" onclick="toggleDb('db4')">
+          <div class="db-icon">&#x1F4DC;</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Activity / Audit DB</div>
+            <div class="db-meta-row">
+              <span class="db-badge cass">Cassandra (append-only)</span>
+              <span class="db-badge kafka">Kafka (event source)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~10B+ rows/year</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">activity_log <span>-- immutable audit trail</span></div>
+                <div class="schema-col"><span class="col-name pk">owner_id</span><span class="col-type">UUID</span><span class="col-note">partition key</span></div>
+                <div class="schema-col"><span class="col-name pk">year_month</span><span class="col-type">TEXT</span><span class="col-note">'2025-01'</span></div>
+                <div class="schema-col"><span class="col-name pk">event_time</span><span class="col-type">TIMESTAMP</span><span class="col-note">clustering key DESC</span></div>
+                <div class="schema-col"><span class="col-name">event_type</span><span class="col-type">TEXT</span><span class="col-note">FILE_CREATED, etc.</span></div>
+                <div class="schema-col"><span class="col-name">actor_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">file_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">file_name</span><span class="col-type">TEXT</span></div>
+                <div class="schema-col"><span class="col-name">details</span><span class="col-type">MAP&lt;TEXT,TEXT&gt;</span></div>
+                <div class="schema-col"><span class="col-name">ip_address</span><span class="col-type">INET</span></div>
+                <div class="schema-indexes">
+                  <strong>Partition key:</strong> (owner_id, year_month) — bounds partition size<br>
+                  <strong>Clustering:</strong> event_time DESC for reverse-chronological queries<br>
+                  <strong>TTL:</strong> 7 years for compliance, configurable per org
+                </div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Cassandra for append-only:</strong> Write-optimized. No UPDATE/DELETE needed. Linear write scalability across nodes. 10B+ rows/year handled easily.</li>
+                <li><strong>Partition by owner_id + month:</strong> Prevents unbounded partition growth. Admin views "recent activity" = single partition read. Cross-user queries handled by separate analytics pipeline.</li>
+                <li><strong>Denormalized file_name:</strong> Stored at event time (not joined from files table). If file is renamed later, activity log shows the name at time of event. Correct for audit purposes.</li>
+                <li><strong>Immutability enforced:</strong> Application-level: no UPDATE/DELETE queries allowed. Cassandra-level: table configured with write-only access for app service accounts. Separate read-only accounts for dashboards.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 07 SCALABILITY -->
+  <section id="scalability">
+    <div class="sec-head">
+      <span class="sec-num">07</span>
+      <span class="sec-title">Scalability</span>
+      <span class="sec-tag">2B files + 2PB storage + 15M DAU</span>
+    </div>
+    <table class="scale-table">
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Volume</th>
+          <th>Strategy</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>files (metadata)</td>
+          <td>2B rows, ~400GB</td>
+          <td>Shard by owner_id. Hot users: virtual sharding (owner_id || file_id % N)</td>
+          <td>Folder listing = single shard. Cross-shard for shared files (scatter-gather).</td>
+        </tr>
+        <tr>
+          <td>chunks (blob metadata)</td>
+          <td>1T+ rows, ~20TB</td>
+          <td>Shard by content_hash prefix (first 2 bytes = 65K buckets)</td>
+          <td>Uniform distribution by hash. No hot spots. Dedup lookup = single shard.</td>
+        </tr>
+        <tr>
+          <td>Object Store (S3/GCS)</td>
+          <td>2PB+</td>
+          <td>Multi-tier: hot (Standard) / warm (IA) / cold (Glacier)</td>
+          <td>Lifecycle auto-tiering saves 40-60% cost. 11 nines durability built-in.</td>
+        </tr>
+        <tr>
+          <td>activity_log</td>
+          <td>10B+ rows/yr</td>
+          <td>Cassandra partitioned by (owner_id, year_month)</td>
+          <td>Write-optimized. Linear horizontal scalability. 7yr retention.</td>
+        </tr>
+        <tr>
+          <td>Redis ACL cache</td>
+          <td>~100M keys</td>
+          <td>Redis Cluster (16 shards). Key: acl:{file_id}:{user_id}</td>
+          <td>5min TTL. 99% hit rate. Invalidation on permission change.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="key-principles">
+      <div class="kp"><div class="kp-title">Content-addressable dedup</div><div class="kp-body">SHA-256 keyed chunks. Same content stored once regardless of how many users have the file. Enterprise accounts with identical shared docs see 30-50% storage savings. ref_count enables safe GC.</div></div>
+      <div class="kp"><div class="kp-title">CDN for read path</div><div class="kp-body">Popular shared files cached at edge. Pre-signed URLs bypass application servers entirely for downloads. p99 first-byte &lt;500ms. CloudFront/Akamai with 200+ edge locations globally.</div></div>
+      <div class="kp"><div class="kp-title">Metadata sharding by owner_id</div><div class="kp-body">All of a user's files on same shard. Folder listing, search, quota calc = single-shard queries. Shared files require cross-shard reads but are 10-15% of total reads.</div></div>
+      <div class="kp"><div class="kp-title">Hot user handling</div><div class="kp-body">Users with 100K+ files: virtual sharding splits their data across N sub-shards. Folder listing uses scatter-gather within virtual shard group. Prevents single-shard bottleneck.</div></div>
+    </div>
+  </section>
+
+  <!-- 08 TRADEOFFS -->
+  <section id="tradeoffs">
+    <div class="sec-head">
+      <span class="sec-num">08</span>
+      <span class="sec-title">Architectural Tradeoffs</span>
+      <span class="sec-tag">Staff-level decision framing</span>
+    </div>
+    <div class="matrix">
+      <div class="matrix-card">
+        <div class="mc-title">Strong vs Eventual Consistency for Sync</div>
+        <div class="mc-row"><span class="mc-label">User experience</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">System complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Throughput</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-verdict"><strong>Eventual consistency wins.</strong> Strong consistency requires distributed locks across all devices. At 15M DAU, latency cost is prohibitive. Eventual with conflict resolution (fork + manual merge) is the industry standard (Dropbox, Google Drive).</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Inline Dedup vs Async Dedup</div>
+        <div class="mc-row"><span class="mc-label">Storage savings</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Upload latency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Implementation effort</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Inline dedup for uploads.</strong> Check SHA-256 before storing chunk. If match: skip upload entirely (save bandwidth + storage). 1-2ms hash lookup cost per chunk is negligible vs 100ms+ upload time saved. Async dedup only for cross-user detection of near-duplicates.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Flat Namespace vs Hierarchical Tree</div>
+        <div class="mc-row"><span class="mc-label">User mental model</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Move/rename perf</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Permission inheritance</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Hierarchical tree with parent_id.</strong> Users expect folders. Move = update parent_id (O(1)). Rename = update name (O(1)). Permission inheritance traverses tree bottom-up. Alternative (materialized path "/a/b/c"): move requires updating ALL descendant paths — O(N) writes for large folders.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Server-side vs Client-side Encryption</div>
+        <div class="mc-row"><span class="mc-label">Security guarantee</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Feature compatibility</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Search / preview</span><div class="mc-val"><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Server-side by default, client-side optional.</strong> Client-side encryption (E2EE) prevents server from reading content. But kills search, thumbnails, collaboration, virus scanning. Offer E2EE as enterprise option for sensitive folders. Server-side (AES-256) for everything else.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 PITFALLS -->
+  <section id="pitfalls">
+    <div class="sec-head">
+      <span class="sec-num">09</span>
+      <span class="sec-title">Pitfall Questions</span>
+      <span class="sec-tag">Expect these at Staff level interviews</span>
+    </div>
+    <div class="pitfall-grid">
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"User A shares a folder with User B. User A then moves a file into that folder. Does User B see it? What if User A removes the file from the folder?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Permission inheritance is dynamic.</strong> When the file is moved INTO the shared folder, it inherits the folder's permissions at query time. User B gains access immediately (after ACL cache invalidation).</li>
+            <li><strong>Moving OUT revokes inherited access.</strong> The file's parent_id changes. ACL check walks up the NEW parent chain. If User B has no direct permission on the file, access is revoked.</li>
+            <li><strong>Cache invalidation is critical.</strong> On any move operation: invalidate Redis ACL cache for the file AND the old/new parent folders. Stale cache = security vulnerability (user retains access they shouldn't have).</li>
+            <li><strong>Notification timing:</strong> User B may get a "file shared" notification but by the time they click, the file has been moved out and they get 403. Edge case: show "file no longer accessible" message, not a raw error.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"Two users rename the same file at the same time. What happens?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>ETag-based optimistic locking prevents lost updates.</strong> Both users read file with ETag "v3". User A sends PUT with If-Match: "v3", succeeds, file becomes "v4". User B sends PUT with If-Match: "v3", gets 412 Precondition Failed.</li>
+            <li><strong>Client retry logic:</strong> User B's client automatically re-fetches file metadata (now "v4" with User A's name). Shows conflict UI: "This file was renamed by User A to 'new-name'. Do you still want to rename it?"</li>
+            <li><strong>Move race conditions are harder:</strong> Two users moving the same file to different folders. Both succeed their ETag check (both read v3 at the same time). Solution: version column increment must be atomic: UPDATE files SET parent_id=?, version=version+1 WHERE id=? AND version=3. Only one succeeds.</li>
+            <li><strong>Circular move detection:</strong> User A moves folder X into folder Y while User B simultaneously moves Y into X. Each operation must check: "would this move create a cycle?" by traversing up the target's ancestor chain. Use advisory locks for cycle detection during concurrent moves.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"How do you handle permission inheritance cycles? E.g., Folder A shared with Group X, which includes User who owns Folder B, which is parent of Folder A."</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Permissions and folder hierarchy are separate graphs.</strong> Permissions form a DAG (directed acyclic graph): file -> permissions -> users/groups. Folder hierarchy is a tree (enforced by cycle detection on move). These two graphs cannot create cycles with each other.</li>
+            <li><strong>Group membership is a separate concern.</strong> User being in Group X doesn't affect folder hierarchy. Permissions are checked at access time: "does this user have access via any path?" (direct permission OR group membership OR inherited from parent folder).</li>
+            <li><strong>Real danger: recursive sharing.</strong> Share folder A with User B. User B shares subfolder A/C with User D. User D shares A/C/E back with Group that includes original Owner. This is valid — each sharing relationship is independent. No cycle, just multiple access paths to the same content.</li>
+            <li><strong>Performance concern:</strong> Deep permission chains (10+ levels of folder nesting with different sharing at each level). Solution: flatten effective permissions into Redis cache. Cache key = (file_id, user_id) -> effective_role. Recompute on any permission change in ancestor chain.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"With content-addressable dedup, how do you handle quota accounting? If 100 users all upload the same 1GB file, who gets charged?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Logical vs physical storage are different.</strong> Physical: one copy of the 1GB file exists (ref_count=100). Logical: each user's quota is charged the full 1GB. This is the Google Drive / Dropbox model.</li>
+            <li><strong>Why charge everyone:</strong> If User A deletes their copy, their quota should decrease. If dedup-aware: deleting would not free quota (other 99 users still reference it). Confusing UX: "I deleted a 1GB file but my storage didn't change."</li>
+            <li><strong>Implementation:</strong> Quota counter (Redis INCRBY) tracks logical usage per user. File size added on upload, subtracted on delete. Completely independent of physical dedup. Reconciliation job periodically verifies Redis counter matches SUM(files.size) from DB.</li>
+            <li><strong>Enterprise exception:</strong> Some enterprise plans offer "dedup-aware quota" where shared files within an org only count once against the org's pool. This is a billing feature, not a storage feature. Implemented as: org_quota = SUM(DISTINCT chunk sizes) for all org users.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"A user has a folder with 500,000 files. How do you make listing performant?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Cursor-based pagination is mandatory.</strong> Never use OFFSET/LIMIT (O(N) for deep pages). Use keyset pagination: WHERE (name, id) > (:last_name, :last_id) ORDER BY name, id LIMIT 50. Cursor encodes the last item's sort key.</li>
+            <li><strong>Index on (parent_id, name, id):</strong> Composite index makes folder listing a single index range scan. No table access needed if query only needs name + id + type (covering index).</li>
+            <li><strong>Pre-computed counts:</strong> Don't SELECT COUNT(*) for folder item count (full scan). Maintain children_count column on folders, incremented/decremented on add/remove. Eventually consistent — reconciliation job fixes drift.</li>
+            <li><strong>Client-side virtual scrolling:</strong> Even with fast backend, rendering 500K items in DOM is impossible. Client uses virtual list: only renders visible ~50 items. Fetches next page on scroll. Illusion of infinite list.</li>
+            <li><strong>Background pre-fetch:</strong> When user navigates to a folder, pre-fetch first 2 pages. On scroll near bottom, prefetch next page. Eliminates perceived loading time for smooth scrolling experience.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"How do you handle the case where a virus is found in a file that has already been shared with 1000 users?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Immediate quarantine.</strong> Set file status = QUARANTINED. This blocks all downloads and sharing link access instantly. ACL check includes status check: status must be ACTIVE for any read operation.</li>
+            <li><strong>Notify all affected users.</strong> Query permissions table for all users with access (direct + inherited). Send security notification: "A file shared with you was found to contain malware." Include file name, sharer, and action taken.</li>
+            <li><strong>Audit trail investigation:</strong> Query activity_log for all FILE_DOWNLOADED events for this file_id. Generate report: which users downloaded it, when, from what IP/device. This report goes to the org's security team.</li>
+            <li><strong>Sync engine handling:</strong> Push QUARANTINED status change via sync delta. Desktop clients that have local copies: mark file as quarantined in local DB, prevent opening, show warning. Do NOT auto-delete from local disk (user may need for forensic analysis).</li>
+            <li><strong>Owner notification:</strong> File owner gets separate notification with option to: (a) delete the file permanently, or (b) appeal if they believe it's a false positive. Appeal triggers manual review by trust & safety team.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const panels = {
+  webclient: {
+    icon: '\u{1F310}', title: 'Mobile / Web Client', subtitle: 'Chunked uploader + local sync engine + offline access',
+    sections: [
+      { title: 'Chunked Upload Engine', items: ['Split files into 4-8MB chunks client-side before upload', 'Compute SHA-256 per chunk for dedup check + integrity verification', 'Resumable: track which chunks uploaded in local SQLite. On failure: resume from last successful chunk', 'Bandwidth throttling: limit upload speed to avoid saturating user connection', 'Parallel upload: 3-4 chunks concurrently for throughput on fast connections'] },
+      { title: 'Local Sync Engine', items: ['SQLite database mirrors server file metadata locally', 'File system watcher (inotify/FSEvents) detects local changes', 'Change queue: debounce rapid edits (1s delay before syncing)', 'Offline mode: queue all changes locally, sync when connection restored', 'Conflict detection: compare local version vs server version on reconnect'] },
+      { title: 'Smart Sync / On-Demand', items: ['Not all files downloaded by default (saves disk space)', 'Placeholder files shown in file browser with cloud icon', 'File accessed -> triggers download on demand', 'Pinned files: always available offline (user selects)', 'LRU eviction: auto-remove least-recently-used local copies when disk is low'] }
+    ]
+  },
+  gateway: {
+    icon: '\u{1F6AA}', title: 'API Gateway', subtitle: 'Auth + Rate limiting + Request routing',
+    sections: [
+      { title: 'Authentication', items: ['OAuth2 bearer tokens (JWT) for API access', 'Token validation at edge: RSA public key verification, no DB lookup', 'Refresh token rotation: old refresh token invalidated on use', 'Service-to-service: mTLS with certificate pinning'] },
+      { title: 'Rate Limiting', items: ['Per-user: 1000 req/min for metadata, 100 req/min for uploads', 'Per-IP: 5000 req/min as DDoS protection', 'Sliding window in Redis: ZADD + ZREMRANGEBYSCORE + ZCARD', 'HTTP 429 with Retry-After header on limit exceeded', 'Different limits by plan tier: Free (strict) vs Enterprise (generous)'] },
+      { title: 'Request Routing', items: ['/api/v1/files/* -> File Metadata Service', '/api/v1/uploads/* -> Blob Storage Service', '/api/v1/search/* -> Search Service', '/api/v1/sync/* -> Sync Service', 'WebSocket /ws/collab/* -> Collaboration Service'] }
+    ]
+  },
+  cdn: {
+    icon: '\u{26A1}', title: 'CDN (CloudFront/Akamai)', subtitle: 'Download acceleration + edge caching',
+    sections: [
+      { title: 'Caching Strategy', items: ['Shared files with 100+ views cached at edge automatically', 'Pre-signed URLs: include token + expiry in URL, CDN validates', 'Cache invalidation on file update: API call to CDN purge endpoint', 'Cache key: content_hash ensures new version = new cache key (no stale content)', 'Geographic routing: user -> nearest edge PoP -> origin if cache miss'] },
+      { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key (content_hash), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs.' }
+    ]
+  },
+  metadata: {
+    icon: '\u{1F4C4}', title: 'File Metadata Service', subtitle: 'CRUD + tree structure + ownership + versioning',
+    sections: [
+      { title: 'Core Responsibilities', text: 'Manages the file/folder hierarchy. Every file and folder is a row in the files table. parent_id creates the tree structure. Owner is the user who created the file. Versions tracked via version column + file_versions table for history.' },
+      { title: 'Optimistic Concurrency', items: ['Every metadata update requires If-Match: ETag header', 'ETag = hash of (id + version + modified_at)', 'PUT /files/{id} with stale ETag -> 412 Precondition Failed', 'Client must refetch, show diff to user, retry with new ETag', 'No pessimistic locks: read-heavy workload (100:1 read:write ratio)'] },
+      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy: deep copy file metadata + increment chunk ref_counts (no data copy)'] }
+    ]
+  },
+  blob: {
+    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Chunked upload/download + SHA-256 dedup',
+    sections: [
+      { title: 'Resumable Upload Protocol', items: ['POST /uploads/resumable: initiate session, get upload_id (24h TTL)', 'PUT /uploads/{id} with Content-Range header for each chunk', 'Server tracks received chunks. Client can query progress.', 'Final chunk: server verifies full-file SHA-256 checksum', 'On failure: client resumes from last acknowledged chunk offset'] },
+      { title: 'Content-Addressable Dedup', items: ['Each chunk keyed by SHA-256 hash of its content', 'Before storing: check if hash exists in chunks table', 'Hash exists: skip upload, increment ref_count (saves bandwidth + storage)', 'Hash collision: astronomically unlikely (1 in 2^128). Not worth handling.', 'Enterprise: 30-50% dedup ratio on shared documents and email attachments'] },
+      { title: 'Download Path', items: ['Generate pre-signed S3 URL (1h TTL)', 'Redirect client to CDN/S3 directly (302 redirect)', 'Range request support for partial downloads and video streaming', 'Chunks reassembled in order by chunk_index from file_chunks table', 'Large files: parallel chunk download on client for speed'] }
+    ]
+  },
+  sharing: {
+    icon: '\u{1F465}', title: 'Sharing & Permission Service', subtitle: 'Hierarchical ACL + link sharing + inheritance',
+    sections: [
+      { title: 'Permission Model', text: 'Four roles in hierarchy: OWNER > EDITOR > COMMENTER > VIEWER. Permissions can be granted to: individual users, groups, entire domain (org), or anyone (public). Inheritance: folder permission applies to all descendants unless explicitly overridden at a lower level.' },
+      { title: 'ACL Evaluation', items: ['Check file direct permissions first', 'If no match: walk up parent chain checking folder permissions', 'First match wins (most specific permission)', 'Redis cache: acl:{file_id}:{user_id} -> role (5min TTL)', 'Cache miss: compute from DB, populate cache', 'Invalidation: on any permission change, invalidate file + all descendants'] },
+      { title: 'Link Sharing', items: ['Generate cryptographically random 32-char token', 'Scope: anyone_with_link, org_members, specific_users', 'Optional: password protection, expiry date, download restriction', 'Link resolves to file_id via sharing_links table lookup', 'Rate limit link lookups to prevent token enumeration attacks'] }
+    ]
+  },
+  sync: {
+    icon: '\u{1F504}', title: 'Sync Service', subtitle: 'Cursor-based delta feed + conflict resolution',
+    sections: [
+      { title: 'Delta Sync Protocol', text: 'Clients maintain an opaque cursor (server-issued token encoding timestamp + sequence number). POST /sync/changes with cursor returns all changes since that point. Long-polling: server holds connection up to 60s if no changes. On any change: immediately returns. Client processes deltas and stores new cursor.' },
+      { title: 'Conflict Resolution', items: ['Metadata conflicts (rename, move): last-writer-wins based on server timestamp', 'Content conflicts (two users edit offline): create conflict copy with both versions', 'Conflict copy naming: "filename (User conflict copy).ext"', 'User must manually resolve: pick one version, merge, or keep both', 'Never silently overwrite user data - data loss is worse than conflict copies'] },
+      { title: 'Scaling', items: ['Change log table: append-only, partitioned by time', 'Each user gets changes filtered to their accessible files', 'WebSocket/SSE for real-time push (reduces polling)', 'Kafka consumer updates change log from file-events topic', 'Multiple sync service instances: stateless, load-balanced'] }
+    ]
+  },
+  search: {
+    icon: '\u{1F50D}', title: 'Search Service', subtitle: 'Full-text + metadata search via Elasticsearch',
+    sections: [
+      { title: 'Indexing Pipeline', items: ['Kafka consumer on file-events topic', 'On file create/update: extract text content (PDFs, docs, images via OCR)', 'Index: file name, content text, owner, MIME type, shared_with users', 'Bulk indexing: batch 1000 documents per ES bulk request', 'Re-index job: periodic full re-index for consistency'] },
+      { title: 'Permission-Filtered Search', items: ['User searches: query must be filtered to only files user can access', 'Approach 1: post-filter (search all, filter by ACL) - poor for users with few files', 'Approach 2: pre-filter (include user access list in query) - used at scale', 'ES document includes field: accessible_by = [user_ids, group_ids]', 'On permission change: update ES document accessible_by field'] }
+    ]
+  },
+  collab: {
+    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing + OT/CRDT + cursor sync',
+    sections: [
+      { title: 'Operational Transform', text: 'Each edit is an operation: insert(pos, text) or delete(pos, length). When two users edit concurrently, operations must be transformed against each other to maintain consistency. Server is the authority: assigns sequential revision numbers. Clients transform local pending ops against incoming server ops.' },
+      { title: 'Architecture', items: ['WebSocket connection per active editor per document', 'In-memory document state on collab server (Redis-backed for HA)', 'Operations applied in server-determined order', 'Broadcast transformed operations to all connected clients', 'Checkpoint: persist full document state every 30s or 100 ops', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
+      { title: 'Presence & Cursors', items: ['Each user cursor position broadcast via WebSocket', 'Cursor updates are fire-and-forget (no persistence needed)', 'User presence: "Alice is viewing", "Bob is editing at line 42"', 'Heartbeat every 30s to detect stale sessions', 'Idle timeout: 5min without activity -> remove from active editors'] }
+    ]
+  },
+  objectstore: {
+    icon: '\u{1F5C4}', title: 'Object Store (S3/GCS)', subtitle: 'Blob storage + 11 nines durability + lifecycle',
+    sections: [
+      { title: 'Storage Architecture', text: 'File chunks stored as objects keyed by SHA-256 content hash. Bucket structure: s3://drive-chunks-{region}/{hash[0:2]}/{hash[2:4]}/{hash}. Two levels of prefix partitioning prevent S3 request throttling on hot prefixes. Cross-region replication for disaster recovery.' },
+      { title: 'Lifecycle Policies', items: ['Hot tier (S3 Standard): accessed within last 30 days. Lowest latency, highest cost.', 'Warm tier (S3 IA): 30-90 days since last access. 40% cheaper, same durability.', 'Cold tier (Glacier): >90 days. 80% cheaper. 3-5 hour retrieval time.', 'Auto-transition based on chunks.last_accessed timestamp', 'User-triggered restore from cold: async, notify when ready'] }
+    ]
+  },
+  metadb: {
+    icon: '\u{1F4BE}', title: 'Metadata DB (PostgreSQL)', subtitle: 'Sharded by owner_id + read replicas',
+    sections: [
+      { title: 'Sharding Strategy', items: ['Shard key: owner_id (all user files on same shard)', 'Shard count: start with 16, scale to 256+ as needed', 'Consistent hashing for shard assignment', 'Cross-shard queries: scatter-gather for shared files (10-15% of reads)', 'PgBouncer: connection pooling in transaction mode'] },
+      { title: 'Read Replicas', items: ['3-5 replicas per shard for read-heavy workload', 'Folder listing, file metadata reads from replicas', 'Writes always go to primary', 'Replication lag: <100ms acceptable for most reads', 'CRITICAL: permission checks must read from primary (security)'] }
+    ]
+  },
+  cache: {
+    icon: '\u{26A1}', title: 'Cache (Redis Cluster)', subtitle: 'ACL cache + hot metadata + rate limits',
+    sections: [
+      { title: 'Cache Layers', items: ['ACL cache: acl:{file_id}:{user_id} -> role (TTL 5min)', 'File metadata: file:{id} -> JSON (TTL 10min, invalidate on write)', 'User quota: quota:{user_id} -> bytes_used (TTL none, updated atomically)', 'Rate limits: ratelimit:{user_id}:{endpoint} -> sliding window', 'Sync cursors: cursor:{user_id} -> latest cursor position'] },
+      { title: 'Invalidation Strategy', items: ['Write-through for quota counters (always update cache on change)', 'Write-invalidate for file metadata (delete cache key on write, lazy reload)', 'Recursive invalidation for ACL on folder permission change', 'Redis Pub/Sub for multi-instance cache coordination'] }
+    ]
+  },
+  mq: {
+    icon: '\u{1F4E8}', title: 'Message Queue (Kafka)', subtitle: 'Event bus + async job dispatch',
+    sections: [
+      { title: 'Topic Design', items: ['file-events: all file CRUD operations, partitioned by owner_id', 'sync-events: change feed for delta sync service', 'notification-dispatch: email/push notifications, partitioned by user_id', 'audit-log: all operations for compliance logging', 'thumbnail-jobs: async preview generation requests'] },
+      { title: 'Consumer Groups', items: ['sync-consumer: updates change_log table for delta sync', 'search-indexer: updates Elasticsearch index', 'notification-sender: sends emails/push/in-app notifications', 'audit-writer: writes to Cassandra activity_log', 'thumbnail-generator: generates image/doc previews', 'All consumers idempotent: event_id as dedup key'] }
+    ]
+  },
+  notify: {
+    icon: '\u{1F514}', title: 'Notification Service', subtitle: 'Email + Push + In-app + Batching',
+    sections: [
+      { title: 'Notification Types', items: ['File shared with you: email + push + in-app', 'Comment on your file: in-app + optional email', 'File edited by collaborator: in-app only (high frequency)', 'Storage quota warning: email at 80%, 90%, 95%', 'Security alerts (virus found, suspicious access): email + push immediately'] },
+      { title: 'Batching', items: ['Bulk operations (move 1000 files) should not generate 1000 notifications', 'Aggregate window: 30 seconds. Group related events into single notification.', '"Alice moved 47 files to Project folder" instead of 47 individual notifications', 'Respect user preferences: notification settings per event type'] }
+    ]
+  },
+  thumbnail: {
+    icon: '\u{1F5BC}', title: 'Thumbnail / Preview Generator', subtitle: 'Async image/doc/video preview generation',
+    sections: [
+      { title: 'Supported Formats', items: ['Images (JPEG, PNG, GIF, WebP): resize to 128px, 256px, 512px', 'PDFs: render first page as image', 'Documents (DOCX, XLSX, PPTX): convert to PDF, render first page', 'Videos: extract frame at 10% mark', 'Code files: syntax-highlighted first 20 lines'] },
+      { title: 'Architecture', items: ['Kafka consumer on thumbnail-jobs topic', 'Worker pool: Kubernetes jobs with auto-scaling', 'Output stored in CDN-backed S3 bucket', 'Thumbnail URL added to file metadata', 'Retry on failure with exponential backoff (max 3 attempts)'] }
+    ]
+  },
+  virus: {
+    icon: '\u{1F6E1}', title: 'Virus Scanner', subtitle: 'ClamAV + heuristic scanning on every upload',
+    sections: [
+      { title: 'Scan Pipeline', items: ['Triggered by FILE_UPLOADED Kafka event', 'Download file from S3 to scanner worker', 'Run ClamAV signature scan + heuristic analysis', 'Clean: update status PROCESSING -> ACTIVE', 'Infected: set status QUARANTINED, notify owner', 'Scan timeout: 5min per file. Files >1GB: sample-based scan'] },
+      { title: 'Periodic Re-scan', items: ['New virus signatures released daily', 'Background job re-scans recently uploaded files (last 7 days) against new signatures', 'Newly detected infections: quarantine + notify all users with access', 'Enterprise: option to re-scan entire org file corpus on demand'] }
+    ]
+  },
+  quota: {
+    icon: '\u{1F4CA}', title: 'Quota Enforcement', subtitle: 'Storage limits + billing + dedup handling',
+    sections: [
+      { title: 'Enforcement Points', items: ['Pre-check on upload initiation: reject if would exceed quota', 'Atomic Redis INCRBY: prevents race condition on concurrent uploads', 'Post-upload adjustment: if dedup detected, actual storage used less than declared', 'Quota tracked as logical usage (not physical) for user simplicity'] },
+      { title: 'Reconciliation', items: ['Hourly job: compare Redis counter vs SUM(files.size) from DB', 'Drift detected: adjust Redis counter to match DB (source of truth)', 'Common drift causes: failed uploads not properly decrementing, race conditions', 'Alert if drift exceeds 1GB for any user (potential bug)'] }
+    ]
+  },
+  audit: {
+    icon: '\u{1F4DC}', title: 'Audit Logger', subtitle: 'Immutable activity log + compliance + investigation',
+    sections: [
+      { title: 'Event Types', items: ['FILE_CREATED, FILE_MODIFIED, FILE_DELETED, FILE_DOWNLOADED', 'FILE_SHARED, FILE_UNSHARED, PERMISSION_CHANGED', 'FILE_MOVED, FILE_RENAMED, FILE_RESTORED (from trash)', 'LOGIN, LOGIN_FAILED, SETTINGS_CHANGED', 'Each event: actor_id, file_id, timestamp, IP, user_agent, details map'] },
+      { title: 'Compliance', items: ['SOC2: audit trail of all data access required', 'HIPAA: track who accessed patient documents', 'GDPR: data subject access request — export all activity for a user', 'Retention: 7 years default, configurable per org', 'Immutability: no UPDATE/DELETE on activity_log. Enforced at DB + app level.'] }
+    ]
+  }
+};
+
+function openPanel(key) {
+  const data = panels[key];
+  if (!data) return;
+  document.getElementById('dp-icon').textContent = data.icon;
+  document.getElementById('dp-title').textContent = data.title;
+  document.getElementById('dp-subtitle').textContent = data.subtitle;
+  const body = document.getElementById('dp-body');
+  body.innerHTML = '';
+  data.sections.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'dp-section';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'dp-sec-title';
+    titleEl.textContent = sec.title;
+    div.appendChild(titleEl);
+    if (sec.text) {
+      const p = document.createElement('p');
+      p.className = 'dp-text';
+      p.textContent = sec.text;
+      div.appendChild(p);
+    }
+    if (sec.items) {
+      const ul = document.createElement('ul');
+      ul.className = 'dp-list';
+      sec.items.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = item;
+        ul.appendChild(li);
+      });
+      div.appendChild(ul);
+    }
+    body.appendChild(div);
+  });
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closePanel() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function toggleLayer(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleFlow(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleDb(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleApi(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
