@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment System Design — Staff Engineer Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --teal: #00d4aa;
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --orange: #f97316;
+  --green: #22c55e;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;
+  line-height:1.6;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999;
+}
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:var(--teal);
+  letter-spacing:0.05em;
+  padding:14px 24px 14px 0;
+  border-right:1px solid var(--border);
+  margin-right:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-item{
+  padding:14px 16px;
+  font-size:11px;
+  color:var(--muted2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color 0.15s;
+  border-bottom:2px solid transparent;
+  flex-shrink:0;
+}
+.nav-item:hover,.nav-item.active{color:var(--teal);border-bottom-color:var(--teal);}
+.page{max-width:1320px;margin:0 auto;padding:48px 28px 80px;}
+
+/* hero */
+.hero{
+  padding:64px 0 48px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:48px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-60px;right:-80px;
+  width:480px;height:480px;
+  background:radial-gradient(circle,rgba(0,212,170,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-tag{
+  font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-tag::before{content:'';width:32px;height:1px;background:var(--teal);}
+.hero-title{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(28px,4vw,44px);
+  font-weight:800;
+  line-height:1.1;
+  color:#fff;
+  margin-bottom:10px;
+}
+.hero-title span{color:var(--teal);}
+.hero-sub{
+  font-size:12px;color:var(--muted2);
+  margin-bottom:32px;
+}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.pill{
+  font-size:10px;padding:4px 12px;
+  border:1px solid var(--border2);
+  border-radius:2px;
+  color:var(--muted);
+}
+.pill.hi{border-color:rgba(0,212,170,0.4);color:var(--teal);}
+
+/* section headers */
+.sec-head{
+  display:flex;align-items:baseline;gap:16px;
+  margin-bottom:24px;padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.sec-num{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--border2);}
+.sec-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:#fff;}
+.sec-tag{font-size:10px;color:var(--muted);letter-spacing:0.1em;margin-left:auto;}
+section{margin-bottom:64px;}
+
+/* overview metrics */
+.metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:2px;
+  margin-bottom:32px;
+}
+.metric{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+}
+.metric-val{
+  font-family:'Syne',sans-serif;
+  font-size:20px;font-weight:800;
+  color:var(--teal);
+  margin-bottom:4px;
+}
+.metric-label{font-size:10px;color:var(--muted);letter-spacing:0.05em;}
+
+/* principle cards */
+.principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:8px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--teal);
+}
+.principle-title{
+  font-size:12px;font-weight:600;color:var(--teal);
+  margin-bottom:6px;
+}
+.principle-desc{font-size:11px;color:var(--muted2);line-height:1.6;}
+
+/* layers */
+.layer{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.layer-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.layer-hd:hover{background:var(--s2);}
+.l-accent{width:3px;height:32px;border-radius:2px;flex-shrink:0;}
+.l-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.l-scale{font-size:10px;color:var(--muted);margin-left:8px;}
+.l-chevron{margin-left:auto;color:var(--muted);font-size:10px;transition:transform 0.2s;}
+.layer.open .l-chevron{transform:rotate(90deg);}
+.layer-bd{display:none;border-top:1px solid var(--border);padding:20px 18px;}
+.layer.open .layer-bd{display:block;}
+.comp-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:2px;
+}
+.comp{
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:14px 16px;
+  cursor:pointer;
+  transition:border-color 0.15s,background 0.15s;
+  border-radius:3px;
+}
+.comp:hover{border-color:var(--border2);background:var(--s2);}
+.comp-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.comp-icon{font-size:16px;}
+.comp-name{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;}
+.comp-role{font-size:10px;color:var(--teal);margin-bottom:6px;letter-spacing:0.05em;}
+.comp-detail{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* state machine */
+.state-machine{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:24px;
+  overflow-x:auto;
+}
+.sm-title{
+  font-family:'Syne',sans-serif;font-size:14px;font-weight:700;
+  color:#fff;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
+}
+.sm-flow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:0;
+  align-items:flex-start;
+}
+.sm-col{
+  display:flex;flex-direction:column;
+  align-items:center;gap:0;
+}
+.state{
+  display:inline-flex;flex-direction:column;align-items:center;
+  padding:10px 16px;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  background:var(--bg);
+  min-width:140px;
+  text-align:center;
+}
+.state-name{font-size:11px;font-weight:600;color:#fff;margin-bottom:2px;}
+.state-desc{font-size:9px;color:var(--muted);}
+.state.terminal{border-color:rgba(239,68,68,0.4);}
+.state.terminal .state-name{color:var(--red);}
+.state.success{border-color:rgba(34,197,94,0.4);}
+.state.success .state-name{color:var(--green);}
+.state.warning{border-color:rgba(240,180,41,0.4);}
+.state.warning .state-name{color:var(--gold);}
+.state.active{border-color:rgba(0,212,170,0.4);}
+.state.active .state-name{color:var(--teal);}
+.sm-arrow{
+  font-size:18px;color:var(--muted);
+  padding:4px;text-align:center;
+}
+.sm-arrow.right{padding:0 8px;}
+.sm-branch{
+  display:flex;align-items:center;gap:4px;
+  margin:4px 0;
+}
+.branch-label{font-size:9px;color:var(--muted);letter-spacing:0.05em;}
+
+/* data flow */
+.flow-block{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.flow-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.flow-hd:hover{background:var(--s2);}
+.flow-num{
+  font-family:'Syne',sans-serif;font-size:11px;font-weight:800;
+  color:var(--teal);
+  background:rgba(0,212,170,0.1);
+  border:1px solid rgba(0,212,170,0.2);
+  padding:3px 10px;border-radius:2px;
+  flex-shrink:0;
+}
+.flow-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;}
+.flow-meta{font-size:10px;color:var(--muted);margin-left:auto;}
+.flow-chevron{color:var(--muted);font-size:10px;transition:transform 0.2s;flex-shrink:0;}
+.flow-block.open .flow-chevron{transform:rotate(90deg);}
+.flow-bd{
+  display:none;
+  border-top:1px solid var(--border);
+}
+.flow-block.open .flow-bd{display:block;}
+.flow-steps{
+  display:flex;flex-direction:column;
+  gap:0;
+}
+.flow-step{
+  display:grid;
+  grid-template-columns:48px 140px 1fr 160px;
+  gap:0;
+  border-bottom:1px solid var(--border);
+}
+.flow-step:last-child{border-bottom:none;}
+.fs-num{
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:800;
+  color:var(--muted);
+  border-right:1px solid var(--border);
+  padding:12px 8px;
+}
+.fs-svc{
+  display:flex;align-items:center;
+  padding:12px 14px;
+  font-size:11px;font-weight:600;color:var(--teal);
+  border-right:1px solid var(--border);
+}
+.fs-action{
+  padding:12px 16px;
+  font-size:11px;color:var(--text);
+}
+.fs-note{
+  padding:12px 14px;
+  font-size:10px;color:var(--muted);
+  border-left:1px solid var(--border);
+  font-style:italic;
+}
+
+/* code blocks */
+.code-block{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:16px 18px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  color:var(--text);
+  overflow-x:auto;
+  margin-bottom:12px;
+  line-height:1.7;
+}
+.code-block .kw{color:var(--blue);}
+.code-block .str{color:var(--green);}
+.code-block .cm{color:var(--muted);}
+.code-block .fn{color:var(--gold);}
+.code-block .num{color:var(--orange);}
+.code-label{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+}
+.code-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* db section */
+.db-grid{display:flex;flex-direction:column;gap:3px;}
+.db-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;cursor:pointer;
+  transition:border-color 0.15s;
+}
+.db-card:hover,.db-card.open{border-color:var(--border2);}
+.db-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+}
+.db-icon{font-size:18px;flex-shrink:0;}
+.db-title-wrap{flex:1;}
+.db-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;}
+.db-meta-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px;}
+.db-badge{font-size:10px;padding:2px 8px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);}
+.db-badge.pg{border-color:rgba(59,130,246,0.4);color:var(--blue);}
+.db-badge.redis{border-color:rgba(239,68,68,0.4);color:var(--red);}
+.db-badge.kafka{border-color:rgba(240,180,41,0.4);color:var(--gold);}
+.db-badge.es{border-color:rgba(139,92,246,0.4);color:var(--purple);}
+.db-scale-tag{margin-left:auto;font-size:10px;padding:2px 10px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);flex-shrink:0;}
+.db-bd{display:none;border-top:1px solid var(--border);}
+.db-card.open .db-bd{display:block;}
+.db-inner{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:900px){.db-inner{grid-template-columns:1fr;}}
+.db-schema{border-right:1px solid var(--border);padding:20px 18px;background:var(--bg);}
+.db-schema:last-child{border-right:none;}
+.db-sec-label{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--teal);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.db-sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.schema-block{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:14px 16px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;}
+.schema-table{font-size:11px;font-weight:600;color:var(--gold2);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.schema-table span{font-size:10px;font-weight:400;color:var(--muted);}
+.schema-col{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:11px;}
+.schema-col:last-child{border-bottom:none;}
+.col-name{color:var(--text);}
+.col-name.pk{color:var(--gold);}
+.col-name.fk{color:var(--teal);}
+.col-name.idx{color:var(--blue);}
+.col-type{color:var(--muted);font-size:10px;}
+.col-note{color:var(--purple);font-size:10px;}
+.schema-indexes{margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--muted2);line-height:1.7;}
+.schema-indexes strong{color:var(--muted);}
+.db-notes-list{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.db-notes-list li{font-size:12px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.db-notes-list li::before{content:'›';position:absolute;left:0;color:var(--teal);font-size:13px;line-height:1.5;}
+.db-notes-list li strong{color:var(--text);}
+.db-full{padding:20px 18px;background:var(--bg);}
+
+/* tradeoff matrix */
+.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2px;}
+.matrix-card{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:20px;}
+.mc-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;margin-bottom:14px;}
+.mc-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.mc-label{font-size:10px;color:var(--muted);width:140px;flex-shrink:0;}
+.mc-val{display:flex;gap:3px;}
+.bar{width:16px;height:8px;border-radius:1px;}
+.bar.fill{background:var(--teal);}
+.bar.empty{background:var(--border2);}
+.mc-verdict{
+  margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--border);
+  font-size:11px;color:var(--muted2);line-height:1.6;
+}
+.mc-verdict strong{color:var(--teal);}
+
+/* pitfalls */
+.pitfall-grid{display:flex;flex-direction:column;gap:3px;}
+.pitfall-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;
+}
+.pf-hd{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:16px 18px;
+}
+.pf-q{
+  flex:1;
+  font-size:12px;color:var(--gold2);line-height:1.5;
+  font-style:italic;
+}
+.pf-bd{
+  border-top:1px solid var(--border);
+  padding:16px 18px;
+  background:var(--bg);
+}
+.pf-ans{font-size:11px;color:var(--muted2);line-height:1.7;}
+.pf-ans strong{color:var(--teal);}
+.pf-steps{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.pf-steps li{font-size:11px;color:var(--muted2);padding-left:14px;position:relative;}
+.pf-steps li::before{content:'→';position:absolute;left:0;color:var(--teal);}
+
+/* detail panel */
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.6);
+  z-index:200;backdrop-filter:blur(4px);
+}
+.overlay.show{display:block;}
+.detail-panel{
+  position:fixed;right:0;top:0;bottom:0;
+  width:min(560px,90vw);
+  background:var(--s1);
+  border-left:1px solid var(--border);
+  z-index:300;
+  transform:translateX(100%);
+  transition:transform 0.25s cubic-bezier(0.2,0,0,1);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.detail-panel.open{transform:translateX(0);}
+.dp-header{
+  padding:24px 24px 18px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.dp-close{
+  position:absolute;top:18px;right:18px;
+  width:28px;height:28px;
+  border:1px solid var(--border2);
+  background:var(--bg);
+  color:var(--muted2);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;border-radius:2px;
+  transition:color 0.15s;
+}
+.dp-close:hover{color:#fff;}
+.dp-icon{font-size:28px;margin-bottom:8px;}
+.dp-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px;}
+.dp-subtitle{font-size:11px;color:var(--muted);}
+.dp-body{flex:1;overflow-y:auto;padding:20px 24px;}
+.dp-section{margin-bottom:20px;}
+.dp-sec-title{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.dp-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.dp-text{font-size:12px;color:var(--muted2);line-height:1.7;}
+.dp-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.dp-list li{font-size:12px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.dp-list li::before{content:'›';position:absolute;left:0;color:var(--teal);}
+.dp-code{
+  background:var(--bg);border:1px solid var(--border);border-radius:3px;
+  padding:12px 14px;font-size:11px;color:var(--text);
+  overflow-x:auto;line-height:1.7;margin-top:8px;
+}
+
+/* principle key callout */
+.key-principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:2px;
+  margin-bottom:24px;
+}
+.kp{
+  background:var(--s1);border:1px solid var(--border);
+  border-left:3px solid var(--gold);
+  padding:14px 16px;
+}
+.kp-title{font-size:11px;font-weight:600;color:var(--gold2);margin-bottom:4px;}
+.kp-body{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* scale table */
+.scale-table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+.scale-table th{
+  background:var(--s2);
+  padding:10px 14px;
+  text-align:left;
+  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:2px solid var(--border);
+}
+.scale-table td{
+  padding:10px 14px;
+  font-size:11px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+.scale-table td:first-child{color:var(--gold2);font-weight:600;}
+.scale-table td:nth-child(2){color:var(--teal);}
+.scale-table tr:last-child td{border-bottom:none;}
+.scale-table tr:hover td{background:var(--s2);}
+
+/* reconciliation table */
+.recon-table{width:100%;border-collapse:collapse;}
+.recon-table th{background:var(--s2);padding:8px 12px;text-align:left;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);}
+.recon-table td{padding:10px 12px;font-size:11px;border-bottom:1px solid var(--border);}
+.recon-table td:first-child{color:var(--gold2);}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.metrics-grid,.principles{animation:fadeUp 0.4s ease both;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">💳 PAYMENT SYSTEM</div>
+  <div class="nav-item active" onclick="scrollTo('overview')">Overview</div>
+  <div class="nav-item" onclick="scrollTo('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollTo('statemachine')">State Machine</div>
+  <div class="nav-item" onclick="scrollTo('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollTo('ledger')">Ledger</div>
+  <div class="nav-item" onclick="scrollTo('outbox')">Outbox</div>
+  <div class="nav-item" onclick="scrollTo('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollTo('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollTo('availability')">Availability</div>
+  <div class="nav-item" onclick="scrollTo('tradeoffs')">Tradeoffs</div>
+  <div class="nav-item" onclick="scrollTo('pitfalls')">Pitfalls</div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="dp-header">
+    <button class="dp-close" onclick="closePanel()">✕</button>
+    <div class="dp-icon" id="dp-icon"></div>
+    <div class="dp-title" id="dp-title"></div>
+    <div class="dp-subtitle" id="dp-subtitle"></div>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
+</div>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">Staff Engineer Reference · v2</div>
+    <div class="hero-title">Payment System<br><span>Design</span></div>
+    <div class="hero-sub">APIs · State Machine · Data Models · Scalability · Trade-offs · Pitfalls</div>
+    <div class="hero-pills">
+      <span class="pill hi">Double-Entry Ledger</span>
+      <span class="pill hi">Transactional Outbox</span>
+      <span class="pill hi">Idempotency at Every Layer</span>
+      <span class="pill hi">UNKNOWN State</span>
+      <span class="pill">PSP Integration</span>
+      <span class="pill">Chargeback Lifecycle</span>
+      <span class="pill">Settlement & Reconciliation</span>
+      <span class="pill">PCI-DSS</span>
+    </div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <span class="sec-title">System Overview</span>
+      <span class="sec-tag">Scale targets · Core principles</span>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-val">1B+</div><div class="metric-label">Payments / Year</div></div>
+      <div class="metric"><div class="metric-val">1,600</div><div class="metric-label">Peak TPS (Black Friday)</div></div>
+      <div class="metric"><div class="metric-val">32</div><div class="metric-label">Average TPS</div></div>
+      <div class="metric"><div class="metric-val">&lt;150ms</div><div class="metric-label">Risk Engine p99</div></div>
+      <div class="metric"><div class="metric-val">99.99%</div><div class="metric-label">Availability Target</div></div>
+      <div class="metric"><div class="metric-val">T+1/T+2</div><div class="metric-label">Settlement Cadence</div></div>
+      <div class="metric"><div class="metric-val">~500GB</div><div class="metric-label">Payments Table / Year</div></div>
+      <div class="metric"><div class="metric-val">7 days</div><div class="metric-label">Auth Validity Window</div></div>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Idempotency at every layer</div>
+        <div class="principle-desc">Every write is safe to retry. Gateway → Payment Service → PSP calls → Webhooks. Use idempotency_key + ON CONFLICT DO NOTHING at DB level.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">State machine with optimistic locking</div>
+        <div class="principle-desc">All status transitions use UPDATE … WHERE status='EXPECTED'. If 0 rows affected → concurrent transition won. Never use SELECT then UPDATE.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Double-entry ledger — immutable</div>
+        <div class="principle-desc">Every debit has a corresponding credit. Sum of all signed entries = 0. Entries never updated — refunds create new reverse entries.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Transactional outbox</div>
+        <div class="principle-desc">Kafka publish = side effect of DB transaction, not a parallel write. Solves dual-write atomically. payment update + outbox insert in same COMMIT.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Write PSP request log BEFORE calling</div>
+        <div class="principle-desc">Log psp_requests row as PENDING before making external call. Enables crash recovery via reconciliation. Timeout ≠ Failure — query inquiry endpoint first.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Saga replaces 2PC</div>
+        <div class="principle-desc">No distributed locks. Compensating transactions for rollback. If capture fails → issue fiat refund. If notification fails → retry idempotently.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">UNKNOWN state is real</div>
+        <div class="principle-desc">On PSP timeout: immediately set AUTHORIZATION_UNKNOWN or CAPTURE_UNKNOWN. Async job reconciles. Never show false success or failure to user.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Amounts in integer cents — NEVER float</div>
+        <div class="principle-desc">0.1 + 0.2 ≠ 0.3 in IEEE 754. Store as BIGINT (cents). Never DECIMAL, never FLOAT. $100.00 = 10000. Currency field is ISO 4217 CHAR(3).</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Architecture</span>
+      <span class="sec-tag">Click components for deep dives</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+
+      <div class="layer open" id="l1">
+        <div class="layer-hd" onclick="toggleLayer('l1')">
+          <div class="l-accent" style="background:var(--teal)"></div>
+          <div class="l-name" style="color:var(--teal)">Ingress Layer</div>
+          <div class="l-scale">Edge · Auth · Idempotency · Rate Limiting</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('gateway')">
+              <div class="comp-top"><span class="comp-icon">🚪</span><span class="comp-name">API Gateway</span></div>
+              <div class="comp-role">Single ingress · TLS · Auth · Idempotency</div>
+              <div class="comp-detail">OAuth2/HMAC auth. Per-merchant + per-IP rate limits. Idempotency key dedup via atomic INSERT ON CONFLICT. HMAC replay protection with ±5min window.</div>
+            </div>
+            <div class="comp" onclick="openPanel('ratelimit')">
+              <div class="comp-top"><span class="comp-icon">⏱️</span><span class="comp-name">Rate Limiter</span></div>
+              <div class="comp-role">3 layers · Redis sliding window</div>
+              <div class="comp-detail">Per-merchant · Per-IP · Global. Sliding window in Redis via atomic Lua (ZADD + ZREMRANGEBYSCORE + ZCARD). Token bucket for burst allowance.</div>
+            </div>
+            <div class="comp" onclick="openPanel('idempotency')">
+              <div class="comp-top"><span class="comp-icon">🔁</span><span class="comp-name">Idempotency Layer</span></div>
+              <div class="comp-role">Dedup · Cache · 24h TTL</div>
+              <div class="comp-detail">INSERT INTO idempotency_keys ON CONFLICT DO NOTHING. 0 rows = duplicate → return cached response. COMPLETE after first successful response stored.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l2">
+        <div class="layer-hd" onclick="toggleLayer('l2')">
+          <div class="l-accent" style="background:var(--blue)"></div>
+          <div class="l-name" style="color:var(--blue)">Core Services</div>
+          <div class="l-scale">Orchestration · Risk · Payment Methods · PSP</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('payment')">
+              <div class="comp-top"><span class="comp-icon">📋</span><span class="comp-name">Payment Service</span></div>
+              <div class="comp-role">State machine · Saga orchestrator</div>
+              <div class="comp-detail">Owns the payment lifecycle. Optimistic locking on every state transition. Coordinates Risk, Payment Method, PSP, and Ledger services.</div>
+            </div>
+            <div class="comp" onclick="openPanel('risk')">
+              <div class="comp-top"><span class="comp-icon">🛡️</span><span class="comp-name">Risk & Fraud Engine</span></div>
+              <div class="comp-role">Rules (&lt;10ms) + ML (&lt;100ms)</div>
+              <div class="comp-detail">Layer 1: deterministic rule engine (blacklists, velocity, BIN checks). Layer 2: gradient-boosted ML model. Decision: APPROVE/REVIEW/DECLINE + score 0–100.</div>
+            </div>
+            <div class="comp" onclick="openPanel('vault')">
+              <div class="comp-top"><span class="comp-icon">🗄️</span><span class="comp-name">Payment Method / Token Vault</span></div>
+              <div class="comp-role">PCI-DSS · Network-isolated · PAN tokenization</div>
+              <div class="comp-detail">Raw PANs stored ONLY in isolated vault. App DBs store opaque token + card_fingerprint + last4. Vault is separate network segment, separate DB, separate deploy.</div>
+            </div>
+            <div class="comp" onclick="openPanel('psp')">
+              <div class="comp-top"><span class="comp-icon">🔌</span><span class="comp-name">PSP Integration Layer</span></div>
+              <div class="comp-role">Stripe · Adyen · Braintree · Failover</div>
+              <div class="comp-detail">Auth → Capture → Settle lifecycle. Log psp_requests BEFORE calling. Hard vs transient retry logic. Circuit breaker: open at 5% error rate / 60s. Never change PSP mid-payment.</div>
+            </div>
+            <div class="comp" onclick="openPanel('chargeback')">
+              <div class="comp-top"><span class="comp-icon">⚖️</span><span class="comp-name">Chargeback / Dispute Service</span></div>
+              <div class="comp-role">Card network arbitration · SLA tracking</div>
+              <div class="comp-detail">Manages full chargeback lifecycle with strict time windows. Auto-populates evidence from order data. Tracks chargeback rate — Visa/MC thresholds trigger escalating consequences.</div>
+            </div>
+            <div class="comp" onclick="openPanel('settlement')">
+              <div class="comp-top"><span class="comp-icon">🏦</span><span class="comp-name">Settlement & Reconciliation</span></div>
+              <div class="comp-role">T+1/T+2 · PSP file matching · Exception handling</div>
+              <div class="comp-detail">Daily PSP settlement files (CSV/SFTP). Match to internal records by psp_transaction_id. Categorize mismatches: timing lag, unmatched captures, fee discrepancies.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l3">
+        <div class="layer-hd" onclick="toggleLayer('l3')">
+          <div class="l-accent" style="background:var(--gold)"></div>
+          <div class="l-name" style="color:var(--gold)">Financial Core</div>
+          <div class="l-scale">Double-entry ledger · Outbox · Events</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('ledger')">
+              <div class="comp-top"><span class="comp-icon">📒</span><span class="comp-name">Ledger Service</span></div>
+              <div class="comp-role">Double-entry · Immutable · Source of truth</div>
+              <div class="comp-detail">Every financial event = 2 entries. Sum of all entries always = 0. payment status + ledger insert + outbox event in single DB transaction. Never update — only append.</div>
+            </div>
+            <div class="comp" onclick="openPanel('outbox')">
+              <div class="comp-top"><span class="comp-icon">📤</span><span class="comp-name">Transactional Outbox</span></div>
+              <div class="comp-role">Dual-write solved · Kafka consistency</div>
+              <div class="comp-detail">outbox_events table written in same transaction as payment update. Outbox worker polls with FOR UPDATE SKIP LOCKED. Debezium CDC alternative at 5K+ TPS.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l4">
+        <div class="layer-hd" onclick="toggleLayer('l4')">
+          <div class="l-accent" style="background:var(--purple)"></div>
+          <div class="l-name" style="color:var(--purple)">Data & Async Layer</div>
+          <div class="l-scale">Kafka · CQRS · Notifications · Webhooks</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('kafka')">
+              <div class="comp-top"><span class="comp-icon">📨</span><span class="comp-name">Kafka Event Bus</span></div>
+              <div class="comp-role">At-least-once · Idempotent consumers</div>
+              <div class="comp-detail">Topics: payment-events · ledger-events · webhook-dispatch · analytics. Partitioned by merchant_id. All consumers idempotent — payment_id + event_type as dedup key.</div>
+            </div>
+            <div class="comp" onclick="openPanel('notify')">
+              <div class="comp-top"><span class="comp-icon">🔔</span><span class="comp-name">Notification Service</span></div>
+              <div class="comp-role">Email · SMS · Push · Webhook</div>
+              <div class="comp-detail">Kafka consumer on payment-events. Idempotent by event_id. Merchant webhooks: HMAC-SHA256 signed, retry with exponential backoff, delivery log for debugging.</div>
+            </div>
+            <div class="comp" onclick="openPanel('analytics')">
+              <div class="comp-top"><span class="comp-icon">📊</span><span class="comp-name">Analytics / CQRS Read</span></div>
+              <div class="comp-role">Merchant dashboard · Fraud investigation</div>
+              <div class="comp-detail">Read replicas for merchant dashboards. Elasticsearch for full-text search on payment metadata. Snowflake/BigQuery for BI and reconciliation analytics.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATE MACHINE -->
+  <section id="statemachine">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <span class="sec-title">Payment State Machine</span>
+      <span class="sec-tag">Optimistic locking · UNKNOWN state is critical</span>
+    </div>
+    <div class="state-machine">
+      <div class="sm-title">💳 Full Payment Lifecycle
+        <span style="font-size:10px;font-weight:400;color:var(--muted)">UPDATE payments SET status=? WHERE id=? AND status='EXPECTED' — 0 rows = lost race</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">CREATED</div><div class="state-desc">idempotency claimed</div></div>
+          <div class="sm-arrow">↓</div>
+          <div class="state active"><div class="state-name">RISK_CHECK_PENDING</div><div class="state-desc">fraud engine scoring</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state terminal"><div class="state-name">RISK_DECLINED</div><div class="state-desc">terminal · no charge</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">AUTHORIZING</div><div class="state-desc">PSP authorize call</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state warning"><div class="state-name">AUTHORIZATION_UNKNOWN</div><div class="state-desc">⚠ timeout — reconcile</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state terminal"><div class="state-name">AUTHORIZATION_FAILED</div><div class="state-desc">terminal</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state success"><div class="state-name">AUTHORIZED</div><div class="state-desc">auth valid 7 days</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state terminal"><div class="state-name">VOIDED</div><div class="state-desc">merchant cancelled</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">CAPTURING</div><div class="state-desc">PSP capture call</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state warning"><div class="state-name">CAPTURE_UNKNOWN</div><div class="state-desc">⚠ timeout — reconcile</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state success"><div class="state-name">CAPTURED</div><div class="state-desc">ledger entries written</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state success"><div class="state-name">SETTLED</div><div class="state-desc">terminal · funds moved</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state active"><div class="state-name">PARTIALLY_REFUNDED</div><div class="state-desc">partial credit</div></div>
+          <div class="sm-arrow right">→</div>
+          <div class="state terminal"><div class="state-name">REFUNDED</div><div class="state-desc">terminal</div></div>
+        </div>
+      </div>
+      <div style="margin-top:20px;padding:16px;background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.2);border-radius:4px;">
+        <div style="font-size:11px;color:var(--gold2);font-weight:600;margin-bottom:8px;">⚠️ UNKNOWN State — Critical Design Point</div>
+        <div style="font-size:11px;color:var(--muted2);line-height:1.7;">
+          On PSP timeout: <strong style="color:var(--gold)">immediately</strong> set AUTHORIZATION_UNKNOWN or CAPTURE_UNKNOWN. 
+          Async reconciliation job polls PSP inquiry endpoint every minute. Never assume failure on timeout — the PSP may have succeeded. 
+          Show "Processing…" in UI. Resolve to SUCCESS or FAILURE only after PSP confirmation. 
+          <strong style="color:var(--gold)">Never retry the original call without querying inquiry endpoint first</strong> — could double-charge.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA FLOWS -->
+  <section id="flows">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <span class="sec-title">Complete Data Flows</span>
+      <span class="sec-tag">State-by-state · Exactly which tables are written</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+
+      <div class="flow-block open" id="f1">
+        <div class="flow-hd" onclick="toggleFlow('f1')">
+          <div class="flow-num">F-01</div>
+          <div class="flow-title">CREATED State — Payment Initiation</div>
+          <div class="flow-meta">~5ms · DB write</div>
+          <div class="flow-chevron">▶</div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">API Gateway</div>
+              <div class="fs-action">Validate JWT/HMAC. Check idempotency_key: INSERT ON CONFLICT DO NOTHING — 0 rows = duplicate, return cached response.</div>
+              <div class="fs-note">Atomic check-and-claim. No race condition possible.</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Risk Engine</div>
+              <div class="fs-action">Rule engine (&lt;10ms): blacklist, BIN check, velocity limits. ML model (&lt;100ms): score 0–100. Score &gt;70 → RISK_DECLINED (no DB write for payment).</div>
+              <div class="fs-note">Fast-path rejection before any DB write</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Payment Service</div>
+              <div class="fs-action">BEGIN; INSERT payments (status=CREATED); INSERT payment_events (NULL→CREATED); INSERT outbox_events (PAYMENT_CREATED); COMMIT; — all or nothing.</div>
+              <div class="fs-note">Outbox in same transaction = no dual-write</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Idempotency</div>
+              <div class="fs-action">UPDATE idempotency_keys SET status=COMPLETE, response='{id, status, ...}' WHERE key=?. Response cached for 24 hours.</div>
+              <div class="fs-note">Any retry within 24h returns this cached response</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f2">
+        <div class="flow-hd" onclick="toggleFlow('f2')">
+          <div class="flow-num">F-02</div>
+          <div class="flow-title">AUTHORIZING → AUTHORIZED (PSP Call)</div>
+          <div class="flow-meta">~200–500ms · External call · Timeout risk</div>
+          <div class="flow-chevron">▶</div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Token Vault</div>
+              <div class="fs-action">Retrieve PAN from vault using payment_methods.card_token. Returns card details to PSP Integration Layer only — never persisted downstream.</div>
+              <div class="fs-note">PAN exists in memory only, never logged</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">PSP Layer</div>
+              <div class="fs-action">INSERT psp_requests (status=PENDING, idempotency_key=uuid) BEFORE calling PSP. Critical: this log enables crash recovery.</div>
+              <div class="fs-note">Write log BEFORE external call</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Payment Service</div>
+              <div class="fs-action">UPDATE payments SET status=AUTHORIZING WHERE id=? AND status=RISK_APPROVED. If 0 rows → concurrent update won, abort.</div>
+              <div class="fs-note">Optimistic lock — no pessimistic SELECT FOR UPDATE</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">External PSP</div>
+              <div class="fs-action">Call stripe.authorize(amount, cardToken, idempotencyKey). Success → update psp_requests to SUCCESS, payments to AUTHORIZED. Timeout → set AUTHORIZATION_UNKNOWN immediately.</div>
+              <div class="fs-note">Timeout ≠ Failure. Never retry without inquiry.</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Recon Job</div>
+              <div class="fs-action">If UNKNOWN: async job polls PSP inquiry API every 60s. stripe.retrieve(pspTransactionId) → resolve to AUTHORIZED or AUTHORIZATION_FAILED. Max 24h window.</div>
+              <div class="fs-note">Async resolution, not blocking the request path</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f3">
+        <div class="flow-hd" onclick="toggleFlow('f3')">
+          <div class="flow-num">F-03</div>
+          <div class="flow-title">CAPTURING → CAPTURED (Most Critical)</div>
+          <div class="flow-meta">~300ms · Ledger + Outbox in same COMMIT</div>
+          <div class="flow-chevron">▶</div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">PSP Layer</div>
+              <div class="fs-action">Check if capture already successful (idempotency). If auth expired (&gt;7 days): must re-authorize. Log psp_requests BEFORE calling. Call stripe.capture(chargeId, amount).</div>
+              <div class="fs-note">Partial capture allowed: captured_amount ≤ authorized_amount</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Payment Service</div>
+              <div class="fs-action">BEGIN; UPDATE payments SET status=CAPTURED (optimistic lock); INSERT ledger_entries × 2 (DEBIT customer_receivable / CREDIT merchant_payable); INSERT payment_events; INSERT outbox_events; COMMIT;</div>
+              <div class="fs-note">All 4 writes in ONE transaction — atomicity guaranteed</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Outbox Worker</div>
+              <div class="fs-action">SELECT from outbox_events FOR UPDATE SKIP LOCKED. Publish PAYMENT_CAPTURED to Kafka. DELETE row. Downstream consumers: Notification, Webhook, Analytics, Settlement.</div>
+              <div class="fs-note">SKIP LOCKED = multiple workers, no contention</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Settlement Job</div>
+              <div class="fs-action">T+1: PSP settlement file downloaded. Match by psp_transaction_id. Fee entries written to ledger: DEBIT psp_fees / DEBIT merchant_payable / CREDIT bank. Merchant payable reduced by PSP fee (2.9% + $0.30).</div>
+              <div class="fs-note">Settlement amount ≠ capture amount (PSP fees)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f4">
+        <div class="flow-hd" onclick="toggleFlow('f4')">
+          <div class="flow-num">F-04</div>
+          <div class="flow-title">Chargeback Lifecycle</div>
+          <div class="flow-meta">Days to weeks · Card network SLA windows</div>
+          <div class="flow-chevron">▶</div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Card Network</div>
+              <div class="fs-action">Cardholder disputes with issuing bank → Visa/MC initiates chargeback. Funds provisionally reversed from merchant. CHARGEBACK_RECEIVED event.</div>
+              <div class="fs-note">Time window starts — typically 7 days to respond</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">Ledger</div>
+              <div class="fs-action">DEBIT merchant_payable (reverse original credit). CREDIT chargeback_liability (new account type). Chargeback fee posted separately.</div>
+              <div class="fs-note">Real money movement — must hit ledger immediately</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Evidence Engine</div>
+              <div class="fs-action">Auto-populate evidence package: order receipt, delivery confirmation, IP address, device fingerprint, prior successful transactions, customer communication history.</div>
+              <div class="fs-note">Auto-population critical — merchants won't respond manually at scale</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">04</div>
+              <div class="fs-svc">Dispute Service</div>
+              <div class="fs-action">Submit evidence to card network via PSP API before deadline. Track response: WON (reverse chargeback, CREDIT merchant) or LOST (chargeback_liability becomes permanent).</div>
+              <div class="fs-note">SLA breach = auto-loss regardless of merits</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Rate Monitor</div>
+              <div class="fs-action">Update chargeback_rate = chargebacks_this_month / transactions_last_month. Alert at 0.65% (Visa warning), block new onboarding at 0.9%, emergency at 1%.</div>
+              <div class="fs-note">Visa/MC use different denominators — track both</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-block" id="f5">
+        <div class="flow-hd" onclick="toggleFlow('f5')">
+          <div class="flow-num">F-05</div>
+          <div class="flow-title">Refund Flow</div>
+          <div class="flow-meta">~500ms · Reverse ledger entries · Never update old entries</div>
+          <div class="flow-chevron">▶</div>
+        </div>
+        <div class="flow-bd">
+          <div class="flow-steps">
+            <div class="flow-step">
+              <div class="fs-num">01</div>
+              <div class="fs-svc">Payment Service</div>
+              <div class="fs-action">Validate: payment must be CAPTURED or SETTLED. refund_amount ≤ captured_amount - previously_refunded_amount. Set status PARTIALLY_REFUNDED or REFUNDED.</div>
+              <div class="fs-note">Partial refunds are common — track cumulative refunded_amount</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">02</div>
+              <div class="fs-svc">PSP Layer</div>
+              <div class="fs-action">Call PSP refund API with idempotency key. PSP reverses original capture. Funds credited back to card. Timeline: 5–10 business days to cardholder.</div>
+              <div class="fs-note">PSP-level idempotency prevents double-refund on retry</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">03</div>
+              <div class="fs-svc">Ledger</div>
+              <div class="fs-action">BEGIN; INSERT ledger_entries × 2 (CREDIT customer_receivable / DEBIT merchant_payable) — reverse of capture entries; INSERT outbox; COMMIT. NEVER update old entries.</div>
+              <div class="fs-note">Ledger is append-only — refunds create NEW entries</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEDGER -->
+  <section id="ledger">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <span class="sec-title">Ledger Service</span>
+      <span class="sec-tag">Double-entry · Immutable · Financial source of truth</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:16px;">
+      <div>
+        <div class="code-label">$100 Capture — Ledger Entries</div>
+        <div class="code-block"><span class="cm">-- On CAPTURE (same tx as payments status update)</span>
+<span class="kw">INSERT INTO</span> ledger_entries <span class="kw">VALUES</span>
+  (<span class="str">'le_1'</span>,<span class="str">'pay_abc'</span>,<span class="str">'acct_customer_rcv'</span>,
+   <span class="str">'DEBIT'</span>,  <span class="num">10000</span>,<span class="str">'USD'</span>,<span class="str">'CAPTURE'</span>,now()),
+  (<span class="str">'le_2'</span>,<span class="str">'pay_abc'</span>,<span class="str">'acct_merchant_pay'</span>,
+   <span class="str">'CREDIT'</span>, <span class="num">10000</span>,<span class="str">'USD'</span>,<span class="str">'CAPTURE'</span>,now());
+
+<span class="cm">-- On SETTLEMENT T+1 (PSP fee 2.9% + $0.30 = $320)</span>
+<span class="kw">INSERT INTO</span> ledger_entries <span class="kw">VALUES</span>
+  (<span class="str">'le_3'</span>,<span class="str">'pay_abc'</span>,<span class="str">'acct_psp_fees'</span>,
+   <span class="str">'DEBIT'</span>,   <span class="num">320</span>,<span class="str">'USD'</span>,<span class="str">'FEE'</span>,now()),
+  (<span class="str">'le_4'</span>,<span class="str">'pay_abc'</span>,<span class="str">'acct_merchant_pay'</span>,
+   <span class="str">'DEBIT'</span>,  <span class="num">9680</span>,<span class="str">'USD'</span>,<span class="str">'SETTLEMENT'</span>,now()),
+  (<span class="str">'le_5'</span>,<span class="str">'pay_abc'</span>,<span class="str">'acct_bank'</span>,
+   <span class="str">'CREDIT'</span>, <span class="num">9680</span>,<span class="str">'USD'</span>,<span class="str">'SETTLEMENT'</span>,now());
+
+<span class="cm">-- INVARIANT: SUM(signed amounts) = 0 at all times</span></div>
+      </div>
+      <div>
+        <div class="code-label">Balance Query — Snapshot + Delta</div>
+        <div class="code-block"><span class="cm">-- Snapshot table for performance</span>
+<span class="kw">SELECT</span> s.balance + <span class="fn">COALESCE</span>(<span class="fn">SUM</span>(
+    <span class="kw">CASE</span> e.direction
+      <span class="kw">WHEN</span> <span class="str">'CREDIT'</span> <span class="kw">THEN</span>  e.amount
+      <span class="kw">ELSE</span>              -e.amount
+    <span class="kw">END</span>
+  ),<span class="num">0</span>) <span class="kw">AS</span> balance
+<span class="kw">FROM</span> account_balance_snapshots s
+<span class="kw">LEFT JOIN</span> ledger_entries e
+  <span class="kw">ON</span> e.account_id = s.account_id
+ <span class="kw">AND</span> e.id > s.last_entry_id
+<span class="kw">WHERE</span> s.account_id = ?
+  <span class="kw">AND</span> s.snapshot_at = (
+    <span class="kw">SELECT MAX</span>(snapshot_at)
+    <span class="kw">FROM</span> account_balance_snapshots
+    <span class="kw">WHERE</span> account_id = ?
+  );
+
+<span class="cm">-- Snapshot every N entries to avoid full-history scan</span></div>
+        <div class="code-label" style="margin-top:14px;">Atomic Payment + Ledger + Outbox</div>
+        <div class="code-block"><span class="kw">BEGIN</span>;
+  <span class="kw">UPDATE</span> payments <span class="kw">SET</span> status=<span class="str">'CAPTURED'</span>
+    <span class="kw">WHERE</span> id=? <span class="kw">AND</span> status=<span class="str">'CAPTURING'</span>; <span class="cm">-- optimistic lock</span>
+  <span class="kw">INSERT INTO</span> ledger_entries ...; <span class="cm">-- 2 rows</span>
+  <span class="kw">INSERT INTO</span> payment_events ...;
+  <span class="kw">INSERT INTO</span> outbox_events ...;
+<span class="kw">COMMIT</span>; <span class="cm">-- all or nothing</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTBOX -->
+  <section id="outbox">
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <span class="sec-title">Outbox & Event Architecture</span>
+      <span class="sec-tag">Dual-write solved · At-least-once delivery</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:16px;">
+      <div>
+        <div class="code-label">Outbox Worker (Polling)</div>
+        <div class="code-block"><span class="kw">while</span> <span class="fn">True</span>:
+  events = db.query(<span class="str">"""
+    SELECT * FROM outbox_events
+    WHERE status = 'PENDING'
+    ORDER BY created_at LIMIT 100
+    FOR UPDATE SKIP LOCKED
+  """</span>)
+  <span class="cm">-- SKIP LOCKED = multiple workers, no contention</span>
+
+  <span class="kw">for</span> event <span class="kw">in</span> events:
+    kafka.publish(
+      topic=event.event_type,
+      key=event.payment_id,
+      value=event.payload
+    )
+    db.execute(
+      <span class="str">"DELETE FROM outbox_events WHERE id=?"</span>,
+      event.id
+    )
+  <span class="cm">-- Keep table tiny: delete immediately after publish</span></div>
+      </div>
+      <div>
+        <div class="code-label">Debezium CDC — High-Scale Alternative (&gt;5K TPS)</div>
+        <div class="code-block"><span class="cm">-- Debezium reads PostgreSQL WAL directly
+-- No outbox table needed
+-- Zero write overhead on Payment Service
+-- Sub-second latency DB write → Kafka</span>
+
+<span class="cm">-- Trade-off: operational complexity
+--   requires Debezium connector
+--   requires Kafka Connect cluster
+--   harder to filter/transform events</span>
+
+<span class="cm">-- Downstream consumers must be idempotent:
+-- use (payment_id + event_type) as dedup key
+-- Kafka = at-least-once, not exactly-once</span>
+
+<span class="cm">-- Partition topics by merchant_id
+-- Preserves per-merchant event ordering
+-- Prevents hot shards</span></div>
+      </div>
+    </div>
+    <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:4px;padding:16px 18px;">
+      <div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:8px;">📨 Downstream Consumers (all idempotent)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
+        <div style="font-size:11px;color:var(--muted2);">🔔 <strong style="color:var(--text)">Notification</strong><br>Email/SMS to customer. Idempotent by event_id.</div>
+        <div style="font-size:11px;color:var(--muted2);">🔗 <strong style="color:var(--text)">Webhook</strong><br>HMAC-signed POST to merchant. Retry with backoff.</div>
+        <div style="font-size:11px;color:var(--muted2);">📊 <strong style="color:var(--text)">Analytics</strong><br>Real-time merchant dashboard. Aggregate counters.</div>
+        <div style="font-size:11px;color:var(--muted2);">🏦 <strong style="color:var(--text)">Settlement</strong><br>Marks payment ready for T+1 settlement batch.</div>
+        <div style="font-size:11px;color:var(--muted2);">🛡️ <strong style="color:var(--text)">Fraud Feedback</strong><br>Labels for model retraining. Outcome tagging.</div>
+        <div style="font-size:11px;color:var(--muted2);">📝 <strong style="color:var(--text)">Audit Log</strong><br>Immutable event log. S3 WORM for compliance.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATABASE DESIGN -->
+  <section id="databases">
+    <div class="sec-head">
+      <span class="sec-num">07</span>
+      <span class="sec-title">Database Design Per Service</span>
+      <span class="sec-tag">Schema · Indexing · Sharding · Access Patterns</span>
+    </div>
+    <div class="db-grid">
+
+      <div class="db-card" id="db1">
+        <div class="db-hd" onclick="toggleDb('db1')">
+          <div class="db-icon">💳</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Payments & Order Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (sharded)</span>
+              <span class="db-badge redis">Redis (idempotency · locks)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">1B rows/yr · ~500GB</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">payments</div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">idempotency_key</span><span class="col-type">VARCHAR UNIQUE</span></div>
+                <div class="schema-col"><span class="col-name idx">merchant_id</span><span class="col-type">UUID NOT NULL</span><span class="col-note">shard key</span></div>
+                <div class="schema-col"><span class="col-name">customer_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">amount</span><span class="col-type">BIGINT</span><span class="col-note">cents — NEVER float</span></div>
+                <div class="schema-col"><span class="col-name">currency</span><span class="col-type">CHAR(3)</span><span class="col-note">ISO 4217</span></div>
+                <div class="schema-col"><span class="col-name idx">status</span><span class="col-type">VARCHAR</span><span class="col-note">state machine</span></div>
+                <div class="schema-col"><span class="col-name">psp_name</span><span class="col-type">VARCHAR</span><span class="col-note">locked at AUTH</span></div>
+                <div class="schema-col"><span class="col-name">psp_transaction_id</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">authorization_expires</span><span class="col-type">TIMESTAMP</span><span class="col-note">auth valid 7 days</span></div>
+                <div class="schema-col"><span class="col-name">captured_amount</span><span class="col-type">BIGINT</span><span class="col-note">may differ (partial)</span></div>
+                <div class="schema-col"><span class="col-name">refunded_amount</span><span class="col-type">BIGINT DEFAULT 0</span></div>
+                <div class="schema-col"><span class="col-name">version</span><span class="col-type">INTEGER DEFAULT 0</span><span class="col-note">optimistic lock</span></div>
+                <div class="schema-col"><span class="col-name idx">created_at</span><span class="col-type">TIMESTAMP</span><span class="col-note">partition key</span></div>
+                <div class="schema-indexes">
+                  <strong>Indexes:</strong> (merchant_id, created_at DESC) for dashboard · (status, created_at) for ops · (psp_transaction_id) for reconciliation · (idempotency_key) UNIQUE<br>
+                  <strong>Partitioning:</strong> RANGE on created_at (monthly). Hot 0–90d on SSD, warm 90d–2yr on HDD, cold 2yr+ on S3+Athena<br>
+                  <strong>Hot shard fix:</strong> large merchants: shard_key = hash(merchant_id || payment_id % 10). Spreads across 10 shards.
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">payment_events <span>— append-only audit</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">payment_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">from_status</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">to_status</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">actor</span><span class="col-type">VARCHAR</span><span class="col-note">service name</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes"><strong>~8B rows/yr · ~2.4TB.</strong> Partition monthly. No UPDATE/DELETE privilege granted. Required for chargeback evidence and dispute resolution.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>BIGINT for cents, NEVER float.</strong> 0.1 + 0.2 ≠ 0.3 in IEEE 754. $100.00 = 10000. All arithmetic in integer domain. Currency conversion at settlement only.</li>
+                <li><strong>version column for optimistic locking:</strong> UPDATE payments SET status=?, version=version+1 WHERE id=? AND version=? AND status='EXPECTED'. Rows_affected=0 → retry or fail.</li>
+                <li><strong>psp_name locked at AUTH.</strong> Constraint: never change PSP mid-payment. Capture, refund, void all go to same PSP. Enforced at application layer.</li>
+                <li><strong>Partial index on active payments:</strong> WHERE status NOT IN ('SETTLED','FAILED','REFUNDED','VOIDED'). Only ~0.01% of rows but queried constantly by ops dashboards.</li>
+                <li><strong>Hot shard problem:</strong> Amazon/Shopify scale → millions of payments per hour. Virtual sharding: shard_key = hash(merchant_id || payment_id % 10) spreads one merchant across 10 shards. Dashboard queries scatter-gather 10 shards (async, acceptable).</li>
+                <li><strong>Redis idempotency cache:</strong> key → {status, response_body} with 24hr TTL. Check Redis first before DB. Reduces DB reads for duplicate requests by ~90%.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db2">
+        <div class="db-hd" onclick="toggleDb('db2')">
+          <div class="db-icon">📒</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Ledger Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (append-only)</span>
+              <span class="db-badge redis">Redis (balance cache)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">3B rows/yr · ~600GB</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">ledger_entries <span>— immutable, append-only</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">payment_id</span><span class="col-type">UUID NOT NULL</span></div>
+                <div class="schema-col"><span class="col-name idx">account_id</span><span class="col-type">UUID NOT NULL</span></div>
+                <div class="schema-col"><span class="col-name">direction</span><span class="col-type">VARCHAR</span><span class="col-note">DEBIT | CREDIT</span></div>
+                <div class="schema-col"><span class="col-name">amount</span><span class="col-type">BIGINT NOT NULL</span><span class="col-note">always positive</span></div>
+                <div class="schema-col"><span class="col-name">currency</span><span class="col-type">CHAR(3)</span></div>
+                <div class="schema-col"><span class="col-name">entry_type</span><span class="col-type">VARCHAR</span><span class="col-note">AUTH/CAPTURE/FEE/REFUND</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span><span class="col-note">immutable partition key</span></div>
+                <div class="schema-indexes"><strong>INVARIANT:</strong> SUM(CASE direction WHEN 'CREDIT' THEN amount ELSE -amount END) = 0 always. Verified by nightly reconciliation job — discrepancy = P0 alert.<br><strong>NO UPDATE/DELETE:</strong> trigger RAISES EXCEPTION on any update attempt.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">account_balance_snapshots</div>
+                <div class="schema-col"><span class="col-name fk">account_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">balance</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">snapshot_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-col"><span class="col-name">last_entry_id</span><span class="col-type">UUID</span><span class="col-note">cursor for delta query</span></div>
+                <div class="schema-indexes"><strong>Pattern:</strong> latest snapshot + sum of entries since snapshot_id. Avoids scanning full history. Snapshot every 1000 entries per account.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Separate ledger DB from payments DB.</strong> Different write patterns, different backup/retention policies. Ledger entries have 7-year retention minimum. Payments can be archived earlier.</li>
+                <li><strong>Trigger enforces immutability:</strong> CREATE TRIGGER prevent_ledger_mutation BEFORE UPDATE OR DELETE ON ledger_entries FOR EACH ROW EXECUTE FUNCTION raise_immutability_error();</li>
+                <li><strong>FX entries:</strong> for multi-currency — store both original_amount + original_currency + settlement_amount + settlement_currency. FX rate locked at capture time. Reconcile settlement_amount against PSP file.</li>
+                <li><strong>Chargeback accounts:</strong> new ledger account type CHARGEBACK_LIABILITY. Created when chargeback received. Reversed if won. Permanent if lost.</li>
+                <li><strong>Reconciliation query:</strong> nightly job. SELECT SUM(CASE direction WHEN 'CREDIT' THEN amount ELSE -amount END) FROM ledger_entries. Must = 0. Any non-zero → P0 incident.</li>
+                <li><strong>Read replicas for merchant balance queries.</strong> Write primary for all inserts. Replica lag &lt;1s acceptable for balance display. Always read from primary for refund amount validation.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db3">
+        <div class="db-hd" onclick="toggleDb('db3')">
+          <div class="db-icon">🔌</div>
+          <div class="db-title-wrap">
+            <div class="db-name">PSP Integration & Reconciliation</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">2B rows/yr · ~4TB</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">psp_requests <span>— safety net, written BEFORE call</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">payment_id</span><span class="col-type">UUID NOT NULL</span></div>
+                <div class="schema-col"><span class="col-name">psp_name</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">request_type</span><span class="col-type">VARCHAR</span><span class="col-note">AUTHORIZE/CAPTURE/REFUND/INQUIRY</span></div>
+                <div class="schema-col"><span class="col-name">request_payload</span><span class="col-type">JSONB</span><span class="col-note">what we sent</span></div>
+                <div class="schema-col"><span class="col-name">response_payload</span><span class="col-type">JSONB</span><span class="col-note">what PSP returned</span></div>
+                <div class="schema-col"><span class="col-name idx">psp_transaction_id</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">http_status</span><span class="col-type">SMALLINT</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">VARCHAR</span><span class="col-note">PENDING/SUCCESS/FAILURE/TIMEOUT</span></div>
+                <div class="schema-col"><span class="col-name">idempotency_key</span><span class="col-type">VARCHAR</span><span class="col-note">PSP-level key</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-col"><span class="col-name">responded_at</span><span class="col-type">TIMESTAMP</span><span class="col-note">null on timeout</span></div>
+                <div class="schema-indexes">
+                  <strong>CRITICAL:</strong> Write this row BEFORE making the PSP call, with status=PENDING. If service crashes after write but before call → on restart, check for PENDING rows and query PSP inquiry endpoint.<br>
+                  <strong>Index:</strong> (payment_id, request_type) for crash recovery lookup · (status='PENDING', created_at) for reconciliation scanner
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">settlement_records</div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name">psp_name</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name idx">psp_transaction_id</span><span class="col-type">VARCHAR UNIQUE</span></div>
+                <div class="schema-col"><span class="col-name fk">payment_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">gross_amount</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">fee_amount</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">net_amount</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">settlement_date</span><span class="col-type">DATE</span></div>
+                <div class="schema-col"><span class="col-name">bank_reference</span><span class="col-type">VARCHAR</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>psp_requests is 4TB/yr</strong> — largest table. Aggressive partitioning by month. After 90 days, compress with pg_compress. After 1 year, export to S3 Parquet + Athena for compliance queries.</li>
+                <li><strong>request_payload stores full JSON</strong> of what was sent to PSP — critical for dispute resolution. "We sent exactly X amount with Y idempotency key." Regex/partial match on this field via Elasticsearch for fraud investigations.</li>
+                <li><strong>Reconciliation process:</strong> (1) Download PSP CSV at 6AM. (2) Parse + normalize. (3) Match by psp_transaction_id. (4) Categorize: timing gap (auto-resolve), unmatched PSP record (alert), unmatched internal (alert), amount mismatch (alert). (5) Generate exception report.</li>
+                <li><strong>PENDING row crash recovery:</strong> on service startup, query SELECT * FROM psp_requests WHERE status='PENDING' AND created_at < now()-5min. For each: call PSP inquiry API, update status. Prevents duplicate charges after crash.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db4">
+        <div class="db-hd" onclick="toggleDb('db4')">
+          <div class="db-icon">🗄️</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Token Vault (PCI-DSS Isolated)</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (network-isolated)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">PCI-DSS scope · air-gap adjacent</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">payment_methods <span>— app DB (no PAN)</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">customer_id</span><span class="col-type">UUID NOT NULL</span></div>
+                <div class="schema-col"><span class="col-name">type</span><span class="col-type">VARCHAR</span><span class="col-note">CARD/BANK/WALLET</span></div>
+                <div class="schema-col"><span class="col-name idx">card_token</span><span class="col-type">VARCHAR UNIQUE</span><span class="col-note">opaque token, not PAN</span></div>
+                <div class="schema-col"><span class="col-name idx">card_fingerprint</span><span class="col-type">VARCHAR</span><span class="col-note">deterministic hash of PAN</span></div>
+                <div class="schema-col"><span class="col-name">last4</span><span class="col-type">CHAR(4)</span><span class="col-note">display only</span></div>
+                <div class="schema-col"><span class="col-name">exp_month</span><span class="col-type">SMALLINT</span></div>
+                <div class="schema-col"><span class="col-name">exp_year</span><span class="col-type">SMALLINT</span></div>
+                <div class="schema-col"><span class="col-name">brand</span><span class="col-type">VARCHAR</span><span class="col-note">VISA/MC/AMEX</span></div>
+                <div class="schema-col"><span class="col-name">billing_country</span><span class="col-type">CHAR(2)</span></div>
+                <div class="schema-col"><span class="col-name">is_default</span><span class="col-type">BOOLEAN</span></div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">vault_mappings <span>— vault DB (network isolated)</span></div>
+                <div class="schema-col"><span class="col-name pk">token</span><span class="col-type">VARCHAR PK</span></div>
+                <div class="schema-col"><span class="col-name">pan_encrypted</span><span class="col-type">BYTEA</span><span class="col-note">AES-256 via HSM</span></div>
+                <div class="schema-col"><span class="col-name">cvv_encrypted</span><span class="col-type">BYTEA</span><span class="col-note">for one-time use only</span></div>
+                <div class="schema-col"><span class="col-name">key_version</span><span class="col-type">INTEGER</span><span class="col-note">for key rotation</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Two separate databases.</strong> payment_methods lives in app DB — safe, in scope for normal services. vault_mappings lives in network-isolated vault service — only vault service can query it. No join possible.</li>
+                <li><strong>card_fingerprint</strong> = deterministic SHA-256(PAN) with pepper. Used to detect duplicate card adds across customers without storing PAN. Never reversible.</li>
+                <li><strong>Network isolation:</strong> vault service accepts connections only from PSP integration layer. No direct DB access from payment service. Audit log on every PAN access.</li>
+                <li><strong>Key rotation:</strong> key_version column tracks which encryption key was used. Annual rotation: re-encrypt all rows with new key + increment key_version. Old key active during transition for in-flight requests.</li>
+                <li><strong>CVV handling:</strong> CVV stored temporarily only for initial tokenization. Most vault implementations NEVER store CVV after first authorization — card networks prohibit it post-auth.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db5">
+        <div class="db-hd" onclick="toggleDb('db5')">
+          <div class="db-icon">📤</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Outbox & Events</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (tiny — delete after publish)</span>
+              <span class="db-badge kafka">Kafka (persistent event log)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">&lt;1M rows at any time</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">outbox_events <span>— keep tiny</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">payment_id</span><span class="col-type">UUID NOT NULL</span></div>
+                <div class="schema-col"><span class="col-name">event_type</span><span class="col-type">VARCHAR</span><span class="col-note">PAYMENT_CAPTURED etc.</span></div>
+                <div class="schema-col"><span class="col-name">payload</span><span class="col-type">JSONB</span></div>
+                <div class="schema-col"><span class="col-name idx">status</span><span class="col-type">VARCHAR</span><span class="col-note">PENDING only (delete after)</span></div>
+                <div class="schema-col"><span class="col-name">retry_count</span><span class="col-type">INT DEFAULT 0</span></div>
+                <div class="schema-col"><span class="col-name idx">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>Index:</strong> (status='PENDING', created_at) — only index needed. Table stays tiny because rows deleted immediately post-publish.<br>
+                  <strong>Partitioning:</strong> hourly partitions for fast DROP PARTITION cleanup. At high TPS, individual DELETEs are expensive — DROP PARTITION is O(1).<br>
+                  <strong>FOR UPDATE SKIP LOCKED:</strong> allows multiple parallel workers without row contention.
+                </div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Outbox must be in same DB as payments.</strong> If in separate DB, you've reintroduced the dual-write problem. Same PostgreSQL instance = same COMMIT = atomic guarantee.</li>
+                <li><strong>Delete vs mark PUBLISHED.</strong> Option A: DELETE after publish (keep table tiny, best performance). Option B: mark PUBLISHED (audit trail of every event). At scale, DELETE wins — table bloat kills performance. Kafka has the event log.</li>
+                <li><strong>Hourly partitions for DROP PARTITION:</strong> at 1600 TPS peak, outbox gets ~1M rows/hour. Deleting individually is expensive. Instead: DROP TABLE payments_outbox_2024_01_15_14 atomically.</li>
+                <li><strong>retry_count:</strong> if Kafka publish fails, increment counter. After 3 retries, alert on-call. Dead-letter queue for manually inspecting failed events.</li>
+                <li><strong>Kafka retention:</strong> 30 days for payment events. Consumers replay from offset for new consumer groups. Enables: new analytics pipelines, data reprocessing, disaster recovery replay.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SCALABILITY -->
+  <section id="scalability">
+    <div class="sec-head">
+      <span class="sec-num">08</span>
+      <span class="sec-title">Scalability at Billions Scale</span>
+      <span class="sec-tag">1B payments/yr · 1,600 TPS peak</span>
+    </div>
+    <table class="scale-table">
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Volume</th>
+          <th>Sharding Strategy</th>
+          <th>Archival</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>payments</td>
+          <td>1B rows · ~500GB/yr</td>
+          <td>Shard by merchant_id. Hot merchants: virtual sharding (merchant_id || payment_id % 10)</td>
+          <td>0–90d SSD · 90d–2yr HDD · 2yr+ S3+Athena</td>
+        </tr>
+        <tr>
+          <td>ledger_entries</td>
+          <td>3B rows · ~600GB/yr</td>
+          <td>Shard by account_id. Append-only — write throughput only concern</td>
+          <td>7yr retention (compliance). Partition monthly, compress yearly.</td>
+        </tr>
+        <tr>
+          <td>payment_events</td>
+          <td>8B rows · ~2.4TB/yr</td>
+          <td>Co-locate with payments (same shard). Partition monthly.</td>
+          <td>7yr retention. Cold storage after 1yr.</td>
+        </tr>
+        <tr>
+          <td>psp_requests</td>
+          <td>2B rows · ~4TB/yr</td>
+          <td>Shard by payment_id. Partition monthly.</td>
+          <td>90d hot, then S3 Parquet + Athena.</td>
+        </tr>
+        <tr>
+          <td>outbox_events</td>
+          <td>&lt;1M rows at any time</td>
+          <td>No sharding — same DB as payments. DELETE after publish.</td>
+          <td>Hourly partitions, DROP PARTITION for cleanup.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2px;margin-bottom:16px;">
+      <div class="kp"><div class="kp-title">CQRS for reads</div><div class="kp-body">Write primary handles all inserts/updates. 1–5 read replicas for merchant dashboards, customer history. Elasticsearch for full-text search. Redis for real-time balances. Snowflake/BigQuery for BI.</div></div>
+      <div class="kp"><div class="kp-title">Stateless payment service</div><div class="kp-body">All state in DB + Redis. Horizontal scale via Kubernetes HPA. KEDA on queue depth for outbox workers. No sticky sessions. Deploy new pods during Black Friday with zero config change.</div></div>
+      <div class="kp"><div class="kp-title">Kafka partitioning</div><div class="kp-body">Partition by merchant_id to preserve per-merchant event ordering. Prevents hot partitions even if one merchant has 10x traffic. Consumers scale independently per partition group.</div></div>
+      <div class="kp"><div class="kp-title">Connection pooling</div><div class="kp-body">PgBouncer in transaction mode (not session mode). At 1600 TPS, naive connection-per-request = 1600 open Postgres connections. PgBouncer multiplexes to ~100 real connections.</div></div>
+    </div>
+  </section>
+
+  <!-- AVAILABILITY -->
+  <section id="availability">
+    <div class="sec-head">
+      <span class="sec-num">09</span>
+      <span class="sec-title">Availability & Reliability</span>
+      <span class="sec-tag">Multi-PSP failover · Circuit breaker · Graceful degradation</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:16px;">
+      <div class="code-block">
+        <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--teal);margin-bottom:10px;">PSP Health Score (recomputed every 30s)</div>
+score = 100
+score -= error_rate_5min * 50       <span class="cm"># 50 pts at 100% error rate</span>
+score -= p99_latency_penalty        <span class="cm"># up to 30 pts</span>
+score -= consecutive_failures * 5  <span class="cm"># 5 pts per failure</span>
+
+<span class="cm"># Routing decision:</span>
+<span class="kw">if</span> primary.score > <span class="num">70</span>:
+    route_to(primary)
+<span class="kw">elif</span> backup.score > <span class="num">70</span>:
+    route_to(backup)
+    alert_oncall()
+<span class="kw">else</span>:
+    queue_payment()  <span class="cm"># never lose the request</span>
+    page_oncall()
+
+<span class="cm"># Constraint: psp_name set at AUTH, never changes
+# All subsequent ops must use same PSP</span>
+      </div>
+      <div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <div style="background:var(--s1);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px;">🟢 CLOSED — Normal Operation</div>
+            <div style="font-size:11px;color:var(--muted2);">All requests pass through to PSP. Error rate and latency monitored every 30s.</div>
+          </div>
+          <div style="background:var(--s1);border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:6px;">🔴 OPEN — Degraded</div>
+            <div style="font-size:11px;color:var(--muted2);">Triggered at 5% error rate over 60s. Fail-fast — no PSP calls. Route to backup PSP or queue. Opens after 30s cooldown.</div>
+          </div>
+          <div style="background:var(--s1);border:1px solid rgba(240,180,41,0.3);border-radius:4px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px;">🟡 HALF-OPEN — Recovering</div>
+            <div style="font-size:11px;color:var(--muted2);">Probe traffic only (1%). Close on success. Reopen on failure. Prevents cascading PSP re-failure on recovery.</div>
+          </div>
+          <div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:600;color:var(--teal);margin-bottom:6px;">Graceful Degradation Modes</div>
+            <div style="font-size:11px;color:var(--muted2);line-height:1.7;">
+              All PSPs down → queue payments (never lose request) · Risk engine down → allow low-value transactions, block high-value · DB read replicas unavailable → read from primary (slower but available) · Analytics down → payments continue unaffected
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRADEOFFS -->
+  <section id="tradeoffs">
+    <div class="sec-head">
+      <span class="sec-num">10</span>
+      <span class="sec-title">Architectural Tradeoffs</span>
+      <span class="sec-tag">Staff-level decision framing</span>
+    </div>
+    <div class="matrix">
+      <div class="matrix-card">
+        <div class="mc-title">Sync vs Async Risk Check</div>
+        <div class="mc-row"><span class="mc-label">Fraud prevention</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Latency cost</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Revenue impact</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Recommendation:</strong> Always synchronous pre-authorization. Post-auth async monitoring for pattern analysis. Irreversible transaction = must block before, not after.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Outbox Polling vs Debezium CDC</div>
+        <div class="mc-row"><span class="mc-label">Operational simplicity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">DB write overhead</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Latency (&lt;5K TPS)</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Recommendation:</strong> Outbox polling for &lt;5K TPS (simpler, explicit control). Debezium CDC for &gt;5K TPS (zero overhead, sub-second latency). Migrate when DB polling becomes visible in query load.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">2PC vs Saga for Distributed Txns</div>
+        <div class="mc-row"><span class="mc-label">Atomicity guarantee</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Availability under partition</span><div class="mc-val"><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Operational complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-verdict"><strong>Always Saga.</strong> 2PC requires all participants to be available simultaneously — single PSP timeout blocks the coordinator. Saga is choreography + compensating transactions. At PSP scale, availability matters more than strict atomicity.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Optimistic vs Pessimistic Locking</div>
+        <div class="mc-row"><span class="mc-label">Throughput</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Deadlock risk</span><div class="mc-val"><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Conflict handling complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Optimistic locking for state machine.</strong> UPDATE WHERE status='EXPECTED', check rows_affected=1. No locks held between read and write. Conflicts are rare — retry is cheap. Pessimistic (SELECT FOR UPDATE) kills throughput at 1600 TPS.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Single PSP vs Multi-PSP</div>
+        <div class="mc-row"><span class="mc-label">Availability</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Integration complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Reconciliation complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Multi-PSP required at scale.</strong> Any single PSP has planned maintenance windows + unplanned outages. Stripe's 2021 outage impacted thousands of businesses. At $1B/yr transaction volume, PSP downtime = direct revenue loss. Worth the integration complexity.</div>
+      </div>
+      <div class="matrix-card">
+        <div class="mc-title">Sync vs Async Webhook Delivery</div>
+        <div class="mc-row"><span class="mc-label">Reliability</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Implementation simplicity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Merchant experience</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Always async with retry.</strong> Merchant server may be temporarily down. Sync delivery means payment hangs on merchant timeout. Async: dequeue, POST to merchant endpoint, retry with exponential backoff (5 retries over 24h), HMAC-sign all deliveries.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PITFALLS -->
+  <section id="pitfalls">
+    <div class="sec-head">
+      <span class="sec-num">11</span>
+      <span class="sec-title">Pitfall Questions</span>
+      <span class="sec-tag">Expect these at Staff level interviews</span>
+    </div>
+    <div class="pitfall-grid">
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"A payment shows CAPTURED but the customer says they were charged twice. Walk me through how you'd debug this."</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>idempotency_keys table:</strong> check if two separate entries exist for different idempotency keys but same merchant+customer+amount+time. Client generated two different keys = two valid charges.</li>
+            <li><strong>psp_requests table:</strong> query by customer payment method + amount + time window. Two SUCCESS rows for CAPTURE = double-capture confirmed.</li>
+            <li><strong>ledger_entries:</strong> check for duplicate DEBIT/CREDIT pairs on same customer account. Double-entry violation = root cause found.</li>
+            <li><strong>outbox + webhook logs:</strong> check if webhook delivered twice and merchant processed it twice on their end (merchant idempotency bug).</li>
+            <li>Resolution: issue refund for duplicate. Post-mortem to identify which layer lost idempotency.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"PSP returns a 200 but you never received the response. What's the payment status?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>UNKNOWN</strong> — set AUTHORIZATION_UNKNOWN or CAPTURE_UNKNOWN immediately. Never assume failure on timeout.</li>
+            <li>PSP may have successfully processed the charge. Retrying without inquiry could double-charge the customer.</li>
+            <li>Async reconciliation job: call PSP inquiry endpoint (stripe.retrieve(pspTransactionId)). The psp_transaction_id is in psp_requests.request_payload even if response was lost.</li>
+            <li>Resolve to AUTHORIZED or AUTHORIZATION_FAILED based on PSP's authoritative response. Show "Processing…" in UI throughout.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"Your reconciliation job found a $50K discrepancy. How do you investigate?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Timing gap first:</strong> T+1 lag means yesterday's late captures don't appear in today's PSP file. Check if discrepancy resolves in 24h. Most "discrepancies" are timing.</li>
+            <li><strong>UNKNOWN state payments:</strong> check count of payments in AUTHORIZATION_UNKNOWN or CAPTURE_UNKNOWN that haven't been reconciled. Could be sitting in limbo.</li>
+            <li><strong>Currency rounding:</strong> FX conversion creates sub-cent differences. Check if $50K = many small rounding differences rather than one large mismatch.</li>
+            <li><strong>Partial captures:</strong> authorized_amount vs captured_amount may differ. PSP settles captured_amount; internal records may show authorized_amount.</li>
+            <li><strong>PSP file format change:</strong> check PSP changelog for CSV format updates. Column offset errors cause systematic mismatches.</li>
+            <li>Ownership: engineering finds root cause; finance ops decides resolution (write-off, dispute, etc.).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"How do you handle a PSP that settles in EUR but your merchants are billed in USD?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Store both amounts in psp_requests and settlement_records:</strong> original_amount (USD), original_currency (USD), settlement_amount (EUR), settlement_currency (EUR).</li>
+            <li><strong>FX rate locked at capture time</strong> — not settlement time. Rate stored in payment record. Merchants get predictable amounts regardless of FX movement over T+1.</li>
+            <li><strong>Ledger FX entries:</strong> on settlement, create FX conversion ledger entry for the rate difference between capture-time rate and actual settlement rate. This difference is P&L for the platform.</li>
+            <li>Reconcile: PSP EUR settlement × locked FX rate = expected USD settlement. Difference = FX exposure. If large, consider hedging via FX derivatives.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"How do you ensure the ledger never has a non-zero balance? What if a service crashes mid-transaction?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Same DB transaction:</strong> payment status update + both ledger entries + outbox event in a single BEGIN/COMMIT. If crash mid-transaction, Postgres rolls back all writes atomically.</li>
+            <li><strong>No partial ledger writes possible</strong> because of single-transaction guarantee. The only risk is crash AFTER commit but BEFORE Kafka publish — that's what the outbox solves.</li>
+            <li><strong>Nightly invariant check:</strong> SELECT SUM(CASE direction WHEN 'CREDIT' THEN amount ELSE -amount END) FROM ledger_entries. Must = 0. Any deviation = P0 alert immediately.</li>
+            <li><strong>Compensating entries never deleted:</strong> refunds, chargebacks, FX corrections all create NEW ledger rows. Never UPDATE or DELETE existing entries. Makes auditing trivial.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"Black Friday hits and order volume spikes 50x. Your payment service starts timing out. What do you do and how do you prevent it next time?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>Immediate:</strong> scale out payment service pods horizontally (pre-defined HPA max). Check PgBouncer connection pool saturation — often the first bottleneck. Increase pool size if still have DB capacity.</li>
+            <li><strong>Check PSP:</strong> are they also degraded? Enable backup PSP if primary health score drops below threshold. Queue payments if both PSPs unhealthy.</li>
+            <li><strong>Shed non-critical load:</strong> disable real-time analytics writes, disable non-critical Kafka consumers, reduce risk engine to rules-only mode (skip ML model) to cut p99 from 150ms to 10ms.</li>
+            <li><strong>Prevention:</strong> load test to 2x expected peak (not just expected). Pre-scale pods before major sales events. Cache merchant configuration in Redis to reduce DB reads. Async risk model inference with synchronous rule fallback.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const panels = {
+  gateway: {
+    icon: '🚪', title: 'API Gateway', subtitle: 'Single ingress · HMAC auth · Idempotency',
+    sections: [
+      { title: 'Idempotency Implementation', text: 'Atomic INSERT INTO idempotency_keys ON CONFLICT DO NOTHING. If 0 rows affected → duplicate request, return cached response. Status moves from IN_PROGRESS to COMPLETE after first successful response. TTL: 24 hours.' },
+      { title: 'HMAC Replay Protection', items: ['Each request includes: timestamp + nonce + HMAC(secret, method+path+body+timestamp)', 'Gateway rejects requests with timestamp outside ±5 minute window — prevents replay', 'Nonces stored in Redis with TTL matching the window', 'HMAC-SHA256 with merchant-specific secrets — each merchant has unique key'] },
+      { title: 'Rate Limiting', items: ['Three layers: per-merchant · per-IP · global', 'Sliding window algorithm via atomic Lua: ZADD + ZREMRANGEBYSCORE + ZCARD', 'Token bucket for burst allowance on top of rate limit', 'Different limits for different endpoints: /payments (stricter) vs /status (looser)'] },
+      { title: 'Scalability', items: ['Stateless pods — horizontal scale to handle spikes', 'JWT validation at edge (RSA public key, no DB lookup)', 'DDoS: rate limit by IP before HMAC validation — avoid crypto on unauthenticated flood', 'Kong/Envoy as gateway layer — mature, battle-tested, plugin ecosystem'] }
+    ]
+  },
+  payment: {
+    icon: '📋', title: 'Payment Service', subtitle: 'State machine · Saga orchestrator · Optimistic locking',
+    sections: [
+      { title: 'State Machine Implementation', text: 'Every transition: UPDATE payments SET status=? WHERE id=? AND status=? AND version=version+1. Check rows_affected. 0 = lost race. Retry with exponential backoff. This prevents any concurrent process from double-transitioning.' },
+      { title: 'UNKNOWN State Handling', items: ['On any PSP timeout: immediately set status to AUTHORIZATION_UNKNOWN or CAPTURE_UNKNOWN', 'Show "Processing..." in UI — never a false success or failure', 'Async reconciliation job polls PSP inquiry API every 60s for UNKNOWN payments', 'Max resolution window: 24 hours. After that: manual review if still unresolved', 'NEVER retry original PSP call without querying inquiry endpoint first'] },
+      { title: 'Saga Compensating Transactions', items: ['Capture fails after debit: issue credit back to customer account', 'PSP timeout: resolve via inquiry, then compensate based on actual PSP state', 'Notification failure: retry idempotently — safe because notification has idempotency key', 'Webhook failure: retry with backoff — merchant server may recover'] },
+      { title: 'Auth Expiry', items: ['Authorization valid 7 days (card network standard)', 'authorization_expires tracked in payments table', 'If merchant tries to capture after 7 days: re-authorization required first', 'Auth expiry check done at capture initiation, before PSP call'] }
+    ]
+  },
+  risk: {
+    icon: '🛡️', title: 'Risk & Fraud Engine', subtitle: 'Rule engine <10ms · ML model <100ms · p99 <150ms',
+    sections: [
+      { title: 'Two-Layer Architecture', text: 'Layer 1 (Rule Engine, <10ms): deterministic blacklists, velocity checks, BIN lookups. Returns DECLINE on hard blocks before ML runs. Layer 2 (ML Model, <100ms): gradient boosted trees or neural net on pre-cached features. Combined decision: APPROVE / REVIEW / DECLINE + score 0–100.' },
+      { title: 'Feature Categories', items: ['Device: fingerprint age, rooted/jailbroken, VPN detected, new device first transaction', 'Velocity: txn count/amount per 1h/24h/7d for this customer and this card', 'Network: IP risk score, geolocation vs home country, tor/proxy detection', 'Behavioral: keystroke dynamics, swipe speed, session duration anomaly', 'Graph: shared device/IP/card with known fraudsters (up to 3 hops)'] },
+      { title: 'Score Thresholds', items: ['<30: auto-approve, no friction', '30–50: approve + flag for monitoring', '50–70: step-up auth required (OTP/3DS)', '70–90: hold 1hr, release if no additional signals', '>90: block + route to manual review queue'] },
+      { title: 'Model Operations', items: ['Weekly retraining on labeled outcomes (confirmed fraud / confirmed legitimate)', '5% shadow traffic to challenger model before promotion', 'Fallback: if ML service down → rules-only mode, p99 drops from 150ms to 10ms', 'Feature store: Redis Hashes precomputed for every customer (HGETALL per inference)'] }
+    ]
+  },
+  vault: {
+    icon: '🗄️', title: 'Token Vault', subtitle: 'PCI-DSS isolated · PAN never in app DBs',
+    sections: [
+      { title: 'Architecture', text: 'Separate network segment, separate deployment, separate DB. Only PSP Integration Layer can call vault service. App services only see opaque token + last4 + brand + expiry. No join between app DB and vault DB possible at network level.' },
+      { title: 'Tokenization Flow', items: ['Customer submits card → goes directly to vault via client-side tokenization (JS library)', 'Vault generates opaque UUID token, stores PAN_encrypted with HSM key', 'Returns token to app — app stores token, never sees PAN', 'card_fingerprint = SHA-256(PAN) for duplicate detection across customers'] },
+      { title: 'PCI-DSS Scope Reduction', items: ['Without vault: entire application is PCI in scope → expensive quarterly audits, network segmentation, penetration tests', 'With vault: only vault service is PCI in scope. App services "out of scope" if they never see PAN', 'Vault has: hardware security modules, restricted network access, separate audit logs, dedicated penetration testing'] },
+      { title: 'Key Rotation', items: ['key_version column in vault_mappings tracks which encryption key was used', 'Annual rotation: generate new key, re-encrypt all rows in background, increment key_version', 'Dual-key period: both old and new key valid during rotation window (~30 days)', 'Old key retired after all rows migrated. Zero downtime rotation.'] }
+    ]
+  },
+  psp: {
+    icon: '🔌', title: 'PSP Integration Layer', subtitle: 'Stripe · Adyen · Failover · Retry strategy',
+    sections: [
+      { title: 'Auth → Capture → Settle', text: 'Three separate PSP calls. Authorize: reserves funds on card (up to 7 days). Capture: transfers funds to merchant. Settle: PSP batch-processes funds to merchant bank (T+1). Each step has its own idempotency key to prevent double-calls.' },
+      { title: 'Retry Strategy', items: ['Hard failures (insufficient funds, stolen card, invalid CVV, expired card): NEVER retry — they will always fail', 'Transient failures (connection reset, 503): exponential backoff with PSP-level idempotency key', 'Timeouts: DO NOT retry — call PSP inquiry endpoint first to get true status', 'Circuit breaker: open at 5% error rate / 60s, route to backup PSP'] },
+      { title: 'PSP Selection', items: ['PSP assigned at AUTH time, stored in payments.psp_name', 'Never changes after AUTH — capture and refund must use same PSP', 'Routing: health score algorithm (error rate + p99 latency + consecutive failures)', 'A/B routing: 90% primary / 10% secondary to keep secondary warm'] },
+      { title: 'Handling 3DS / Strong Auth', items: ['3DS challenge may be required by card issuer based on risk signals', 'Flow: payment created → PSP returns 3DS URL → redirect user → cardholder authenticates → PSP callback → resume capture', 'Timeout risk during 3DS: user may abandon — payment stays in AUTHORIZING for max 30min then expires'] }
+    ]
+  },
+  chargeback: {
+    icon: '⚖️', title: 'Chargeback & Dispute Service', subtitle: 'Card network arbitration · Evidence collection · Rate monitoring',
+    sections: [
+      { title: 'Chargeback Lifecycle', text: 'Cardholder disputes → Visa/MC initiates → funds reversed from merchant → merchant has 7 days to submit evidence → card network adjudicates → WIN (funds restored) or LOSS (chargeback permanent). Each stage has strict card-network-mandated deadlines. SLA breach = automatic loss.' },
+      { title: 'Ledger Impact', items: ['On receipt: DEBIT merchant_payable / CREDIT chargeback_liability (new account type)', 'Chargeback fee ($15–25 per dispute): separate ledger entry', 'On WIN: DEBIT chargeback_liability / CREDIT merchant_payable (reversal)', 'On LOSS: chargeback_liability stays permanently — merchant absorbs loss', 'All entries immutable — never update, only append'] },
+      { title: 'Evidence Auto-Population', items: ['Order receipt with full transaction details', 'IP address + geolocation at time of purchase', 'Device fingerprint + browser/app signature', 'Customer authentication proof (3DS completion, OTP verification)', 'Delivery confirmation if physical goods', 'Prior successful transactions by same customer on same card'] },
+      { title: 'Rate Thresholds', items: ['Visa: warn at 0.65%, remediation at 0.9%, at-risk at 1.0%', 'Mastercard: warn at 1.0%, excessive at 1.5%', 'Visa/MC use DIFFERENT denominators — track both', 'Consequences: fines, restricted processing, program termination', 'Mitigation: better fraud prevention, clearer merchant descriptors, proactive refunds'] }
+    ]
+  },
+  settlement: {
+    icon: '🏦', title: 'Settlement & Reconciliation', subtitle: 'T+1/T+2 · PSP file matching · Exception handling',
+    sections: [
+      { title: 'Settlement Flow', text: 'PSPs batch-process captured payments daily. Funds wired to merchant bank T+1 (Stripe) or T+2 (some others). Settlement file arrives via SFTP or API (~6AM next day). Contains: psp_transaction_id, gross_amount, fee_amount, net_amount, settlement_date.' },
+      { title: 'Reconciliation Process', items: ['Step 1: Download PSP settlement file (CSV/SFTP)', 'Step 2: Parse and normalize to canonical format', 'Step 3: Match each record to internal payment by psp_transaction_id', 'Step 4: Categorize mismatches: timing (auto-resolve), unmatched (alert), amount mismatch (alert)', 'Step 5: Write fee entries to ledger for matched records', 'Step 6: Generate exception report for human review'] },
+      { title: 'Mismatch Categories', items: ['Timing gap: T+1 lag — check next day\'s file. 90% of apparent mismatches.', 'PSP record, no internal: PSP processed something we don\'t know about → investigate immediately', 'Internal record, no PSP: UNKNOWN payment that resolved as FAILURE → needs refund to ledger', 'Amount mismatch: partial capture, FX rounding, or fee calculation error → alert finance'] },
+      { title: 'Multi-Currency Handling', items: ['PSP settles in EUR, merchants billed in USD', 'FX rate locked at capture time, stored in payment record', 'Settlement creates FX conversion ledger entry (rate difference = platform P&L)', 'Reconcile: PSP EUR amount × locked rate = expected USD amount'] }
+    ]
+  },
+  ledger: {
+    icon: '📒', title: 'Ledger Service', subtitle: 'Double-entry · Immutable · Financial source of truth',
+    sections: [
+      { title: 'Double-Entry Invariant', text: 'Every financial transaction creates at least 2 ledger entries. Sum of all signed amounts = 0 always. DEBIT customer_receivable + CREDIT merchant_payable for $100 capture = (+10000) + (-10000) = 0. Nightly verification job checks this invariant. Any non-zero = P0.' },
+      { title: 'Immutability Enforcement', items: ['Trigger RAISES EXCEPTION on any UPDATE or DELETE on ledger_entries', 'No engineer has DELETE privilege on this table in production', 'Refunds: create new CREDIT/DEBIT pair (reverse of original) — never modify old entries', 'Chargebacks: new account type CHARGEBACK_LIABILITY — not modification of existing entries'] },
+      { title: 'Account Types', items: ['CUSTOMER_RECEIVABLE: amount owed by customer to platform', 'MERCHANT_PAYABLE: amount platform owes to merchant', 'PSP_FEES: fees collected by PSP', 'BANK: funds actually in bank account', 'CHARGEBACK_LIABILITY: disputed amounts pending resolution'] },
+      { title: 'Balance Query Pattern', text: 'Find latest snapshot for account → query ledger_entries with id > snapshot.last_entry_id → sum deltas → add to snapshot balance. Snapshot every 1000 entries avoids full table scan on busy merchant accounts.' }
+    ]
+  },
+  outbox: {
+    icon: '📤', title: 'Transactional Outbox', subtitle: 'Dual-write solved · Guaranteed delivery · At-least-once',
+    sections: [
+      { title: 'Why Outbox?', text: 'You cannot atomically write to DB and publish to Kafka. If you write DB first then Kafka: crash between them = silent event loss. If you write Kafka first then DB: crash = event published for non-existent payment. Outbox: Kafka publish is a DB write, solved by existing DB transaction.' },
+      { title: 'Polling Worker', items: ['SELECT * FROM outbox_events WHERE status=PENDING FOR UPDATE SKIP LOCKED', 'SKIP LOCKED: multiple workers can run in parallel, each claims a different batch — no contention', 'Publish to Kafka with payment_id as partition key', 'DELETE row immediately after successful publish', 'Table stays tiny: <1M rows at any time even at high TPS'] },
+      { title: 'Debezium CDC (>5K TPS)', items: ['Reads Postgres WAL (write-ahead log) directly', 'Every DB change published to Kafka automatically', 'Zero write overhead — no outbox table needed', 'Sub-second latency from DB write to Kafka', 'Trade-off: requires Debezium + Kafka Connect cluster, operational complexity'] },
+      { title: 'Consumer Idempotency', text: 'Kafka delivers at-least-once (rarely more). All consumers must be idempotent. Use (payment_id + event_type) as dedup key. INSERT ON CONFLICT DO NOTHING at consumer DB level. Webhook delivery: dedup by outbox event ID.' }
+    ]
+  },
+  kafka: {
+    icon: '📨', title: 'Kafka Event Bus', subtitle: 'At-least-once · Idempotent consumers · 30-day retention',
+    sections: [
+      { title: 'Topic Design', items: ['payment-events: all payment state transitions, partitioned by merchant_id', 'ledger-events: all ledger entries (for audit consumers)', 'webhook-dispatch: outbound webhooks to merchants, partitioned by merchant_id', 'analytics: real-time dashboard events (can drop, not business-critical)', 'reconciliation: settlement file parsing results'] },
+      { title: 'Consumer Design', items: ['All consumers must be idempotent — Kafka at-least-once delivery', 'Dedup key: payment_id + event_type (+ partition + offset as fallback)', 'Consumer lag monitoring: alert if >10K messages behind', 'Dead-letter queue: failed events after 3 retries → DLQ for manual inspection'] },
+      { title: 'Partitioning Strategy', items: ['partition by merchant_id (not payment_id) to preserve per-merchant ordering', 'Merchant dashboard requires events in order — partition key guarantees this', 'Avoids hot partitions: large merchants spread across multiple partitions with virtual sharding'] }
+    ]
+  },
+  notify: {
+    icon: '🔔', title: 'Notification Service', subtitle: 'Customer alerts · Merchant webhooks · HMAC-signed',
+    sections: [
+      { title: 'Webhook Delivery', text: 'HMAC-SHA256 sign all outbound webhooks with merchant-specific secret. Merchant verifies signature before processing. This prevents spoofed webhooks from triggering merchant actions. Stripe uses same pattern.' },
+      { title: 'Retry Strategy', items: ['5 retries over 24 hours: 30s, 5min, 30min, 2h, 12h delays', 'HTTP 2xx = success, delete delivery record', 'Non-2xx or timeout = retry', 'After 5 failures: mark webhook as failed, alert merchant in dashboard', 'Delivery log: full request + response history for debugging'] },
+      { title: 'Idempotency for Consumers', items: ['Kafka consumer: deduplicate by event_id before sending notification', 'Prevents duplicate emails/SMS if consumer restarts mid-batch', 'Merchant webhook: include idempotency_key in payload — merchant should dedup on their end'] }
+    ]
+  },
+  analytics: {
+    icon: '📊', title: 'Analytics & CQRS Read Layer', subtitle: 'Read replicas · Elasticsearch · Data warehouse',
+    sections: [
+      { title: 'CQRS Read Models', items: ['Write primary: payment service inserts/updates', '1–5 read replicas: merchant dashboards, customer payment history', 'Redis: real-time merchant counters (sub-ms), today\'s revenue, live transaction count', 'Elasticsearch: full-text search on metadata, fraud investigation queries', 'Snowflake/BigQuery: BI analytics, reconciliation reports, chargeback analysis'] },
+      { title: 'Eventual Consistency', items: ['Read replicas: ~100ms lag acceptable for merchant dashboards', 'Redis counters: updated via Kafka consumer, ~1s lag for real-time metrics', 'CRITICAL: always read from primary for refund amount validation — can\'t rely on replica for financial decisions'] }
+    ]
+  },
+  ratelimit: {
+    icon: '⏱️', title: 'Rate Limiter', subtitle: 'Per-merchant · Per-IP · Global — 3 layers',
+    sections: [
+      { title: 'Sliding Window Algorithm', text: 'Lua script in Redis: ZADD {key} {timestamp} {unique_id}; ZREMRANGEBYSCORE {key} 0 {window_start}; count = ZCARD {key}; if count > limit: reject. Atomic — no race conditions. TTL on key = window duration.' },
+      { title: 'Rate Limit Tiers', items: ['Per-merchant: different limits by plan (Starter: 100/min, Enterprise: 10K/min)', 'Per-IP: 100/min as DDoS protection — even before auth validation', 'Global: circuit breaker for system protection under extreme load', 'Endpoint-specific: /payments stricter than /status (idempotent reads)'] },
+      { title: 'Response Strategy', items: ['HTTP 429 Too Many Requests with Retry-After header', 'Include current limit, remaining, and reset time in response headers', 'Log rate limit hits for merchant analytics and abuse detection'] }
+    ]
+  },
+  idempotency: {
+    icon: '🔁', title: 'Idempotency Layer', subtitle: 'Atomic check-and-claim · Cached responses · 24h TTL',
+    sections: [
+      { title: 'Implementation', text: 'INSERT INTO idempotency_keys (key, status, created_at) VALUES (?, IN_PROGRESS, now()) ON CONFLICT (key) DO NOTHING. If 0 rows inserted: key already claimed → return cached response from idempotency_keys.response column.' },
+      { title: 'Race Condition Protection', items: ['Atomic INSERT ON CONFLICT: two concurrent requests with same key → only one succeeds at DB level', 'No SELECT then INSERT: that pattern has TOCTOU race', 'IN_PROGRESS → COMPLETE transition: first request completes, caches response', 'Second request sees COMPLETE → returns cached response immediately'] },
+      { title: 'Design Considerations', items: ['TTL: 24 hours. Client should reuse same key for retries within 24h only.', 'Key format: client-generated UUID. Gateway validates format but not content.', 'Response caching: full HTTP response body stored as JSONB. Includes status code.', 'Idempotency at PSP layer too: separate UUID per PSP call, not same as client key.'] }
+    ]
+  }
+};
+
+function openPanel(key) {
+  const data = panels[key];
+  if (!data) return;
+  document.getElementById('dp-icon').textContent = data.icon;
+  document.getElementById('dp-title').textContent = data.title;
+  document.getElementById('dp-subtitle').textContent = data.subtitle;
+  const body = document.getElementById('dp-body');
+  body.innerHTML = '';
+  data.sections.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'dp-section';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'dp-sec-title';
+    titleEl.textContent = sec.title;
+    div.appendChild(titleEl);
+    if (sec.text) {
+      const p = document.createElement('p');
+      p.className = 'dp-text';
+      p.textContent = sec.text;
+      div.appendChild(p);
+    }
+    if (sec.items) {
+      const ul = document.createElement('ul');
+      ul.className = 'dp-list';
+      sec.items.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = item;
+        ul.appendChild(li);
+      });
+      div.appendChild(ul);
+    }
+    body.appendChild(div);
+  });
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closePanel() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function toggleLayer(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleFlow(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleDb(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

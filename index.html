@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design Library — Staff Engineer Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --teal: #00d4aa;
+  --gold: #f0b429;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;
+  line-height:1.6;
+  min-height:100vh;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* nav */
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 40px;
+  display:flex;align-items:center;gap:0;
+  height:52px;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:var(--teal);
+  letter-spacing:0.05em;
+  padding-right:24px;
+  border-right:1px solid var(--border);
+  margin-right:24px;
+  white-space:nowrap;
+}
+.nav-links{display:flex;gap:24px;}
+.nav-link{font-size:11px;color:var(--muted2);cursor:pointer;transition:color 0.15s;text-decoration:none;}
+.nav-link:hover{color:var(--teal);}
+.nav-meta{margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:0.05em;}
+
+/* hero */
+.hero{
+  max-width:1200px;
+  margin:0 auto;
+  padding:80px 40px 64px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-100px;right:-100px;
+  width:600px;height:600px;
+  background:radial-gradient(circle,rgba(0,212,170,0.04) 0%,transparent 65%);
+  pointer-events:none;
+}
+.hero::after{
+  content:'';
+  position:absolute;bottom:-80px;left:40px;
+  width:400px;height:400px;
+  background:radial-gradient(circle,rgba(59,130,246,0.04) 0%,transparent 65%);
+  pointer-events:none;
+}
+.hero-eyebrow{
+  font-size:10px;letter-spacing:0.25em;text-transform:uppercase;
+  color:var(--teal);
+  margin-bottom:20px;
+  display:flex;align-items:center;gap:12px;
+}
+.hero-eyebrow::before{content:'';width:40px;height:1px;background:var(--teal);opacity:0.6;}
+.hero-title{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(36px,5vw,64px);
+  font-weight:800;
+  line-height:1.05;
+  color:#fff;
+  margin-bottom:16px;
+  letter-spacing:-0.02em;
+}
+.hero-title span{color:var(--teal);}
+.hero-sub{
+  font-size:13px;color:var(--muted2);
+  max-width:520px;
+  line-height:1.7;
+  margin-bottom:40px;
+}
+.hero-stats{
+  display:flex;flex-wrap:wrap;gap:32px;
+}
+.hero-stat{
+  display:flex;flex-direction:column;
+}
+.stat-val{
+  font-family:'Syne',sans-serif;
+  font-size:22px;font-weight:800;
+  color:var(--teal);
+}
+.stat-label{font-size:10px;color:var(--muted);letter-spacing:0.05em;}
+
+/* divider */
+.divider{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:0;
+}
+
+/* main grid */
+.main{
+  max-width:1200px;
+  margin:0 auto;
+  padding:64px 40px 100px;
+}
+.section-label{
+  font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:28px;
+  display:flex;align-items:center;gap:12px;
+}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* design cards */
+.designs-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(480px,1fr));
+  gap:3px;
+  margin-bottom:64px;
+}
+@media(max-width:700px){.designs-grid{grid-template-columns:1fr;}}
+
+.design-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:6px;
+  overflow:hidden;
+  text-decoration:none;
+  display:flex;flex-direction:column;
+  transition:border-color 0.2s,transform 0.2s;
+  cursor:pointer;
+  position:relative;
+}
+.design-card:hover{
+  border-color:var(--border2);
+  transform:translateY(-2px);
+}
+.card-accent{height:3px;width:100%;}
+.card-body{padding:28px 28px 20px;flex:1;}
+.card-top{
+  display:flex;align-items:flex-start;
+  justify-content:space-between;
+  margin-bottom:20px;
+}
+.card-icon{font-size:32px;line-height:1;}
+.card-badge{
+  font-size:9px;letter-spacing:0.15em;text-transform:uppercase;
+  padding:4px 10px;border-radius:2px;
+  border:1px solid var(--border2);
+  color:var(--muted);
+}
+.card-title{
+  font-family:'Syne',sans-serif;
+  font-size:22px;font-weight:800;
+  color:#fff;
+  margin-bottom:6px;
+  line-height:1.1;
+}
+.card-sub{
+  font-size:11px;color:var(--muted);
+  margin-bottom:20px;
+  line-height:1.5;
+}
+.card-chips{
+  display:flex;flex-wrap:wrap;gap:6px;
+  margin-bottom:24px;
+}
+.chip{
+  font-size:10px;padding:3px 10px;
+  border:1px solid var(--border);
+  border-radius:2px;
+  color:var(--muted2);
+}
+.chip.hi{color:var(--teal);border-color:rgba(0,212,170,0.3);}
+.card-metrics{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:3px;
+  overflow:hidden;
+  margin-bottom:24px;
+}
+.card-metric{
+  background:var(--bg);
+  padding:10px 12px;
+  text-align:center;
+}
+.cm-val{
+  font-family:'Syne',sans-serif;
+  font-size:14px;font-weight:800;
+}
+.cm-label{font-size:9px;color:var(--muted);margin-top:2px;}
+
+.card-footer{
+  padding:16px 28px;
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(0,0,0,0.15);
+}
+.card-link{
+  font-size:11px;font-weight:600;
+  display:flex;align-items:center;gap:8px;
+  transition:gap 0.15s;
+}
+.design-card:hover .card-link{gap:12px;}
+.card-sections{font-size:10px;color:var(--muted);}
+
+/* coming soon card */
+.design-card.soon{
+  opacity:0.5;cursor:default;
+  pointer-events:none;
+}
+.design-card.soon:hover{transform:none;}
+.soon-overlay{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(6,8,11,0.7);
+  backdrop-filter:blur(2px);
+}
+.soon-badge{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:var(--muted);
+  border:1px solid var(--border2);
+  padding:8px 20px;
+  border-radius:3px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+}
+
+/* topics grid */
+.topics-section{margin-bottom:64px;}
+.topics-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:2px;
+}
+.topic-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px;
+  border-radius:4px;
+  transition:border-color 0.15s;
+}
+.topic-card:hover{border-color:var(--border2);}
+.topic-icon{font-size:20px;margin-bottom:8px;}
+.topic-name{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;margin-bottom:4px;}
+.topic-desc{font-size:10px;color:var(--muted);line-height:1.5;}
+.topic-tag{
+  margin-top:8px;
+  font-size:9px;padding:2px 8px;
+  border-radius:2px;border:1px solid var(--border2);
+  display:inline-block;
+}
+.tag-teal{border-color:rgba(0,212,170,0.3);color:var(--teal);}
+.tag-gold{border-color:rgba(240,180,41,0.3);color:var(--gold);}
+.tag-blue{border-color:rgba(59,130,246,0.3);color:var(--blue);}
+.tag-purple{border-color:rgba(139,92,246,0.3);color:var(--purple);}
+
+/* principles section */
+.principles-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-left:3px solid var(--teal);
+  padding:16px 18px;
+  border-radius:0 4px 4px 0;
+}
+.p-title{font-size:11px;font-weight:600;color:var(--teal);margin-bottom:4px;}
+.p-body{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* footer */
+footer{
+  border-top:1px solid var(--border);
+  padding:24px 40px;
+  display:flex;align-items:center;justify-content:space-between;
+  max-width:1200px;
+  margin:0 auto;
+}
+.footer-logo{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--muted);}
+.footer-meta{font-size:10px;color:var(--muted);}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.hero{animation:fadeUp 0.4s ease both;}
+.designs-grid{animation:fadeUp 0.4s ease 0.1s both;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">⬡ SYSTEM DESIGN</div>
+  <div class="nav-links">
+    <a href="#designs" class="nav-link">Designs</a>
+    <a href="#topics" class="nav-link">Core Topics</a>
+    <a href="#principles" class="nav-link">Principles</a>
+  </div>
+  <div class="nav-meta">Staff Engineer · Interview Reference · v2</div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-eyebrow">Staff Engineer Interview Prep</div>
+  <div class="hero-title">System Design<br><span>Library</span></div>
+  <div class="hero-sub">Production-grade reference designs covering architecture, APIs, data models, state machines, scalability, and tradeoffs. Built for Staff+ engineering interviews.</div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="stat-val">2</div><div class="stat-label">Complete Designs</div></div>
+    <div class="hero-stat"><div class="stat-val">20+</div><div class="stat-label">Sections / Design</div></div>
+    <div class="hero-stat"><div class="stat-val">Staff+</div><div class="stat-label">Target Level</div></div>
+    <div class="hero-stat"><div class="stat-val">Deep Dive</div><div class="stat-label">DB Schema + APIs</div></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div class="main">
+
+  <!-- DESIGNS -->
+  <div id="designs">
+    <div class="section-label">Complete System Designs</div>
+    <div class="designs-grid">
+
+      <!-- Payment System -->
+      <a class="design-card" href="payment-system-design.html">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--teal),var(--blue))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">💳</div>
+            <div class="card-badge">Staff Reference · v2</div>
+          </div>
+          <div class="card-title">Payment System</div>
+          <div class="card-sub">End-to-end payments platform · PSP integration · Double-entry ledger · PCI-DSS compliance · Settlement & reconciliation</div>
+          <div class="card-chips">
+            <span class="chip hi">Transactional Outbox</span>
+            <span class="chip hi">UNKNOWN State</span>
+            <span class="chip hi">Double-Entry Ledger</span>
+            <span class="chip">Chargeback Lifecycle</span>
+            <span class="chip">Multi-PSP Failover</span>
+            <span class="chip">Optimistic Locking</span>
+          </div>
+          <div class="card-metrics">
+            <div class="card-metric"><div class="cm-val" style="color:var(--teal)">1B+</div><div class="cm-label">Payments/yr</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--blue)">1,600</div><div class="cm-label">Peak TPS</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">99.99%</div><div class="cm-label">Availability</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-link" style="color:var(--teal)">Open Design →</span>
+          <span class="card-sections">11 sections · State machine · 5 data flows · DB schema</span>
+        </div>
+      </a>
+
+      <!-- Crypto App -->
+      <a class="design-card" href="crypto-staff-system-design.html">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--gold),var(--purple))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">🔐</div>
+            <div class="card-badge">Staff Reference · v1</div>
+          </div>
+          <div class="card-title">Consumer Crypto App</div>
+          <div class="card-sub">Crypto trading platform · Custody & key management · UTXO tracking · Fraud/AML · Real-time price feeds</div>
+          <div class="card-chips">
+            <span class="chip hi">HD Wallet Custody</span>
+            <span class="chip hi">UTXO Management</span>
+            <span class="chip hi">Bloom Filter Lookup</span>
+            <span class="chip">Order State Machine</span>
+            <span class="chip">KYC / AML Compliance</span>
+            <span class="chip">Quote Expiry (Lua)</span>
+          </div>
+          <div class="card-metrics">
+            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">50K</div><div class="cm-label">Orders/sec</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--purple)">100M</div><div class="cm-label">Addresses</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--teal)">15s</div><div class="cm-label">Quote TTL</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-link" style="color:var(--gold)">Open Design →</span>
+          <span class="card-sections">9 services · 4 data flows · Full DB schema</span>
+        </div>
+      </a>
+
+      <!-- Coming Soon: Ride Share -->
+      <div class="design-card soon">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--blue),var(--teal))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">🚗</div>
+          </div>
+          <div class="card-title">Ride-Share Platform</div>
+          <div class="card-sub">Geospatial matching · Dynamic pricing · Driver dispatch · Trip state machine</div>
+          <div class="card-chips">
+            <span class="chip">Geo-sharding</span>
+            <span class="chip">Surge Pricing</span>
+            <span class="chip">Driver Location Stream</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-sections">Coming soon</span>
+        </div>
+        <div class="soon-overlay"><div class="soon-badge">Coming Soon</div></div>
+      </div>
+
+      <!-- Coming Soon: Messaging -->
+      <div class="design-card soon">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--purple),var(--blue))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">💬</div>
+          </div>
+          <div class="card-title">Real-Time Messaging</div>
+          <div class="card-sub">WebSocket fanout · Message ordering · Read receipts · Presence system</div>
+          <div class="card-chips">
+            <span class="chip">WebSocket</span>
+            <span class="chip">Message Ordering</span>
+            <span class="chip">Fanout at Scale</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-sections">Coming soon</span>
+        </div>
+        <div class="soon-overlay"><div class="soon-badge">Coming Soon</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CORE TOPICS -->
+  <div id="topics" class="topics-section">
+    <div class="section-label">Cross-Cutting Topics</div>
+    <div class="topics-grid">
+      <div class="topic-card">
+        <div class="topic-icon">🔁</div>
+        <div class="topic-name">Idempotency</div>
+        <div class="topic-desc">INSERT ON CONFLICT at DB level. PSP-level idempotency keys. Dedup at every layer from API gateway to webhooks.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">⚙️</div>
+        <div class="topic-name">State Machines</div>
+        <div class="topic-desc">Optimistic locking via WHERE status='EXPECTED'. Check rows_affected=1. UNKNOWN states for timeouts. Never assume failure.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">📤</div>
+        <div class="topic-name">Transactional Outbox</div>
+        <div class="topic-desc">Solves dual-write problem. Kafka publish = DB write in same transaction. Debezium CDC alternative at high TPS.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">📒</div>
+        <div class="topic-name">Double-Entry Ledger</div>
+        <div class="topic-desc">Every debit has a credit. SUM = 0 invariant. Immutable append-only. Snapshots for balance queries. BIGINT cents.</div>
+        <span class="topic-tag tag-gold">Covered in: Payments</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">🔀</div>
+        <div class="topic-name">Saga vs 2PC</div>
+        <div class="topic-desc">No distributed locks. Compensating transactions for rollback. 2PC blocks on any participant failure — avoid at scale.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">🗄️</div>
+        <div class="topic-name">Sharding Strategies</div>
+        <div class="topic-desc">Shard by merchant_id/user_id. Hot shard: virtual sharding (id % N). UUID v7 for time-ordered PKs. Scatter-gather for reads.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">🔵</div>
+        <div class="topic-name">Bloom Filters</div>
+        <div class="topic-desc">O(1) membership check. 100M addresses in 120MB Redis. 0.1% false positive. Used in custody, address lookup, notifications.</div>
+        <span class="topic-tag tag-gold">Covered in: Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">🔐</div>
+        <div class="topic-name">Encryption Patterns</div>
+        <div class="topic-desc">Column-level encryption via Vault transit. PAN tokenization in isolated vault. GDPR erasure via DEK destruction. Key rotation.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">⚡</div>
+        <div class="topic-name">Redis Patterns</div>
+        <div class="topic-desc">Lua scripts for atomic ops. Sliding window rate limiting. Sorted sets for TTL queues. Bloom filters. Distributed locks (Redlock).</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">🔌</div>
+        <div class="topic-name">Circuit Breaker</div>
+        <div class="topic-desc">CLOSED → OPEN at 5% error rate. Fail-fast. HALF-OPEN for probe traffic. Health score algorithm for PSP routing.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">📊</div>
+        <div class="topic-name">CQRS</div>
+        <div class="topic-desc">Write primary + read replicas. Elasticsearch for search. Redis for real-time counters. Snowflake for BI. Separate read models.</div>
+        <span class="topic-tag tag-teal">Covered in: Payments · Crypto</span>
+      </div>
+      <div class="topic-card">
+        <div class="topic-icon">⛓️</div>
+        <div class="topic-name">UTXO & HD Wallets</div>
+        <div class="topic-desc">BIP32 HD derivation paths. UTXO selection with SELECT FOR UPDATE. Confirmation tracker via Sorted Sets. Reorg handling.</div>
+        <span class="topic-tag tag-gold">Covered in: Crypto</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- UNIVERSAL PRINCIPLES -->
+  <div id="principles">
+    <div class="section-label">Universal Staff-Level Principles</div>
+    <div class="principles-grid">
+      <div class="principle">
+        <div class="p-title">Amounts in integer cents — NEVER float</div>
+        <div class="p-body">0.1 + 0.2 ≠ 0.3 in IEEE 754. Store as BIGINT. $100.00 = 10000. Satoshis as BIGINT. Never DECIMAL(x,y) for money arithmetic.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Write log BEFORE external call</div>
+        <div class="p-body">Log psp_requests / blockchain_tx as PENDING before making any external call. Enables crash recovery. Without this: timeout = unrecoverable state.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Timeout ≠ Failure — UNKNOWN state is real</div>
+        <div class="p-body">Never assume failure on timeout. Set UNKNOWN state. Async reconciliation job queries authoritative source. Never retry without querying first.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Immutable audit trail — append only</div>
+        <div class="p-body">Ledger entries, payment events, kyc_records never updated or deleted. Corrections create new entries. Essential for regulatory compliance.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Idempotency at EVERY layer</div>
+        <div class="p-body">Gateway → Service → DB → PSP/Blockchain calls → Webhooks. INSERT ON CONFLICT DO NOTHING at DB level as final backstop. Safe retries everywhere.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Optimistic over pessimistic locking</div>
+        <div class="p-body">UPDATE WHERE status='EXPECTED', check rows_affected=1. No lock held between read and write. Kills throughput if you use SELECT FOR UPDATE at scale.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Saga replaces 2PC always</div>
+        <div class="p-body">2PC blocks entire transaction if any participant is unavailable. Saga + compensating transactions: each step independent, rollback via explicit reversal.</div>
+      </div>
+      <div class="principle">
+        <div class="p-title">Partial index on active subset</div>
+        <div class="p-body">WHERE status NOT IN ('SETTLED','COMPLETE'). 99.9% of rows are terminal — indexing them wastes space and slows writes. Active subset is what ops query constantly.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="footer-logo">⬡ SYSTEM DESIGN LIBRARY</div>
+  <div class="footer-meta">Staff Engineer Interview Reference · Updated March 2026</div>
+</footer>
+
+</body>
+</html>
