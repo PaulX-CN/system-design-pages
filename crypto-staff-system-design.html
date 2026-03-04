@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consumer Crypto — Staff Engineer System Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --teal: #00d4aa;
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --orange: #f97316;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px;
+  line-height:1.6;
+}
+
+/* scanline overlay */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* nav */
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:800;
+  color:var(--gold);
+  letter-spacing:0.05em;
+  padding:14px 24px 14px 0;
+  border-right:1px solid var(--border);
+  margin-right:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-item{
+  padding:14px 16px;
+  font-size:11px;
+  color:var(--muted2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color 0.15s;
+  border-bottom:2px solid transparent;
+  flex-shrink:0;
+}
+.nav-item:hover,.nav-item.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+/* layout */
+.page{max-width:1320px;margin:0 auto;padding:48px 28px 80px;}
+
+/* hero */
+.hero{
+  padding:52px 0 44px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:48px;
+}
+.hero-label{
+  font-size:10px;letter-spacing:0.25em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-label::before{content:'';width:24px;height:1px;background:var(--gold);}
+.hero h1{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(28px,5vw,56px);
+  font-weight:800;
+  line-height:1.0;
+  letter-spacing:-0.03em;
+  margin-bottom:16px;
+}
+.hero h1 .dim{color:var(--muted);}
+.hero h1 .hi{color:var(--gold);}
+.hero-sub{
+  color:var(--muted2);font-size:12px;
+  max-width:600px;line-height:1.8;
+}
+.hero-meta{
+  display:flex;gap:24px;flex-wrap:wrap;
+  margin-top:28px;
+}
+.meta-pill{
+  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 12px;border-radius:2px;
+  border:1px solid var(--border2);color:var(--muted2);
+}
+
+/* section headers */
+.sec-head{
+  display:flex;align-items:center;gap:16px;
+  margin-bottom:24px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.sec-num{
+  font-family:'Syne',sans-serif;
+  font-size:11px;font-weight:700;
+  color:var(--gold);
+  letter-spacing:0.1em;
+}
+.sec-title{
+  font-family:'Syne',sans-serif;
+  font-size:18px;font-weight:700;
+  letter-spacing:-0.01em;
+}
+.sec-tag{
+  margin-left:auto;
+  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+  padding:3px 10px;border-radius:2px;
+  border:1px solid var(--border2);color:var(--muted);
+}
+
+section{margin-bottom:64px;}
+
+/* arch diagram */
+.arch-wrap{
+  display:flex;flex-direction:column;gap:3px;
+  position:relative;
+}
+
+.layer{
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+  transition:border-color 0.2s;
+}
+.layer:hover{border-color:var(--border2);}
+.layer.open{border-color:var(--border2);}
+
+.layer-hd{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 18px;
+  cursor:pointer;
+  background:var(--s1);
+  user-select:none;
+}
+.l-accent{width:3px;height:28px;border-radius:2px;flex-shrink:0;}
+.l-name{
+  font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:700;
+  letter-spacing:0.05em;flex:1;
+}
+.l-scale{font-size:10px;color:var(--muted);flex-shrink:0;}
+.l-chevron{color:var(--muted);font-size:10px;transition:transform 0.2s;}
+.layer.open .l-chevron{transform:rotate(90deg);}
+
+.layer-bd{
+  display:none;
+  background:var(--bg);
+  border-top:1px solid var(--border);
+}
+.layer.open .layer-bd{display:block;}
+
+.comp-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:1px;
+  background:var(--border);
+}
+.comp{
+  background:var(--s1);
+  padding:16px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+  position:relative;
+}
+.comp:hover{background:var(--s2);}
+.comp-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.comp-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.comp-name{
+  font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:700;
+  line-height:1.3;
+}
+.comp-role{font-size:10px;color:var(--muted2);margin-bottom:6px;}
+.comp-detail{font-size:11px;color:var(--muted2);line-height:1.6;}
+
+/* detail panel */
+.detail-panel{
+  position:fixed;
+  right:0;top:0;bottom:0;
+  width:min(480px,100vw);
+  background:var(--s1);
+  border-left:1px solid var(--border2);
+  z-index:200;
+  transform:translateX(100%);
+  transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+.detail-panel.open{transform:translateX(0);}
+.dp-header{
+  padding:20px 24px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;gap:12px;
+  position:sticky;top:0;
+  background:var(--s1);z-index:1;
+}
+.dp-close{
+  margin-left:auto;
+  background:none;border:1px solid var(--border2);
+  color:var(--muted2);cursor:pointer;
+  padding:4px 10px;border-radius:2px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  flex-shrink:0;
+}
+.dp-icon{font-size:24px;flex-shrink:0;}
+.dp-title-wrap{}
+.dp-title{
+  font-family:'Syne',sans-serif;
+  font-size:16px;font-weight:700;
+  margin-bottom:2px;
+}
+.dp-subtitle{font-size:10px;color:var(--muted2);letter-spacing:0.05em;}
+.dp-body{padding:20px 24px;display:flex;flex-direction:column;gap:20px;}
+.dp-section{}
+.dp-sec-title{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.dp-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.dp-text{font-size:12px;color:var(--muted2);line-height:1.7;}
+.dp-list{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.dp-list li{
+  font-size:12px;color:var(--muted2);line-height:1.6;
+  padding-left:16px;position:relative;
+}
+.dp-list li::before{
+  content:'›';position:absolute;left:0;
+  color:var(--gold);font-size:13px;line-height:1.5;
+}
+.dp-list li strong{color:var(--text);}
+.dp-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.dp-tag{
+  font-size:10px;padding:3px 8px;border-radius:2px;
+  border:1px solid var(--border2);color:var(--muted2);
+}
+.dp-tag.warn{border-color:rgba(239,68,68,0.4);color:var(--red);}
+.dp-tag.ok{border-color:rgba(0,212,170,0.4);color:var(--teal);}
+.dp-tag.info{border-color:rgba(59,130,246,0.4);color:var(--blue);}
+
+/* overlay */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.5);
+  z-index:199;display:none;
+}
+.overlay.show{display:block;}
+
+/* flows */
+.flow-grid{display:flex;flex-direction:column;gap:3px;}
+.flow-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+  cursor:pointer;
+  transition:border-color 0.15s;
+}
+.flow-card:hover,.flow-card.open{border-color:var(--border2);}
+.flow-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+}
+.f-num{
+  font-family:'Syne',sans-serif;
+  font-weight:800;font-size:11px;
+  color:var(--gold);width:28px;flex-shrink:0;
+}
+.f-name{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:700;flex:1;
+}
+.f-meta{display:flex;gap:8px;margin-left:auto;}
+.f-badge{
+  font-size:10px;padding:2px 8px;border-radius:2px;
+  border:1px solid var(--border2);color:var(--muted);
+}
+.flow-bd{
+  display:none;
+  border-top:1px solid var(--border);
+  padding:20px 18px;
+}
+.flow-card.open .flow-bd{display:block;}
+
+.steps{display:flex;flex-direction:column;gap:0;}
+.step{
+  display:flex;gap:14px;
+  padding:10px 0;
+  border-bottom:1px solid var(--border);
+  position:relative;
+}
+.step:last-child{border-bottom:none;}
+.step-num{
+  font-size:10px;color:var(--muted);
+  width:22px;flex-shrink:0;padding-top:1px;
+  text-align:right;
+}
+.step-content{flex:1;}
+.step-main{font-size:12px;line-height:1.6;color:var(--text);}
+.step-main strong{color:var(--gold2);}
+.step-notes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.snote{
+  font-size:10px;padding:2px 7px;border-radius:2px;
+  background:rgba(240,180,41,0.07);
+  border:1px solid rgba(240,180,41,0.2);
+  color:var(--gold);
+}
+.snote.red{background:rgba(239,68,68,0.07);border-color:rgba(239,68,68,0.25);color:var(--red);}
+.snote.blue{background:rgba(59,130,246,0.07);border-color:rgba(59,130,246,0.25);color:var(--blue);}
+.snote.teal{background:rgba(0,212,170,0.07);border-color:rgba(0,212,170,0.25);color:var(--teal);}
+
+/* edge cases */
+.ec-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+  gap:12px;
+}
+.ec-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:18px;
+  transition:border-color 0.15s;
+}
+.ec-card:hover{border-color:var(--border2);}
+.ec-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.ec-icon{font-size:16px;}
+.ec-title{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:700;
+}
+.ec-severity{
+  margin-left:auto;font-size:10px;padding:2px 8px;border-radius:2px;
+}
+.sev-critical{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+.sev-high{background:rgba(249,115,22,0.1);color:var(--orange);border:1px solid rgba(249,115,22,0.3);}
+.sev-medium{background:rgba(240,180,41,0.1);color:var(--gold);border:1px solid rgba(240,180,41,0.3);}
+.ec-items{display:flex;flex-direction:column;gap:8px;}
+.ec-item{}
+.ec-problem{font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:3px;}
+.ec-solution{
+  font-size:11px;color:var(--teal);line-height:1.5;
+  padding-left:10px;border-left:2px solid rgba(0,212,170,0.3);
+}
+
+/* scalability */
+.scale-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:12px;
+}
+.scale-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;padding:18px;
+}
+.scale-head{
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  margin-bottom:4px;display:flex;align-items:center;gap:8px;
+}
+.scale-head .dot{width:6px;height:6px;border-radius:50%;}
+.scale-target{
+  font-size:10px;color:var(--muted);margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+.scale-points{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.scale-points li{
+  font-size:11px;color:var(--muted2);line-height:1.6;
+  padding-left:14px;position:relative;
+}
+.scale-points li::before{content:'→';position:absolute;left:0;color:var(--muted);}
+
+/* tradeoff matrix */
+.matrix{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:12px;
+}
+.matrix-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;padding:18px;
+}
+.mc-title{
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  margin-bottom:12px;color:var(--gold2);
+}
+.mc-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--border);
+  font-size:11px;
+}
+.mc-row:last-child{border-bottom:none;}
+.mc-label{color:var(--muted2);}
+.mc-val{
+  display:flex;gap:3px;
+}
+.bar{width:8px;height:8px;border-radius:1px;}
+.bar.fill{background:var(--gold);}
+.bar.empty{background:var(--border2);}
+
+/* numbers highlight */
+.nums-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+  margin-bottom:32px;
+}
+.num-card{
+  background:var(--s1);
+  padding:16px 18px;
+}
+.num-val{
+  font-family:'Syne',sans-serif;
+  font-size:22px;font-weight:800;
+  color:var(--gold);
+  margin-bottom:2px;
+}
+.num-label{font-size:10px;color:var(--muted2);line-height:1.4;}
+
+/* database section */
+.db-grid{display:flex;flex-direction:column;gap:3px;}
+.db-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;cursor:pointer;
+  transition:border-color 0.15s;
+}
+.db-card:hover,.db-card.open{border-color:var(--border2);}
+.db-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+}
+.db-icon{font-size:18px;flex-shrink:0;}
+.db-title-wrap{flex:1;}
+.db-name{
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+}
+.db-meta-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px;}
+.db-badge{
+  font-size:10px;padding:2px 8px;border-radius:2px;
+  border:1px solid var(--border2);color:var(--muted);
+}
+.db-badge.pg{border-color:rgba(59,130,246,0.4);color:var(--blue);}
+.db-badge.redis{border-color:rgba(239,68,68,0.4);color:var(--red);}
+.db-badge.kafka{border-color:rgba(240,180,41,0.4);color:var(--gold);}
+.db-badge.s3{border-color:rgba(0,212,170,0.4);color:var(--teal);}
+.db-badge.cassandra{border-color:rgba(249,115,22,0.4);color:var(--orange);}
+.db-badge.elastic{border-color:rgba(139,92,246,0.4);color:var(--purple);}
+.db-scale-tag{
+  margin-left:auto;font-size:10px;padding:2px 10px;
+  border-radius:2px;border:1px solid var(--border2);color:var(--muted);
+  flex-shrink:0;
+}
+.db-bd{
+  display:none;
+  border-top:1px solid var(--border);
+  padding:0;
+}
+.db-card.open .db-bd{display:block;}
+.db-inner{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0;
+}
+@media(max-width:900px){.db-inner{grid-template-columns:1fr;}}
+.db-schema{
+  border-right:1px solid var(--border);
+  padding:20px 18px;
+  background:var(--bg);
+}
+.db-schema:last-child{border-right:none;}
+.db-sec-label{
+  font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:12px;
+  display:flex;align-items:center;gap:8px;
+}
+.db-sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.schema-block{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:14px 16px;
+  margin-bottom:12px;
+  font-family:'JetBrains Mono',monospace;
+}
+.schema-table{
+  font-size:11px;font-weight:600;color:var(--gold2);
+  margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.schema-table span{
+  font-size:10px;font-weight:400;color:var(--muted);
+}
+.schema-col{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:3px 0;border-bottom:1px solid var(--border);
+  font-size:11px;
+}
+.schema-col:last-child{border-bottom:none;}
+.col-name{color:var(--text);}
+.col-name.pk{color:var(--gold);} /* primary key */
+.col-name.fk{color:var(--teal);} /* foreign key */
+.col-name.idx{color:var(--blue);} /* indexed */
+.col-type{color:var(--muted);font-size:10px;}
+.col-note{color:var(--purple);font-size:10px;}
+.schema-indexes{
+  margin-top:10px;padding-top:8px;
+  border-top:1px dashed var(--border);
+  font-size:10px;color:var(--muted2);
+  line-height:1.7;
+}
+.schema-indexes strong{color:var(--muted);}
+.db-notes-list{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.db-notes-list li{
+  font-size:12px;color:var(--muted2);line-height:1.6;
+  padding-left:14px;position:relative;
+}
+.db-notes-list li::before{content:'›';position:absolute;left:0;color:var(--gold);font-size:13px;line-height:1.5;}
+.db-notes-list li strong{color:var(--text);}
+.db-full{padding:20px 18px;background:var(--bg);}
+
+/* animations */
+@keyframes fadeSlide{
+  from{opacity:0;transform:translateY(16px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.hero,.nums-row{animation:fadeSlide 0.5s ease both;}
+section{animation:fadeSlide 0.5s ease 0.1s both;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">CRYPTO SYS DESIGN</div>
+  <div class="nav-item active" onclick="scrollTo('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollTo('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollTo('edgecases')">Edge Cases</div>
+  <div class="nav-item" onclick="scrollTo('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollTo('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollTo('tradeoffs')">Tradeoffs</div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+
+<div class="detail-panel" id="detailPanel">
+  <div class="dp-header">
+    <div class="dp-icon" id="dp-icon"></div>
+    <div class="dp-title-wrap">
+      <div class="dp-title" id="dp-title"></div>
+      <div class="dp-subtitle" id="dp-subtitle"></div>
+    </div>
+    <button class="dp-close" onclick="closePanel()">✕ close</button>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
+</div>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-label">Staff Engineer Interview Prep</div>
+    <h1>Consumer <span class="hi">Crypto</span><br><span class="dim">System Design</span></h1>
+    <p class="hero-sub">Deep dive into architecture, data flows, edge cases, and scalability for a Cash App–scale consumer crypto platform. Click any component for staff-level detail.</p>
+    <div class="hero-meta">
+      <span class="meta-pill">10M+ DAU</span>
+      <span class="meta-pill">$1B+ daily volume</span>
+      <span class="meta-pill">99.99% uptime</span>
+      <span class="meta-pill">Sub-200ms p99</span>
+      <span class="meta-pill">Multi-region active-active</span>
+    </div>
+  </div>
+
+  <!-- SCALE NUMBERS -->
+  <div class="nums-row">
+    <div class="num-card"><div class="num-val">50K</div><div class="num-label">Orders/sec peak throughput</div></div>
+    <div class="num-card"><div class="num-val">&lt;50ms</div><div class="num-label">Fraud scoring p99 latency</div></div>
+    <div class="num-card"><div class="num-val">1s</div><div class="num-label">Price quote freshness TTL</div></div>
+    <div class="num-card"><div class="num-val">3–6</div><div class="num-label">BTC confirmations required</div></div>
+    <div class="num-card"><div class="num-val">90%</div><div class="num-label">Assets in cold storage</div></div>
+    <div class="num-card"><div class="num-val">7 yr</div><div class="num-label">Compliance data retention</div></div>
+    <div class="num-card"><div class="num-val">M-of-N</div><div class="num-label">Multi-sig cold wallet ops</div></div>
+    <div class="num-card"><div class="num-val">&lt;15s</div><div class="num-label">Quote TTL before expiry</div></div>
+  </div>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <span class="sec-title">System Architecture</span>
+      <span class="sec-tag">Click components for detail</span>
+    </div>
+
+    <div class="arch-wrap">
+
+      <!-- L1 Client -->
+      <div class="layer open" id="la">
+        <div class="layer-hd" onclick="toggleLayer('la')">
+          <div class="l-accent" style="background:var(--teal)"></div>
+          <div class="l-name" style="color:var(--teal)">L1 — Client & Edge</div>
+          <div class="l-scale">CDN + API Gateway · scales horizontally · stateless</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('mobile')">
+              <div class="comp-top"><span class="comp-icon">📱</span><span class="comp-name">Mobile App (iOS/Android)</span></div>
+              <div class="comp-role">React Native / Native · Client entry point</div>
+              <div class="comp-detail">Biometric auth, offline balance caching, WebSocket for real-time price feed. Tokens in Keychain/Keystore only.</div>
+            </div>
+            <div class="comp" onclick="openPanel('apigw')">
+              <div class="comp-top"><span class="comp-icon">🚪</span><span class="comp-name">API Gateway (Kong / Envoy)</span></div>
+              <div class="comp-role">Rate limiting · Auth · Routing</div>
+              <div class="comp-detail">JWT validation, per-user rate limits, DDoS mitigation, TLS termination, request ID injection for tracing.</div>
+            </div>
+            <div class="comp" onclick="openPanel('bff')">
+              <div class="comp-top"><span class="comp-icon">🔀</span><span class="comp-name">BFF (Backend for Frontend)</span></div>
+              <div class="comp-role">Aggregation layer · Response shaping</div>
+              <div class="comp-detail">Fans out to 5+ services, assembles unified portfolio response. GraphQL or REST. Reduces mobile round trips by 80%.</div>
+            </div>
+            <div class="comp" onclick="openPanel('auth')">
+              <div class="comp-top"><span class="comp-icon">🔐</span><span class="comp-name">Auth Service</span></div>
+              <div class="comp-role">OAuth 2.0 + PKCE · Step-up auth</div>
+              <div class="comp-detail">Short-lived JWTs (15min), rotating refresh tokens, MFA enforcement, device fingerprinting, step-up for >$500 txns.</div>
+            </div>
+            <div class="comp" onclick="openPanel('ws')">
+              <div class="comp-top"><span class="comp-icon">⚡</span><span class="comp-name">WebSocket / SSE Gateway</span></div>
+              <div class="comp-role">Real-time price feed · Order status push</div>
+              <div class="comp-detail">Persistent connections for price ticks. Server-sent events for order confirmation updates. Backed by Redis pub/sub.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L2 Core -->
+      <div class="layer" id="lb">
+        <div class="layer-hd" onclick="toggleLayer('lb')">
+          <div class="l-accent" style="background:var(--blue)"></div>
+          <div class="l-name" style="color:var(--blue)">L2 — Core Business Services</div>
+          <div class="l-scale">Microservices · Kubernetes · horizontal pod autoscaling</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('order')">
+              <div class="comp-top"><span class="comp-icon">📋</span><span class="comp-name">Order Service</span></div>
+              <div class="comp-role">State machine · Saga orchestrator</div>
+              <div class="comp-detail">CREATED→FRAUD_CHECK→COMPLIANCE→EXECUTING→CONFIRMING→SETTLED. Publishes events on every transition. Idempotent by order_id.</div>
+            </div>
+            <div class="comp" onclick="openPanel('ledger')">
+              <div class="comp-top"><span class="comp-icon">📒</span><span class="comp-name">Ledger Service</span></div>
+              <div class="comp-role">Double-entry · Event sourcing · ACID</div>
+              <div class="comp-detail">Append-only event log. Balance = sum of events. Per-user pessimistic locking during writes. Read replicas for queries.</div>
+            </div>
+            <div class="comp" onclick="openPanel('price')">
+              <div class="comp-top"><span class="comp-icon">💱</span><span class="comp-name">Price / Quote Service</span></div>
+              <div class="comp-role">Aggregated pricing · Spread engine</div>
+              <div class="comp-detail">Multi-exchange aggregation (Coinbase, Kraken, Binance). VWAP calculation. Spread varies by user tier, coin, market volatility.</div>
+            </div>
+            <div class="comp" onclick="openPanel('fiat')">
+              <div class="comp-top"><span class="comp-icon">🏦</span><span class="comp-name">Fiat Payment Service</span></div>
+              <div class="comp-role">ACH · Card · Bank partner abstraction</div>
+              <div class="comp-detail">ACH pull with 2–5 day settlement; instant buy via credit extension. Card funding via network tokens. Handles NSF, reversals.</div>
+            </div>
+            <div class="comp" onclick="openPanel('user')">
+              <div class="comp-top"><span class="comp-icon">👤</span><span class="comp-name">User Service</span></div>
+              <div class="comp-role">Identity · KYC state · Tier limits</div>
+              <div class="comp-detail">Source of truth for user state. Daily/monthly trading limits by tier. Feature flags by jurisdiction. Never stores raw PII.</div>
+            </div>
+            <div class="comp" onclick="openPanel('notif')">
+              <div class="comp-top"><span class="comp-icon">🔔</span><span class="comp-name">Notification Service</span></div>
+              <div class="comp-role">Push · Email · SMS · Dedup</div>
+              <div class="comp-detail">Consumes Kafka order events. Idempotent by event_id. Retry with exponential backoff. User preference-aware fanout.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L3 Crypto -->
+      <div class="layer" id="lc">
+        <div class="layer-hd" onclick="toggleLayer('lc')">
+          <div class="l-accent" style="background:var(--orange)"></div>
+          <div class="l-name" style="color:var(--orange)">L3 — Crypto Infrastructure</div>
+          <div class="l-scale">HSM-backed · Air-gapped cold · Multi-sig ops</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('custody')">
+              <div class="comp-top"><span class="comp-icon">🏛️</span><span class="comp-name">Custody Service</span></div>
+              <div class="comp-role">Hot/Warm/Cold tiering · Key management</div>
+              <div class="comp-detail">Hot (5%): online, instant. Warm (5%): HSM-locked, 30min unlock. Cold (90%): air-gapped, M-of-N quorum. Address derivation via BIP32 HD.</div>
+            </div>
+            <div class="comp" onclick="openPanel('broadcast')">
+              <div class="comp-top"><span class="comp-icon">📡</span><span class="comp-name">Transaction Broadcast Service</span></div>
+              <div class="comp-role">Signing · Fee estimation · Broadcast</div>
+              <div class="comp-detail">UTXO selection (BTC), gas estimation (ETH). Signs via HSM. Multi-node broadcast. Handles stuck txns: RBF (BTC), EIP-1559 gas bump (ETH).</div>
+            </div>
+            <div class="comp" onclick="openPanel('nodes')">
+              <div class="comp-top"><span class="comp-icon">⛓️</span><span class="comp-name">Blockchain Nodes</span></div>
+              <div class="comp-role">Full nodes · Mempool monitoring</div>
+              <div class="comp-detail">Self-hosted BTC (Bitcoin Core) + ETH (Geth/Erigon). Redundant across AZs. 3rd-party (Alchemy) as fallback only. Never trust single source.</div>
+            </div>
+            <div class="comp" onclick="openPanel('confirm')">
+              <div class="comp-top"><span class="comp-icon">✅</span><span class="comp-name">Confirmation Tracker</span></div>
+              <div class="comp-role">Mempool watch · Reorg handling</div>
+              <div class="comp-detail">ZMQ subscription for BTC. ETH via block event streaming. Handles reorgs: rolls back events if block depth &lt; finality threshold.</div>
+            </div>
+            <div class="comp" onclick="openPanel('liquidity')">
+              <div class="comp-top"><span class="comp-icon">💧</span><span class="comp-name">Liquidity Connector</span></div>
+              <div class="comp-role">OTC execution · Exchange routing</div>
+              <div class="comp-detail">Smart order routing across B2C2, Galaxy, Coinbase Prime. VWAP targeting for large orders. Exposure limits per counterparty.</div>
+            </div>
+            <div class="comp" onclick="openPanel('sweep')">
+              <div class="comp-top"><span class="comp-icon">🧹</span><span class="comp-name">Sweep / Consolidation</span></div>
+              <div class="comp-role">Hot→Cold · UTXO consolidation</div>
+              <div class="comp-detail">Threshold-triggered sweep when hot wallet &gt; $10M. UTXO fan-in to reduce future fees. Multi-sig approval workflow. Off-peak scheduling.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L4 Compliance -->
+      <div class="layer" id="ld">
+        <div class="layer-hd" onclick="toggleLayer('ld')">
+          <div class="l-accent" style="background:var(--purple)"></div>
+          <div class="l-name" style="color:var(--purple)">L4 — Compliance & Risk</div>
+          <div class="l-scale">Async post-processing · ML inference · Regulatory reporting</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('kyc')">
+              <div class="comp-top"><span class="comp-icon">🪪</span><span class="comp-name">KYC / Identity Engine</span></div>
+              <div class="comp-role">ID verification · Sanctions screening</div>
+              <div class="comp-detail">Jumio/Persona integration. Risk-scored tiers: Basic (photo ID), Enhanced (selfie liveness), EDD (high-risk). Re-KYC triggers on behavior changes.</div>
+            </div>
+            <div class="comp" onclick="openPanel('aml')">
+              <div class="comp-top"><span class="comp-icon">🔍</span><span class="comp-name">Transaction Monitoring (AML)</span></div>
+              <div class="comp-role">Chainalysis · Rule engine · SAR filing</div>
+              <div class="comp-detail">On-chain graph analysis. Detects: structuring, mixer use, darknet wallet proximity. Auto-SAR generation above thresholds. 90-day lookback window.</div>
+            </div>
+            <div class="comp" onclick="openPanel('fraud')">
+              <div class="comp-top"><span class="comp-icon">🛡️</span><span class="comp-name">Fraud Detection</span></div>
+              <div class="comp-role">Real-time ML · Feature store · <50ms</div>
+              <div class="comp-detail">Gradient boosted model. Features: device, velocity, network graph, behavioral biometrics. Model served via Triton. Retrained weekly on labeled outcomes.</div>
+            </div>
+            <div class="comp" onclick="openPanel('travel')">
+              <div class="comp-top"><span class="comp-icon">✈️</span><span class="comp-name">Travel Rule Service</span></div>
+              <div class="comp-role">TRISA · VASP-to-VASP · Threshold logic</div>
+              <div class="comp-detail">FATF Travel Rule: $3K US / €1K EU. Identifies counterparty VASP via address lookup. Falls back to manual if VASP unresolvable.</div>
+            </div>
+            <div class="comp" onclick="openPanel('limits')">
+              <div class="comp-top"><span class="comp-icon">🚦</span><span class="comp-name">Limits & Controls Engine</span></div>
+              <div class="comp-role">Daily/monthly caps · Velocity rules</div>
+              <div class="comp-detail">Per-user daily buy/sell/withdrawal limits by KYC tier. Rolling window counters in Redis. Hard blocks, not just soft warnings.</div>
+            </div>
+            <div class="comp" onclick="openPanel('ops')">
+              <div class="comp-top"><span class="comp-icon">🧑‍💼</span><span class="comp-name">Compliance Ops Queue</span></div>
+              <div class="comp-role">Manual review · Case management</div>
+              <div class="comp-detail">Flagged transactions routed to ops agents. SLA-driven queue (high-risk: 2hr, standard: 24hr). Full audit trail per case. Integration with JIRA/Zendesk.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L5 Data -->
+      <div class="layer" id="le">
+        <div class="layer-hd" onclick="toggleLayer('le')">
+          <div class="l-accent" style="background:var(--muted2)"></div>
+          <div class="l-name" style="color:var(--muted2)">L5 — Data & Platform Infrastructure</div>
+          <div class="l-scale">Multi-region · Active-passive replication · CDC pipelines</div>
+          <div class="l-chevron">▶</div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('kafka')">
+              <div class="comp-top"><span class="comp-icon">📨</span><span class="comp-name">Event Bus (Kafka)</span></div>
+              <div class="comp-role">Event streaming · Decoupling · Replay</div>
+              <div class="comp-detail">Topics: order-events, ledger-events, price-feed, compliance-signals. Partitioned by user_id. 7-day retention. Schema registry (Avro).</div>
+            </div>
+            <div class="comp" onclick="openPanel('postgres')">
+              <div class="comp-top"><span class="comp-icon">🐘</span><span class="comp-name">PostgreSQL (Per-Service)</span></div>
+              <div class="comp-role">ACID · PITR · Per-service isolation</div>
+              <div class="comp-detail">Each service owns its schema. RDS Multi-AZ, automated failover &lt;30s. Read replicas for analytics. Logical replication to Debezium for CDC.</div>
+            </div>
+            <div class="comp" onclick="openPanel('redis')">
+              <div class="comp-top"><span class="comp-icon">⚡</span><span class="comp-name">Redis Cluster</span></div>
+              <div class="comp-role">Cache · Locks · Rate limits · Pub/Sub</div>
+              <div class="comp-detail">Price quote cache (1s TTL), idempotency keys, distributed locks (Redlock), rate limit sliding windows, WebSocket fanout via pub/sub.</div>
+            </div>
+            <div class="comp" onclick="openPanel('hsm')">
+              <div class="comp-top"><span class="comp-icon">🔒</span><span class="comp-name">HSM + Vault (Key Mgmt)</span></div>
+              <div class="comp-role">Signing keys · Service secrets · MPC</div>
+              <div class="comp-detail">AWS CloudHSM or Thales Luna. Zero plaintext key policy. HashiCorp Vault for service creds. Exploring MPC (Fireblocks) to eliminate single key risk.</div>
+            </div>
+            <div class="comp" onclick="openPanel('dw')">
+              <div class="comp-top"><span class="comp-icon">📊</span><span class="comp-name">Data Warehouse (Redshift/BQ)</span></div>
+              <div class="comp-role">Analytics · ML training · Reporting</div>
+              <div class="comp-detail">CDC via Debezium → Kafka → S3 → DW. Powers: fraud model training, regulatory reporting, revenue analytics. dbt for transformations.</div>
+            </div>
+            <div class="comp" onclick="openPanel('s3')">
+              <div class="comp-top"><span class="comp-icon">🪣</span><span class="comp-name">Object Storage (S3)</span></div>
+              <div class="comp-role">KYC docs · Audit logs · Cold archive</div>
+              <div class="comp-detail">Immutable buckets (Object Lock) for compliance audit trail. AES-256 encryption. 7-year retention policy. KYC documents in WORM storage.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- DATA FLOWS -->
+  <section id="flows">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Critical Data Flows</span>
+      <span class="sec-tag">Click to expand step-by-step</span>
+    </div>
+    <div class="flow-grid">
+
+      <div class="flow-card" id="f1">
+        <div class="flow-hd" onclick="toggleFlow('f1')">
+          <span class="f-num">F-01</span>
+          <span class="f-name">Buy Bitcoin — Full Happy Path</span>
+          <div class="f-meta">
+            <span class="f-badge">~800ms e2e</span>
+            <span class="f-badge">12 steps</span>
+          </div>
+        </div>
+        <div class="flow-bd">
+          <div class="steps">
+            <div class="step"><div class="step-num">01</div><div class="step-content"><div class="step-main">User taps "Buy BTC $100" → Mobile App validates locally (positive balance, network), then calls <strong>BFF</strong> with amount + device fingerprint header.</div><div class="step-notes"><span class="snote blue">client validation</span></div></div></div>
+            <div class="step"><div class="step-num">02</div><div class="step-content"><div class="step-main"><strong>API Gateway</strong> validates JWT signature + checks token expiry. Extracts user_id, injects trace-id. Rate limit check: 10 req/s per user. Rejects if exceeded with 429.</div><div class="step-notes"><span class="snote">auth</span><span class="snote">rate limit</span></div></div></div>
+            <div class="step"><div class="step-num">03</div><div class="step-content"><div class="step-main"><strong>BFF</strong> fans out in parallel: (a) User Service → KYC status + daily limit remaining, (b) Ledger → fiat balance, (c) Price Service → current quote. Assembles in &lt;100ms.</div><div class="step-notes"><span class="snote blue">parallel fan-out</span></div></div></div>
+            <div class="step"><div class="step-num">04</div><div class="step-content"><div class="step-main"><strong>Price Service</strong> returns quote with quote_id and 15s TTL. BTC/USD price = VWAP across 3 exchanges + 1.75% spread. Quote stored in Redis keyed by quote_id.</div><div class="step-notes"><span class="snote">quote TTL</span><span class="snote">spread applied</span></div></div></div>
+            <div class="step"><div class="step-num">05</div><div class="step-content"><div class="step-main">User confirms. App sends order request: {user_id, quote_id, amount_fiat, idempotency_key}. <strong>Order Service</strong> checks idempotency_key in Redis — deduplicates retries.</div><div class="step-notes"><span class="snote">idempotency</span></div></div></div>
+            <div class="step"><div class="step-num">06</div><div class="step-content"><div class="step-main"><strong>Fraud Detection</strong> scores synchronously in &lt;50ms. Features: is new device? velocity in last 1h? payee risk? Score &gt;0.8 = auto-block. Score 0.5–0.8 = step-up auth required.</div><div class="step-notes"><span class="snote red">risk gate</span></div></div></div>
+            <div class="step"><div class="step-num">07</div><div class="step-content"><div class="step-main"><strong>Limits Engine</strong> checks daily buy limit (e.g. $7,500 for Basic KYC tier). Acquires distributed lock on user_id to prevent concurrent order race condition.</div><div class="step-notes"><span class="snote">Redlock</span><span class="snote">race prevention</span></div></div></div>
+            <div class="step"><div class="step-num">08</div><div class="step-content"><div class="step-main"><strong>Fiat Payment Service</strong> debits $100 from user's fiat balance in Ledger. Write is transactional (Postgres). If user has bank-linked account, ACH pull is queued (credit extended immediately).</div><div class="step-notes"><span class="snote teal">ACID debit</span></div></div></div>
+            <div class="step"><div class="step-num">09</div><div class="step-content"><div class="step-main"><strong>Liquidity Connector</strong> executes market buy at quoted rate via OTC desk or exchange API. Returns fill confirmation with actual execution price. Slippage &gt;0.5% triggers retry on alternate venue.</div><div class="step-notes"><span class="snote">smart routing</span></div></div></div>
+            <div class="step"><div class="step-num">10</div><div class="step-content"><div class="step-main"><strong>Ledger Service</strong> credits user BTC balance. Double-entry: DEBIT platform_inventory_BTC / CREDIT user_BTC. Event appended. Balance queryable immediately from read replica.</div><div class="step-notes"><span class="snote teal">double-entry</span></div></div></div>
+            <div class="step"><div class="step-num">11</div><div class="step-content"><div class="step-main">Order Service transitions to SETTLED, publishes ORDER_SETTLED event to Kafka. Consumers: Notification Service (push), AML Monitor (async screen), Analytics (real-time pipeline).</div><div class="step-notes"><span class="snote">Kafka fanout</span></div></div></div>
+            <div class="step"><div class="step-num">12</div><div class="step-content"><div class="step-main"><strong>AML Transaction Monitor</strong> runs async blockchain graph check against Chainalysis. If post-settlement flag triggered, funds are frozen and case opened — does NOT reverse (crypto = irreversible).</div><div class="step-notes"><span class="snote red">async AML</span><span class="snote red">no reversal</span></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-card" id="f2">
+        <div class="flow-hd" onclick="toggleFlow('f2')">
+          <span class="f-num">F-02</span>
+          <span class="f-name">Withdraw BTC to External Wallet</span>
+          <div class="f-meta">
+            <span class="f-badge">~30–90 min e2e</span>
+            <span class="f-badge">10 steps</span>
+          </div>
+        </div>
+        <div class="flow-bd">
+          <div class="steps">
+            <div class="step"><div class="step-num">01</div><div class="step-content"><div class="step-main">User submits: {destination_address, amount_btc}. <strong>Order Service</strong> validates: bech32/base58 checksum, not internal platform address (prevents double-crediting).</div><div class="step-notes"><span class="snote">address validation</span></div></div></div>
+            <div class="step"><div class="step-num">02</div><div class="step-content"><div class="step-main">Destination address screened against OFAC SDN list + Chainalysis risk score. Addresses with direct darknet exposure = auto-reject. High-risk = manual review queue.</div><div class="step-notes"><span class="snote red">sanctions check</span></div></div></div>
+            <div class="step"><div class="step-num">03</div><div class="step-content"><div class="step-main"><strong>Travel Rule Service</strong>: if amount ≥$3K, attempt VASP lookup on destination address. If VASP identified, exchange PII via TRISA. If unresolvable and ≥$3K, block withdrawal.</div><div class="step-notes"><span class="snote">FATF Travel Rule</span></div></div></div>
+            <div class="step"><div class="step-num">04</div><div class="step-content"><div class="step-main"><strong>Fraud Detection</strong>: new address? first withdrawal? velocity spike? Score above threshold routes to <strong>Compliance Ops Queue</strong> for human review (SLA: 2hr for high-risk).</div><div class="step-notes"><span class="snote red">fraud gate</span></div></div></div>
+            <div class="step"><div class="step-num">05</div><div class="step-content"><div class="step-main">Ledger Service reserves (debits) user BTC balance immediately — prevents double-spend. Balance locked even before blockchain broadcast.</div><div class="step-notes"><span class="snote">reserve-then-broadcast</span></div></div></div>
+            <div class="step"><div class="step-num">06</div><div class="step-content"><div class="step-main"><strong>Custody Service</strong> checks hot wallet balance. If insufficient: (a) warn sweep team, (b) request warm wallet unlock (30min), (c) escalate to cold if urgent. SLA maintained.</div><div class="step-notes"><span class="snote">wallet tiering</span></div></div></div>
+            <div class="step"><div class="step-num">07</div><div class="step-content"><div class="step-main"><strong>Transaction Broadcast Service</strong> selects UTXOs (minimizes fees + future consolidation), estimates fee from mempool (next-block target), constructs tx, signs via HSM (key never leaves hardware).</div><div class="step-notes"><span class="snote">HSM signing</span><span class="snote">UTXO selection</span></div></div></div>
+            <div class="step"><div class="step-num">08</div><div class="step-content"><div class="step-main">Transaction broadcast to 3+ nodes simultaneously. tx_id stored against order. If stuck after 30min (mempool congestion), RBF (Replace-by-Fee) submitted with higher fee.</div><div class="step-notes"><span class="snote">multi-node broadcast</span><span class="snote">RBF fallback</span></div></div></div>
+            <div class="step"><div class="step-num">09</div><div class="step-content"><div class="step-main"><strong>Confirmation Tracker</strong> monitors mempool → 1 conf → 3 conf → 6 conf. Emits events at each threshold. Order moves CONFIRMING → SETTLED at 6 confirmations (~60min).</div><div class="step-notes"><span class="snote">~60 min</span></div></div></div>
+            <div class="step"><div class="step-num">10</div><div class="step-content"><div class="step-main">Compliance audit log written to S3 (immutable). Includes: user_id, amount, destination address, VASP data, fraud score, approval chain. Retained 7 years.</div><div class="step-notes"><span class="snote teal">audit trail</span></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-card" id="f3">
+        <div class="flow-hd" onclick="toggleFlow('f3')">
+          <span class="f-num">F-03</span>
+          <span class="f-name">Inbound Deposit — BTC Received</span>
+          <div class="f-meta">
+            <span class="f-badge">Event-driven</span>
+            <span class="f-badge">8 steps</span>
+          </div>
+        </div>
+        <div class="flow-bd">
+          <div class="steps">
+            <div class="step"><div class="step-num">01</div><div class="step-content"><div class="step-main">User requests deposit address. <strong>Custody Service</strong> derives address via BIP32 HD wallet path (m/44'/0'/account_index'/0/address_index). Each user gets unique deterministic address.</div><div class="step-notes"><span class="snote">BIP32 HD derivation</span></div></div></div>
+            <div class="step"><div class="step-num">02</div><div class="step-content"><div class="step-main">All watched addresses registered in Confirmation Tracker. Bitcoin node ZMQ socket emits notification when tx appears in mempool targeting any watched address.</div><div class="step-notes"><span class="snote blue">ZMQ subscription</span></div></div></div>
+            <div class="step"><div class="step-num">03</div><div class="step-content"><div class="step-main">TX_SEEN event published. UI shows "1 incoming BTC (pending)". Balance NOT credited yet. User informed of estimated confirmation time based on current mempool depth.</div><div class="step-notes"><span class="snote">pending UX</span></div></div></div>
+            <div class="step"><div class="step-num">04</div><div class="step-content"><div class="step-main"><strong>AML Monitor</strong> immediately begins source address analysis — Chainalysis traces provenance. Flags if funds passed through known mixer, ransomware, or sanctioned entity in last N hops.</div><div class="step-notes"><span class="snote red">source screening</span></div></div></div>
+            <div class="step"><div class="step-num">05</div><div class="step-content"><div class="step-main">After 3 confirmations (lower-value) or 6 confirmations (high-value, >$10K): TX_CONFIRMED event emitted. This threshold is configurable by risk team.</div><div class="step-notes"><span class="snote">risk-tiered confirms</span></div></div></div>
+            <div class="step"><div class="step-num">06</div><div class="step-content"><div class="step-main">If AML screen is clean: <strong>Ledger Service</strong> credits user BTC balance. If AML screen flagged: funds held in quarantine wallet, case opened, user notified of regulatory hold.</div><div class="step-notes"><span class="snote red">quarantine path</span></div></div></div>
+            <div class="step"><div class="step-num">07</div><div class="step-content"><div class="step-main">Chain reorg protection: if block reorg detected (depth &lt;6), TX_CONFIRMED is reverted. Ledger reversal event appended. User notified. This is rare but must be handled.</div><div class="step-notes"><span class="snote red">reorg handling</span></div></div></div>
+            <div class="step"><div class="step-num">08</div><div class="step-content"><div class="step-main">Sweep evaluation: if total hot wallet balance crosses threshold post-deposit, Sweep Service is triggered to consolidate to cold storage. Runs off-peak (low mempool fees).</div><div class="step-notes"><span class="snote">auto-sweep</span></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-card" id="f4">
+        <div class="flow-hd" onclick="toggleFlow('f4')">
+          <span class="f-num">F-04</span>
+          <span class="f-name">ACH Failure + Partial Saga Rollback</span>
+          <div class="f-meta">
+            <span class="f-badge">Failure path</span>
+            <span class="f-badge">Staff-level</span>
+          </div>
+        </div>
+        <div class="flow-bd">
+          <div class="steps">
+            <div class="step"><div class="step-num">01</div><div class="step-content"><div class="step-main">User buys BTC via ACH-linked bank account. ACH pull initiated. Crypto credited immediately (instant buy = credit extension against pending ACH).</div><div class="step-notes"><span class="snote">credit extension</span></div></div></div>
+            <div class="step"><div class="step-num">02</div><div class="step-content"><div class="step-main">2 days later: ACH returns NSF (insufficient funds). <strong>Fiat Payment Service</strong> receives R01 return code from bank partner. Publishes ACH_FAILED event to Kafka.</div><div class="step-notes"><span class="snote red">R01 NSF return</span></div></div></div>
+            <div class="step"><div class="step-num">03</div><div class="step-content"><div class="step-main">Saga compensating action: attempt to sell equivalent BTC to recover debt. BUT: if BTC price dropped, shortfall exists. If BTC price rose, user benefited — reclaim only original debt.</div><div class="step-notes"><span class="snote red">debt recovery</span></div></div></div>
+            <div class="step"><div class="step-num">04</div><div class="step-content"><div class="step-main">If user balance insufficient for recovery (sold BTC already): account flagged, trading suspended, debt sent to collections pipeline. User notified + given repayment window.</div><div class="step-notes"><span class="snote red">account suspension</span></div></div></div>
+            <div class="step"><div class="step-num">05</div><div class="step-content"><div class="step-main">Fraud signal: ACH failure is a known fraud vector (buy crypto, cause intentional NSF). NSF rate per user tracked. High NSF rate triggers enhanced fraud review on future instant-buy requests.</div><div class="step-notes"><span class="snote red">fraud signal</span></div></div></div>
+            <div class="step"><div class="step-num">06</div><div class="step-content"><div class="step-main">All saga steps logged as compensating events in Ledger (not deleted — append-only). Full audit trail preserved for disputes and regulatory review.</div><div class="step-notes"><span class="snote teal">append-only audit</span></div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- EDGE CASES -->
+  <section id="edgecases">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <span class="sec-title">Edge Cases & Failure Modes</span>
+      <span class="sec-tag">Staff-level considerations</span>
+    </div>
+    <div class="ec-grid">
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">⛓️</span><span class="ec-title">Blockchain Reorg</span><span class="ec-severity sev-critical">CRITICAL</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">A confirmed block gets reorganized out of the canonical chain. User's "confirmed" deposit evaporates. Our ledger credited a tx that no longer exists on chain.</div>
+            <div class="ec-solution">Use 6-confirmation finality for large deposits. Listen for reorg events via node. Emit LEDGER_REVERSAL compensating event. Freeze user funds during reorg window. Alert on-call immediately.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">💸</span><span class="ec-title">Double Spend / Double Broadcast</span><span class="ec-severity sev-critical">CRITICAL</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Broadcast service crashes after signing but before recording tx_id. On restart, it could sign and broadcast the same withdrawal again — sending funds twice.</div>
+            <div class="ec-solution">Idempotency key written to DB before broadcast. Check-then-act with distributed lock (Redlock). tx_id recorded atomically. On restart, check: "was this order already broadcast?" before signing.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">🧊</span><span class="ec-title">Stuck Transaction (Mempool)</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Mempool congestion spikes (e.g. during NFT drops). Fee was too low. Transaction sits unconfirmed for hours. Users angry, funds in limbo.</div>
+            <div class="ec-solution">BTC: Replace-by-Fee (RBF) — broadcast replacement tx with higher fee, same inputs. ETH: EIP-1559 gas bump. Monitor mempool depth and auto-bump after 30min. Alert + page on-call for large stuck withdrawals.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">💰</span><span class="ec-title">Hot Wallet Depletion</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Sudden spike in withdrawals (market crash, viral influencer post) drains hot wallet faster than cold replenishment can occur. Withdrawals queue or fail.</div>
+            <div class="ec-solution">Pre-warm: move funds from warm to hot on anomalous withdrawal velocity. Queue withdrawals vs. reject them (better UX). Automated cold-to-warm unlock pipeline with M-of-N approval via mobile push. SLA: &lt;30min warm unlock.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">📊</span><span class="ec-title">Price Quote Race</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">BTC drops 5% between when user saw the price and when their order executes. User expected $100 → 0.0025 BTC but gets less. Or price pumped and user got a better deal — arbitrage.</div>
+            <div class="ec-solution">Quote TTL (15s). quote_id validated on execution. If expired, reject with 409 and issue fresh quote. Slippage tolerance configurable (±2% default). Large orders use TWAP execution over 5min to reduce market impact.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">🔄</span><span class="ec-title">Ledger Split-Brain</span><span class="ec-severity sev-critical">CRITICAL</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Network partition causes two Postgres nodes to think they're primary. Both accept writes. User balance updates are applied to different primaries. Data diverges.</div>
+            <div class="ec-solution">RDS Multi-AZ with single-primary enforced. Patroni for HA with STONITH (Shoot The Other Node In The Head) to prevent split-brain. Read replicas are read-only. Regular reconciliation job compares ledger sum to blockchain custody balances.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">🌐</span><span class="ec-title">Exchange / OTC Counterparty Failure</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Primary OTC desk (B2C2) goes offline mid-order. Fiat was debited. Crypto execution failed. Ledger now inconsistent — user has no fiat and no crypto.</div>
+            <div class="ec-solution">Saga pattern: fiat debit is step 1, execution is step 2. If step 2 fails, compensating transaction refunds fiat. Automatic failover to secondary venue (Galaxy, Wintermute). Exposure limits per counterparty (max $10M outstanding).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">🤖</span><span class="ec-title">Fraud Ring / Sybil Attack</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Coordinated fraud: 10,000 fake accounts buy BTC, cause intentional ACH failures, resulting in $1M+ in unrecoverable debt. Or: synthetic identity pass KYC using AI-generated IDs.</div>
+            <div class="ec-solution">Device fingerprint graph — detect shared devices across "unique" accounts. Network graph: shared IPs, phone numbers, bank accounts. ML clustering to identify rings. Liveness detection (3D depth map) in KYC flow against AI-generated faces.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">🔑</span><span class="ec-title">HSM Key Compromise / Loss</span><span class="ec-severity sev-critical">CRITICAL</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">HSM device fails or is compromised. All keys inside are inaccessible or leaked. Cold wallet holding $500M in customer BTC is now at risk or unrecoverable.</div>
+            <div class="ec-solution">Multi-party computation (MPC): key split across 3 parties, no single HSM holds full key. Geographic distribution. Key ceremony documentation. Annual recovery drills. Insurance (Lloyd's of London crypto custody policies). Proof of reserves audit.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">📡</span><span class="ec-title">Node Desync / Stale Data</span><span class="ec-severity sev-medium">MEDIUM</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">Self-hosted Bitcoin node falls behind by 10 blocks. Confirmation tracker thinks a tx has 0 confirmations when it actually has 10. User's withdrawal appears stuck.</div>
+            <div class="ec-solution">Monitor node block height vs. public explorers. Alert if lag &gt;3 blocks. Fallback to 3rd-party node (Alchemy) for reads when primary lags. Never use lagged node for security-critical confirmations.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">💣</span><span class="ec-title">Flash Crash Liquidation Cascade</span><span class="ec-severity sev-high">HIGH</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">BTC drops 30% in 5 minutes. 100K users simultaneously hit "sell" button. Order service overloaded. Price service can't keep quotes fresh. Sells execute at wrong prices.</div>
+            <div class="ec-solution">Circuit breaker: if order velocity exceeds 5x normal, engage queue. Price service has 500ms TTL fallback (accept slightly stale). Horizontal pod autoscaling pre-warms on volatility signal from price feed. Load shed: queue non-urgent orders.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ec-card">
+        <div class="ec-head"><span class="ec-icon">⚖️</span><span class="ec-title">Regulatory Change Mid-Flight</span><span class="ec-severity sev-medium">MEDIUM</span></div>
+        <div class="ec-items">
+          <div class="ec-item">
+            <div class="ec-problem">SEC declares a specific token a security. Overnight, trading that token is illegal in the US. Thousands of pending orders for that token in the queue.</div>
+            <div class="ec-solution">Token-level feature flags with &lt;1min propagation (LaunchDarkly or internal). Kill switch can halt all trading on a specific asset in seconds. Pending orders auto-cancelled with user notification. Refunds triggered via compensating transactions.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SCALABILITY -->
+  <section id="scalability">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <span class="sec-title">Scalability Design</span>
+      <span class="sec-tag">10M DAU → 100M DAU</span>
+    </div>
+    <div class="scale-grid">
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--teal)"></div> Order Service</div>
+        <div class="scale-target">Target: 50K orders/sec peak · p99 &lt;200ms</div>
+        <ul class="scale-points">
+          <li>Stateless pods — horizontal scale on CPU/RPS via KEDA</li>
+          <li>Partition Kafka topics by user_id — prevents hot shards, preserves per-user ordering</li>
+          <li>Async saga: only synchronous steps are fraud score + balance check. Rest is event-driven</li>
+          <li>Database per shard (user_id % N shards) — avoids single Postgres bottleneck</li>
+          <li>Write-ahead logging to Kafka before DB write — ensures event order matches intent</li>
+        </ul>
+      </div>
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--blue)"></div> Ledger Service</div>
+        <div class="scale-target">Target: ACID at scale · No balance inconsistency</div>
+        <ul class="scale-points">
+          <li>User-level sharding: user_id → shard. Cross-shard transfers are rare (platform wallet ↔ user)</li>
+          <li>Optimistic locking for read-heavy balance queries, pessimistic for writes</li>
+          <li>CQRS: separate write model (event log) from read model (materialized balance). Read replica serves portfolio API</li>
+          <li>Event sourcing enables time-travel queries — reconstruct balance at any point in history</li>
+          <li>Periodic snapshot (every 1000 events) to avoid replaying full history on startup</li>
+        </ul>
+      </div>
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--gold)"></div> Price / Quote Service</div>
+        <div class="scale-target">Target: 1s freshness · millions of concurrent subscribers</div>
+        <ul class="scale-points">
+          <li>Price aggregator is single-threaded write path; all reads from Redis cache</li>
+          <li>WebSocket gateway sharded by user_id prefix — 100 gateway pods, each holds 100K connections</li>
+          <li>Redis pub/sub broadcasts new price tick to all gateway pods simultaneously</li>
+          <li>Price feed degraded mode: if aggregator lags &gt;2s, widen spread to protect against stale execution</li>
+          <li>Circuit breaker: if 2/3 exchanges unreachable, halt market orders, allow limit orders only</li>
+        </ul>
+      </div>
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--orange)"></div> Confirmation Tracker</div>
+        <div class="scale-target">Target: Watch 100M addresses · &lt;1s detection latency</div>
+        <ul class="scale-points">
+          <li>Bloom filter for O(1) address lookup — 100M addresses in ~120MB RAM (false positive ~0.1%)</li>
+          <li>Verified via DB lookup on bloom filter hit — eliminates false positives before processing</li>
+          <li>Multiple full node connections across AZs — never single-node dependency</li>
+          <li>Reorg detector: compare last N block hashes every 10s against multiple nodes</li>
+          <li>Dedicated high-memory node for mempool tracking (mempool can be 300MB+)</li>
+        </ul>
+      </div>
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--purple)"></div> Fraud Detection</div>
+        <div class="scale-target">Target: &lt;50ms p99 · 50K req/sec</div>
+        <ul class="scale-points">
+          <li>Feature computation pre-cached in Redis (velocity windows, device history) — model only does inference</li>
+          <li>Model served via NVIDIA Triton Inference Server — GPU-accelerated, batching, model versioning</li>
+          <li>Shadow mode: new model runs in parallel with production. Compare scores before promoting</li>
+          <li>Feedback loop: labeled outcomes (chargebacks, fraud confirmed) retrain model weekly</li>
+          <li>Fallback: if ML service down, rule-based fallback (velocity + device age) kicks in automatically</li>
+        </ul>
+      </div>
+
+      <div class="scale-card">
+        <div class="scale-head"><div class="dot" style="background:var(--red)"></div> Multi-Region Architecture</div>
+        <div class="scale-target">Target: 99.99% uptime · RPO &lt;1s · RTO &lt;30s</div>
+        <ul class="scale-points">
+          <li>Active-active US-East + US-West for read traffic; active-passive for writes (Ledger is single primary)</li>
+          <li>Ledger writes go to primary region. Replication lag &lt;100ms to standby. Auto-failover via Route53 health checks</li>
+          <li>Kafka MirrorMaker2 for cross-region event replication. Consumers idempotent — safe to replay</li>
+          <li>Blockchain nodes in both regions — each region has independent view of chain</li>
+          <li>Chaos engineering (Chaos Monkey) runs weekly to validate failover paths work in practice</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- DATABASE DESIGN -->
+  <section id="databases">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <span class="sec-title">Database Design Per Service</span>
+      <span class="sec-tag">Schema · Indexing · Sharding · Access Patterns</span>
+    </div>
+    <div class="db-grid">
+
+      <!-- LEDGER -->
+      <div class="db-card" id="db1">
+        <div class="db-hd" onclick="toggleDb('db1')">
+          <div class="db-icon">📒</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Ledger Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (sharded)</span>
+              <span class="db-badge redis">Redis (balance cache)</span>
+              <span class="db-badge kafka">Kafka (CDC)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~1B rows/yr · append-only</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">ledger_events <span>— primary event log, append-only</span></div>
+                <div class="schema-col"><span class="col-name pk">event_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">user_id</span><span class="col-type">UUID NOT NULL</span><span class="col-note">shard key</span></div>
+                <div class="schema-col"><span class="col-name">asset</span><span class="col-type">VARCHAR(10)</span><span class="col-note">BTC, ETH, USD</span></div>
+                <div class="schema-col"><span class="col-name">amount</span><span class="col-type">NUMERIC(28,18)</span><span class="col-note">+ credit / − debit</span></div>
+                <div class="schema-col"><span class="col-name">counterparty_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name idx">order_id</span><span class="col-type">UUID</span><span class="col-note">FK → orders</span></div>
+                <div class="schema-col"><span class="col-name">event_type</span><span class="col-type">ENUM</span><span class="col-note">CREDIT/DEBIT/RESERVE/RELEASE</span></div>
+                <div class="schema-col"><span class="col-name">idempotency_key</span><span class="col-type">VARCHAR UNIQUE</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span><span class="col-note">partition key</span></div>
+                <div class="schema-indexes"><strong>Indexes:</strong> (user_id, asset, created_at DESC) for balance history · (order_id) for saga lookup · (idempotency_key) UNIQUE for dedup<br><strong>Partitioning:</strong> RANGE on created_at monthly · pg_partman auto-creates future partitions<br><strong>Constraint:</strong> NO UPDATE / DELETE enforced via trigger</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">balance_snapshots <span>— materialized every 1000 events</span></div>
+                <div class="schema-col"><span class="col-name pk">snapshot_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">asset</span><span class="col-type">VARCHAR(10)</span></div>
+                <div class="schema-col"><span class="col-name">balance</span><span class="col-type">NUMERIC(28,18)</span></div>
+                <div class="schema-col"><span class="col-name">as_of_event_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Purpose:</strong> Avoid replaying full event history on every balance read. Query: "latest snapshot before now + sum of events since snapshot_event_id"</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Sharding & Scale</div>
+              <ul class="db-notes-list">
+                <li><strong>64 shards by user_id % 64.</strong> Each shard = independent Postgres RDS Multi-AZ instance. Cross-shard ops (platform ↔ user) use Saga, not distributed transactions.</li>
+                <li><strong>Write path:</strong> always primary only. Read path: replica for balance queries (lag &lt;100ms acceptable), primary for saga consistency checks.</li>
+                <li><strong>NUMERIC(28,18)</strong> — never use FLOAT for money. Supports 10 decimal places beyond satoshi precision for future assets.</li>
+                <li><strong>Idempotency UNIQUE constraint</strong> at DB level — application-level dedup is not enough. DB constraint is the final safety net against double-credit.</li>
+                <li><strong>Row-level locking:</strong> SELECT FOR UPDATE on user+asset during write. Prevents concurrent balance race even across service instances.</li>
+                <li><strong>Reconciliation table:</strong> nightly job computes sum of all user balances per asset vs. custody holdings. Discrepancy = PagerDuty P0.</li>
+                <li><strong>CDC via Debezium:</strong> logical replication slot on primary. Events flow to Kafka → data warehouse for analytics and fraud model training.</li>
+                <li><strong>Archival:</strong> partitions older than 2 years moved to Redshift. Still queryable via Athena for historical dispute resolution.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDER SERVICE -->
+      <div class="db-card" id="db2">
+        <div class="db-hd" onclick="toggleDb('db2')">
+          <div class="db-icon">📋</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Order Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL</span>
+              <span class="db-badge redis">Redis (idempotency · locks)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~500M orders/yr · state machine</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">orders</div>
+                <div class="schema-col"><span class="col-name pk">order_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">user_id</span><span class="col-type">UUID NOT NULL</span><span class="col-note">shard key</span></div>
+                <div class="schema-col"><span class="col-name">order_type</span><span class="col-type">ENUM</span><span class="col-note">BUY/SELL/WITHDRAW/DEPOSIT</span></div>
+                <div class="schema-col"><span class="col-name">asset</span><span class="col-type">VARCHAR(10)</span></div>
+                <div class="schema-col"><span class="col-name">amount_fiat</span><span class="col-type">NUMERIC(18,2)</span></div>
+                <div class="schema-col"><span class="col-name">amount_asset</span><span class="col-type">NUMERIC(28,18)</span></div>
+                <div class="schema-col"><span class="col-name idx">status</span><span class="col-type">ENUM</span><span class="col-note">state machine</span></div>
+                <div class="schema-col"><span class="col-name">quote_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">idempotency_key</span><span class="col-type">VARCHAR UNIQUE</span></div>
+                <div class="schema-col"><span class="col-name">fraud_score</span><span class="col-type">DECIMAL(5,4)</span></div>
+                <div class="schema-col"><span class="col-name">execution_price</span><span class="col-type">NUMERIC(18,8)</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">settled_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Indexes:</strong> (user_id, created_at DESC) · (status, created_at) for ops dashboards · (idempotency_key) UNIQUE<br><strong>Partial index:</strong> WHERE status NOT IN ('SETTLED','FAILED') — for active order queries, tiny and fast</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">order_state_transitions <span>— full audit trail</span></div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">BIGSERIAL PK</span></div>
+                <div class="schema-col"><span class="col-name fk">order_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">from_status</span><span class="col-type">ENUM</span></div>
+                <div class="schema-col"><span class="col-name">to_status</span><span class="col-type">ENUM</span></div>
+                <div class="schema-col"><span class="col-name">reason</span><span class="col-type">TEXT</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Purpose:</strong> Full history of every state change per order. Invaluable for debugging failed sagas and disputes.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Optimistic locking for status transitions:</strong> UPDATE orders SET status='EXECUTING', version=version+1 WHERE order_id=? AND version=? AND status='FRAUD_CHECK'. Row count=0 means concurrent update won — retry or fail.</li>
+                <li><strong>Partial index on active orders</strong> is critical at scale: only ~0.1% of orders are non-terminal at any time, yet ops dashboards query them constantly. Full-table index scan would be catastrophic.</li>
+                <li><strong>Redis for in-flight state:</strong> distributed lock keyed by user_id prevents concurrent orders from racing on the same user's balance. Lock TTL=30s, auto-expires on crash.</li>
+                <li><strong>Separate state_transitions table</strong> — never overwrite. Append only. Lets you reconstruct what happened to any order, which is essential for P0 incidents and regulator requests.</li>
+                <li><strong>Sharding by user_id</strong> — ensures all orders for a user land on the same shard. Simplifies per-user queries and saga consistency within a user scope.</li>
+                <li><strong>Hot partition problem:</strong> BIGSERIAL PKs on time-ordered inserts create hot write shards. Use UUID v7 (time-ordered UUID) instead — spreads writes while preserving time-ordering for range scans.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- USER / KYC SERVICE -->
+      <div class="db-card" id="db3">
+        <div class="db-hd" onclick="toggleDb('db3')">
+          <div class="db-icon">👤</div>
+          <div class="db-title-wrap">
+            <div class="db-name">User & KYC Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL</span>
+              <span class="db-badge s3">S3 WORM (documents)</span>
+              <span class="db-badge redis">Redis (session)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~100M users · compliance-heavy</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">users</div>
+                <div class="schema-col"><span class="col-name pk">user_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name">kyc_tier</span><span class="col-type">ENUM</span><span class="col-note">UNVERIFIED/BASIC/STANDARD/ENHANCED</span></div>
+                <div class="schema-col"><span class="col-name">account_status</span><span class="col-type">ENUM</span><span class="col-note">ACTIVE/SUSPENDED/CLOSED</span></div>
+                <div class="schema-col"><span class="col-name">jurisdiction_code</span><span class="col-type">CHAR(2)</span><span class="col-note">ISO 3166</span></div>
+                <div class="schema-col"><span class="col-name">risk_score</span><span class="col-type">DECIMAL(5,4)</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">kyc_verified_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">kyc_records <span>— encrypted PII, separate table</span></div>
+                <div class="schema-col"><span class="col-name pk">kyc_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">user_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">name_encrypted</span><span class="col-type">BYTEA</span><span class="col-note">AES-256 via Vault transit</span></div>
+                <div class="schema-col"><span class="col-name">dob_encrypted</span><span class="col-type">BYTEA</span></div>
+                <div class="schema-col"><span class="col-name">ssn_hash</span><span class="col-type">VARCHAR</span><span class="col-note">bcrypt, never plaintext</span></div>
+                <div class="schema-col"><span class="col-name">doc_s3_key</span><span class="col-type">VARCHAR</span><span class="col-note">pointer to S3 WORM</span></div>
+                <div class="schema-col"><span class="col-name">vendor_ref_id</span><span class="col-type">VARCHAR</span><span class="col-note">Jumio/Persona record ID</span></div>
+                <div class="schema-col"><span class="col-name">vendor_score</span><span class="col-type">DECIMAL</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>PII separation:</strong> kyc_records in a separate DB with column-level encryption. Users table has no PII — only status/tier. GDPR erasure: encrypt PII fields with user-specific key, then destroy key. Data is "erased" without deleting financial records.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Column-level encryption for PII</strong> via HashiCorp Vault transit engine. Encryption happens in app layer before write — DB never sees plaintext. Key rotation possible without re-writing data (re-wrap API).</li>
+                <li><strong>SSN stored as bcrypt hash only</strong> — used for duplicate detection only (same SSN = existing user). Never decryptable. Salted per-user to prevent rainbow table attacks.</li>
+                <li><strong>GDPR Right to Erasure:</strong> encrypt PII with user-specific DEK (Data Encryption Key). Erasure = destroy DEK. Data remains in DB (financial records can't be deleted) but is permanently unreadable.</li>
+                <li><strong>S3 WORM for documents:</strong> ID scan + selfie stored with Object Lock (Compliance mode, 7-year retention). Pointer (s3_key) in DB. If DB record deleted, document still immutable on S3.</li>
+                <li><strong>Audit log table:</strong> every KYC status change logged with actor_id, timestamp, reason. Append-only. Required for regulatory examination.</li>
+                <li><strong>Read-heavy, write-rarely pattern:</strong> user status checked on every order (~50K/sec). Cache kyc_tier in Redis (5min TTL). Cache invalidation on status change via Kafka event.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CUSTODY SERVICE -->
+      <div class="db-card" id="db4">
+        <div class="db-hd" onclick="toggleDb('db4')">
+          <div class="db-icon">🏛️</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Custody Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (HSM-adjacent)</span>
+              <span class="db-badge redis">Redis (bloom filter mirror)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~100M wallet addresses · HSM-backed</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">wallet_addresses</div>
+                <div class="schema-col"><span class="col-name pk">address_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">address</span><span class="col-type">VARCHAR(128) UNIQUE</span><span class="col-note">BTC bech32 / ETH hex</span></div>
+                <div class="schema-col"><span class="col-name fk">user_id</span><span class="col-type">UUID</span><span class="col-note">null for platform wallets</span></div>
+                <div class="schema-col"><span class="col-name">wallet_tier</span><span class="col-type">ENUM</span><span class="col-note">HOT/WARM/COLD</span></div>
+                <div class="schema-col"><span class="col-name">chain</span><span class="col-type">ENUM</span><span class="col-note">BTC/ETH/SOL</span></div>
+                <div class="schema-col"><span class="col-name">hd_path</span><span class="col-type">VARCHAR</span><span class="col-note">m/44'/0'/acct/0/idx</span></div>
+                <div class="schema-col"><span class="col-name">is_active</span><span class="col-type">BOOLEAN</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Indexes:</strong> (address) UNIQUE — primary lookup for inbound tx detection · (user_id, chain, is_active) — get current deposit address for user<br><strong>Bloom filter:</strong> all active addresses loaded into Redis bloom filter at startup. O(1) "is this our address?" check before DB lookup.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">utxos <span>— Bitcoin only</span></div>
+                <div class="schema-col"><span class="col-name pk">utxo_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">txid</span><span class="col-type">CHAR(64)</span><span class="col-note">Bitcoin tx hash</span></div>
+                <div class="schema-col"><span class="col-name">vout</span><span class="col-type">INTEGER</span><span class="col-note">output index</span></div>
+                <div class="schema-col"><span class="col-name fk">address_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">amount_sat</span><span class="col-type">BIGINT</span><span class="col-note">satoshis, never float</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">UNSPENT/RESERVED/SPENT</span></div>
+                <div class="schema-col"><span class="col-name">block_height</span><span class="col-type">INTEGER</span></div>
+                <div class="schema-indexes"><strong>UTXO selection query:</strong> SELECT * FROM utxos WHERE status='UNSPENT' AND wallet_tier='HOT' ORDER BY amount_sat ASC for coin selection algorithm. Covered by (status, wallet_tier, amount_sat) index.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Bloom filter for 100M addresses:</strong> at 10 bits/element and 2 hash functions, false positive rate ~1%. On bloom hit: verify against DB. On bloom miss: skip. Prevents O(N) DB queries per block.</li>
+                <li><strong>BIGINT for satoshis</strong> — 21M BTC × 10^8 satoshis = 2.1×10^15, fits in BIGINT (max 9.2×10^18). Never use DECIMAL for BTC amounts — precision errors accumulate.</li>
+                <li><strong>UTXO locking:</strong> SELECT FOR UPDATE on UTXO row during fee estimation + transaction construction. Prevents two concurrent withdrawals selecting the same UTXO. Reserved status set atomically before broadcast.</li>
+                <li><strong>HD path stored per address:</strong> allows key reconstruction from master seed during disaster recovery without scanning chain. Path is not secret — master seed is the secret.</li>
+                <li><strong>Custody DB is air-gap adjacent:</strong> hot custody DB is online but has restricted network access. Warm/cold wallet data on separate DB with no internet connectivity — only local network from operations center.</li>
+                <li><strong>Sweep audit table:</strong> every hot→cold sweep logged with: initiator, approvers (M-of-N), tx_id, amount, timestamp. Immutable. Required for SOC 2 audit.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FRAUD / AML -->
+      <div class="db-card" id="db5">
+        <div class="db-hd" onclick="toggleDb('db5')">
+          <div class="db-icon">🛡️</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Fraud Detection & AML</div>
+            <div class="db-meta-row">
+              <span class="db-badge cassandra">Cassandra (velocity)</span>
+              <span class="db-badge redis">Redis (feature store)</span>
+              <span class="db-badge pg">PostgreSQL (cases)</span>
+              <span class="db-badge elastic">Elasticsearch (search)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~50K lookups/sec · &lt;50ms p99</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Velocity Tables (Cassandra)</div>
+              <div class="schema-block">
+                <div class="schema-table">user_velocity <span>— time-window counters</span></div>
+                <div class="schema-col"><span class="col-name pk">user_id</span><span class="col-type">UUID (partition key)</span></div>
+                <div class="schema-col"><span class="col-name pk">window_type</span><span class="col-type">TEXT (clustering)</span><span class="col-note">1H/24H/7D</span></div>
+                <div class="schema-col"><span class="col-name">txn_count</span><span class="col-type">COUNTER</span></div>
+                <div class="schema-col"><span class="col-name">amount_sum</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">unique_addresses</span><span class="col-type">SET&lt;TEXT&gt;</span></div>
+                <div class="schema-indexes"><strong>Why Cassandra:</strong> COUNTER type supports atomic increments without locking. Partition by user_id = single-partition reads (&lt;1ms). TTL per row = 7 days auto-expiry. No explicit deletes needed.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">compliance_cases (PostgreSQL)</div>
+                <div class="schema-col"><span class="col-name pk">case_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name fk">order_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">case_type</span><span class="col-type">ENUM</span><span class="col-note">AML/FRAUD/SAR/SANCTION</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">OPEN/REVIEW/CLOSED</span></div>
+                <div class="schema-col"><span class="col-name">assigned_agent_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">risk_score</span><span class="col-type">DECIMAL</span></div>
+                <div class="schema-col"><span class="col-name">chainalysis_ref</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">sla_deadline</span><span class="col-type">TIMESTAMPTZ</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Cassandra for velocity counters</strong> — not PostgreSQL. Postgres row-level locks on counter updates would bottleneck at 50K/sec. Cassandra COUNTER columns use atomic CAS without locking. Linear horizontal scaling.</li>
+                <li><strong>Redis feature store</strong> — precomputed ML features (device age, user risk tier, 24h velocity) stored as Redis Hashes. Model reads a single HGETALL per inference. Features refreshed async by a stream processor (Flink/Spark Streaming). Keeps inference under 10ms.</li>
+                <li><strong>Elasticsearch for AML search:</strong> compliance analysts need full-text search across transaction notes, addresses, names. ES indexes all case data. Postgres is source of truth; ES is search index rebuilt from CDC stream.</li>
+                <li><strong>Graph DB consideration (Neo4j):</strong> for advanced AML — model the transaction network as a graph. Detect: ring transactions, layering patterns, wallet clusters. Query: "find all users within 3 hops of sanctioned wallet." Expensive but powerful for sophisticated fraud rings.</li>
+                <li><strong>SAR document table:</strong> append-only, immutable. SAR ID + filing timestamp + FinCEN acknowledgment. Cross-referenced with case. 5-year retention minimum.</li>
+                <li><strong>Time-series for pattern detection:</strong> TimescaleDB (Postgres extension) for storing transaction time-series. Efficient range queries like "total BTC sent by user in sliding 30-day window" — critical for structuring detection.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRICE / QUOTE SERVICE -->
+      <div class="db-card" id="db6">
+        <div class="db-hd" onclick="toggleDb('db6')">
+          <div class="db-icon">💱</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Price & Quote Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge redis">Redis (quote cache · price feed)</span>
+              <span class="db-badge pg">PostgreSQL (quote audit)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~10M quotes/day · 1s TTL</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Redis Structures</div>
+              <div class="schema-block">
+                <div class="schema-table">Price Feed (Redis Hash)</div>
+                <div class="schema-col"><span class="col-name">KEY</span><span class="col-type">price:{asset}</span><span class="col-note">e.g. price:BTC</span></div>
+                <div class="schema-col"><span class="col-name">mid_price</span><span class="col-type">String (decimal)</span></div>
+                <div class="schema-col"><span class="col-name">bid</span><span class="col-type">String (decimal)</span></div>
+                <div class="schema-col"><span class="col-name">ask</span><span class="col-type">String (decimal)</span></div>
+                <div class="schema-col"><span class="col-name">updated_at</span><span class="col-type">Unix timestamp</span></div>
+                <div class="schema-col"><span class="col-name">spread_bps</span><span class="col-type">Integer</span></div>
+                <div class="schema-indexes"><strong>TTL:</strong> 2 seconds. If key expired = price feed down. Consumers detect staleness by checking updated_at delta, not just key presence.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">Quote Store (Redis Hash + EXPIRE)</div>
+                <div class="schema-col"><span class="col-name">KEY</span><span class="col-type">quote:{quote_id}</span></div>
+                <div class="schema-col"><span class="col-name">user_id</span><span class="col-type">String</span></div>
+                <div class="schema-col"><span class="col-name">asset</span><span class="col-type">String</span></div>
+                <div class="schema-col"><span class="col-name">fiat_amount</span><span class="col-type">String</span></div>
+                <div class="schema-col"><span class="col-name">asset_amount</span><span class="col-type">String</span></div>
+                <div class="schema-col"><span class="col-name">rate</span><span class="col-type">String</span></div>
+                <div class="schema-col"><span class="col-name">spread_bps</span><span class="col-type">Integer</span></div>
+                <div class="schema-indexes"><strong>EXPIRE:</strong> 15 seconds. Quote consumed atomically via Lua: GET + validate + DEL in single script. One-time use — prevents quote replay for arbitrage.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">quote_audit (PostgreSQL — async write)</div>
+                <div class="schema-col"><span class="col-name pk">quote_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">rate_offered</span><span class="col-type">NUMERIC(18,8)</span></div>
+                <div class="schema-col"><span class="col-name">rate_executed</span><span class="col-type">NUMERIC(18,8)</span><span class="col-note">null if expired</span></div>
+                <div class="schema-col"><span class="col-name">spread_bps</span><span class="col-type">INTEGER</span></div>
+                <div class="schema-col"><span class="col-name">was_executed</span><span class="col-type">BOOLEAN</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Purpose:</strong> Revenue audit (spread earned per quote), slippage analysis (offered vs executed rate), quote acceptance rate analytics. Written async via Kafka — does not block order path.</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Never store prices in Postgres as primary store</strong> — write throughput (thousands of ticks/sec per asset) and 1s TTL requirement make Redis the only viable choice. Postgres is for audit trail only.</li>
+                <li><strong>Atomic quote consumption via Lua:</strong> GET quote, validate user_id match, DEL in single Lua script. Prevents TOCTOU race where two concurrent order executions both read the same valid quote before either deletes it.</li>
+                <li><strong>Store amounts as strings in Redis</strong> — Redis doesn't natively support fixed-point decimals. Store as string representation of NUMERIC. Never cast through float. Parse to BigDecimal in application layer.</li>
+                <li><strong>Price staleness detection:</strong> consumers check updated_at field in price hash. If now() - updated_at &gt; 2s, treat as stale regardless of key TTL. Two-layer protection against receiving old prices.</li>
+                <li><strong>Historical price time-series:</strong> separate TimescaleDB instance stores 1-second OHLCV candles per asset. Used for: charting in app, volatility calculation for dynamic spread, ML feature (recent price movement).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONFIRMATION TRACKER -->
+      <div class="db-card" id="db7">
+        <div class="db-hd" onclick="toggleDb('db7')">
+          <div class="db-icon">✅</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Confirmation Tracker</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (tx records)</span>
+              <span class="db-badge redis">Redis (bloom filter · pending set)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~100M watched addresses · &lt;1s detection</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">watched_transactions</div>
+                <div class="schema-col"><span class="col-name pk">id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">txid</span><span class="col-type">VARCHAR(128) UNIQUE</span><span class="col-note">blockchain tx hash</span></div>
+                <div class="schema-col"><span class="col-name fk">address_id</span><span class="col-type">UUID FK → custody</span></div>
+                <div class="schema-col"><span class="col-name fk">order_id</span><span class="col-type">UUID</span><span class="col-note">null for inbound deposits</span></div>
+                <div class="schema-col"><span class="col-name">chain</span><span class="col-type">ENUM</span></div>
+                <div class="schema-col"><span class="col-name">amount_sat</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">confirmations</span><span class="col-type">INTEGER DEFAULT 0</span></div>
+                <div class="schema-col"><span class="col-name">block_height</span><span class="col-type">INTEGER</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">PENDING/CONFIRMING/CONFIRMED/REORGED</span></div>
+                <div class="schema-col"><span class="col-name">seen_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">confirmed_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Indexes:</strong> (txid) UNIQUE for dedup · (status, seen_at) for pending tx scanner · (block_height) for reorg detection queries<br><strong>Reorg query:</strong> SELECT * FROM watched_transactions WHERE block_height BETWEEN :reorg_depth AND :chain_tip AND status='CONFIRMED'</div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Bloom filter in Redis for 100M addresses:</strong> 100M addresses × 10 bits = ~120MB in Redis. False positive rate: 0.1%. On hit, verify against Postgres custody DB. On miss, discard (not our address). Eliminates nearly all DB reads for irrelevant transactions.</li>
+                <li><strong>Pending transactions in Redis Sorted Set:</strong> ZADD pending:txns {seen_timestamp} {txid}. Scan with ZRANGEBYSCORE to find txns pending >30min (stuck detection). Remove on confirmation: ZREM.</li>
+                <li><strong>Confirmations column vs. separate events table:</strong> UPDATE is fine here — idempotent increment. We only care about current state. But also emit Kafka event per confirmation threshold — consumers get event stream without polling DB.</li>
+                <li><strong>Reorg handling query pattern:</strong> on reorg detected, query all CONFIRMED transactions at block_height &gt;= reorg_start_height. Emit REORGED status. Ledger service has Kafka consumer that applies compensating events. Critical: must process reorg events in order — Kafka partition by chain+shard ensures ordering.</li>
+                <li><strong>Sharding consideration:</strong> partition watched_transactions by chain first, then by address_hash prefix. BTC and ETH are independent workloads. Allows chain-specific scaling.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTH SERVICE -->
+      <div class="db-card" id="db8">
+        <div class="db-hd" onclick="toggleDb('db8')">
+          <div class="db-icon">🔐</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Auth Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (devices · tokens)</span>
+              <span class="db-badge redis">Redis (session · revocation)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~500M token validations/day</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">refresh_tokens</div>
+                <div class="schema-col"><span class="col-name pk">token_hash</span><span class="col-type">VARCHAR PK</span><span class="col-note">SHA-256 of token</span></div>
+                <div class="schema-col"><span class="col-name fk">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name fk">device_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">expires_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">rotated_at</span><span class="col-type">TIMESTAMPTZ</span><span class="col-note">null = still valid</span></div>
+                <div class="schema-col"><span class="col-name">replaced_by_hash</span><span class="col-type">VARCHAR</span><span class="col-note">token chain</span></div>
+                <div class="schema-indexes"><strong>Rotation:</strong> on use, set rotated_at=now() and create new token linked via replaced_by_hash. If old token reused after rotation → token theft detected → revoke entire chain.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">devices</div>
+                <div class="schema-col"><span class="col-name pk">device_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name fk">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name idx">fingerprint_hash</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">trust_level</span><span class="col-type">ENUM</span><span class="col-note">UNKNOWN/TRUSTED/BLOCKED</span></div>
+                <div class="schema-col"><span class="col-name">platform</span><span class="col-type">ENUM</span><span class="col-note">IOS/ANDROID/WEB</span></div>
+                <div class="schema-col"><span class="col-name">last_seen_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-col"><span class="col-name">first_seen_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Store token_hash not token:</strong> if refresh_tokens table is compromised, attacker gets hashes — useless without the actual token value (SHA-256 is one-way). Store SHA-256(token), validate by comparing hash of presented token.</li>
+                <li><strong>JWT access tokens are stateless</strong> — not stored in DB. Validated via public key (RS256). Revocation is the challenge: maintain a Redis revocation set. SADD revoked:{jti} with TTL=token_expiry. Check on every request (fast: O(1) Redis SISMEMBER).</li>
+                <li><strong>Refresh token rotation chain:</strong> replaced_by_hash creates a linked list. Detect replay attacks: if a rotated token is presented, walk the chain and revoke all tokens in the family. Signals token theft.</li>
+                <li><strong>Device fingerprint_hash:</strong> composite of: OS version + screen resolution + installed app version + hardware ID. Hashed to avoid storing identifiable data. Changed fingerprint = flag as new device.</li>
+                <li><strong>Redis for active session count:</strong> INCR/DECR session_count:{user_id}. Enforce max concurrent sessions (e.g. 5 devices). Oldest device session evicted on 6th login.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATION SERVICE -->
+      <div class="db-card" id="db9">
+        <div class="db-hd" onclick="toggleDb('db9')">
+          <div class="db-icon">🔔</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Notification Service</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (history · preferences)</span>
+              <span class="db-badge redis">Redis (dedup · rate limit)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">~200M notifications/day</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">notification_log <span>— write-heavy, time-series</span></div>
+                <div class="schema-col"><span class="col-name pk">notif_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name idx">user_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">channel</span><span class="col-type">ENUM</span><span class="col-note">PUSH/SMS/EMAIL</span></div>
+                <div class="schema-col"><span class="col-name">template_id</span><span class="col-type">VARCHAR</span></div>
+                <div class="schema-col"><span class="col-name">source_event_id</span><span class="col-type">UUID UNIQUE</span><span class="col-note">dedup key</span></div>
+                <div class="schema-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">SENT/FAILED/BOUNCED</span></div>
+                <div class="schema-col"><span class="col-name">provider_msg_id</span><span class="col-type">VARCHAR</span><span class="col-note">FCM/SendGrid ID</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMPTZ</span></div>
+                <div class="schema-indexes"><strong>Partitioning:</strong> RANGE on created_at (weekly partitions). Notifications older than 90 days archived or dropped — no regulatory requirement to keep them long-term.<br><strong>Index:</strong> (source_event_id) UNIQUE — DB-level dedup as backstop beyond Redis check.</div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">user_notification_prefs</div>
+                <div class="schema-col"><span class="col-name pk">user_id</span><span class="col-type">UUID PK</span></div>
+                <div class="schema-col"><span class="col-name">push_enabled</span><span class="col-type">BOOLEAN DEFAULT true</span></div>
+                <div class="schema-col"><span class="col-name">sms_enabled</span><span class="col-type">BOOLEAN</span></div>
+                <div class="schema-col"><span class="col-name">email_enabled</span><span class="col-type">BOOLEAN</span></div>
+                <div class="schema-col"><span class="col-name">quiet_hours_start</span><span class="col-type">TIME</span></div>
+                <div class="schema-col"><span class="col-name">quiet_hours_end</span><span class="col-type">TIME</span></div>
+                <div class="schema-col"><span class="col-name">timezone</span><span class="col-type">VARCHAR</span></div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>source_event_id UNIQUE</strong> at both Redis and DB level. Redis check is fast (first line). DB UNIQUE constraint is the backstop for race conditions between Redis check and DB write. Exactly-once delivery guarantee.</li>
+                <li><strong>Write-heavy, low-read pattern:</strong> notification log is written on every send but rarely read. TimescaleDB or Postgres with aggressive partitioning + fast archival policy. No complex JOINs needed — optimize for append speed.</li>
+                <li><strong>Push token management:</strong> separate push_tokens table with (user_id, device_id, token, platform, last_valid_at). On 410 GONE from FCM/APNS: mark token invalid. Token refresh on next app open. Never send to invalid tokens — wastes quota.</li>
+                <li><strong>Redis rate limit:</strong> SMS is expensive ($0.01/message). Limit: 5 SMS/user/hour. ZADD with timestamp + ZCARD sliding window. Fallback to email when SMS rate-limited.</li>
+                <li><strong>Preference cache:</strong> user preferences cached in Redis (1hr TTL). Avoids DB hit on every notification send. Cache invalidated immediately on preference change via Kafka event.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TRADEOFFS -->
+  <section id="tradeoffs">
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <span class="sec-title">Architectural Tradeoffs</span>
+      <span class="sec-tag">Staff-level decision framing</span>
+    </div>
+    <div class="matrix">
+
+      <div class="matrix-card">
+        <div class="mc-title">Custodial vs. MPC Wallets</div>
+        <div class="mc-row"><span class="mc-label">User experience</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Security (custody)</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Regulatory burden</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Recovery option</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Custodial is simpler UX but you hold all liability. MPC (Fireblocks model) splits key shards — no single point of failure, user shares custody. Trade-off: complexity, latency per signing op.</div>
+      </div>
+
+      <div class="matrix-card">
+        <div class="mc-title">Instant Credit vs. Wait for ACH</div>
+        <div class="mc-row"><span class="mc-label">User satisfaction</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Fraud exposure</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Revenue (spreads)</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Operational cost</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Instant buy drives engagement but creates ACH fraud vector. Mitigated by: per-user instant-buy limits, NSF history signals, bank balance verification APIs (Plaid). CashApp charges higher spread for instant to offset risk.</div>
+      </div>
+
+      <div class="matrix-card">
+        <div class="mc-title">Event Sourcing vs. CRUD Ledger</div>
+        <div class="mc-row"><span class="mc-label">Auditability</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Query performance</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Regulatory fit</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Event sourcing wins for fintech: immutable history, replay capability, time-travel queries, natural audit trail. Cost: query complexity (need materialized views / snapshots). Worth it at this scale.</div>
+      </div>
+
+      <div class="matrix-card">
+        <div class="mc-title">Sync vs. Async Compliance Checks</div>
+        <div class="mc-row"><span class="mc-label">User latency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Compliance coverage</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Fraud risk</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Regulatory defensibility</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Sanctions check = sync (must block before execution). AML pattern analysis = async (can't hold order 10s while Chainalysis runs full graph trace). Hybrid: fast pre-screen sync, deep analysis async with freeze capability.</div>
+      </div>
+
+      <div class="matrix-card">
+        <div class="mc-title">Self-hosted Nodes vs. 3rd Party RPC</div>
+        <div class="mc-row"><span class="mc-label">Trust / security</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Ops cost</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Reliability</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Latency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Self-hosted nodes for security-critical ops (tx signing, confirmation finality). 3rd party (Alchemy) as redundant fallback for reads. Never trust a single external provider for transaction confirmation.</div>
+      </div>
+
+      <div class="matrix-card">
+        <div class="mc-title">Monolith vs. Microservices</div>
+        <div class="mc-row"><span class="mc-label">Deploy velocity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Operational complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Fault isolation</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Scale granularity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.6;">Start monolith, extract services on pain points. Ledger, Custody, and Compliance are natural service boundaries due to different scaling, security, and team ownership needs. Don't micro-service prematurely.</div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<!-- DETAIL PANEL DATA -->
+<script>
+const panels = {
+  mobile: {
+    icon: '📱', title: 'Mobile App', subtitle: 'Client entry point · iOS & Android',
+    sections: [
+      { title: 'Architecture', text: 'React Native for shared codebase with native modules for Keychain (iOS) and Keystore (Android) — no credentials ever in AsyncStorage. Hermes JS engine for fast startup. Code push for hotfixes without app store review.' },
+      { title: 'Security Considerations', items: ['Auth tokens in OS-level secure storage only (Keychain/Keystore)', 'Certificate pinning — reject MITM proxies. Bypass for dev/QA via debug flag', 'Jailbreak/root detection — restrict high-value operations on compromised devices', 'Screenshot prevention on sensitive screens (balance, transaction detail)', 'App backgrounding clears clipboard containing wallet addresses'] },
+      { title: 'Offline & Edge Cases', items: ['Optimistic UI: show balance immediately from local cache, reconcile on reconnect', 'Network retry with exponential backoff — user should never see a spinner forever', 'Deep link handling for OAuth2 PKCE redirect must be robust against URL manipulation', 'App killed mid-order: on relaunch, query order status by idempotency_key'] },
+      { title: 'Scale Concerns', items: ['WebSocket reconnect must use exponential backoff — thundering herd on server restart', 'Push tokens rotate; sync device token to backend on every app launch'] }
+    ]
+  },
+  apigw: {
+    icon: '🚪', title: 'API Gateway', subtitle: 'Kong / Envoy Proxy · Edge security',
+    sections: [
+      { title: 'Responsibilities', text: 'Single ingress point. Handles TLS termination, JWT signature validation (RS256, not HS256 — asymmetric), request ID injection for distributed tracing (W3C Trace-Context header), and per-user rate limiting.' },
+      { title: 'Rate Limiting Design', items: ['Sliding window per user_id + per IP (both)', 'Crypto-specific: 10 orders/min, 100 price checks/min, 5 withdrawal attempts/hour', 'Rate limit state in Redis — gateway pods are stateless', 'Response: 429 with Retry-After header. Client must respect this.', 'Burst allowance: allow 2x for 10s before throttling (handles laggy mobile retries)'] },
+      { title: 'Auth Validation', items: ['Validate JWT signature using public key from Auth Service JWKS endpoint', 'Check exp, iat, nbf claims — reject clock-skewed tokens', 'Inject user_id, kyc_tier, device_id into downstream request headers', 'Do NOT forward Authorization header downstream — internal services use service mesh mTLS'] },
+      { title: 'Edge Cases', items: ['JWT key rotation: cache JWKS with 5min TTL, but re-fetch on unknown kid claim', 'DDoS: rate limit by IP before JWT check — avoid RSA verify on unauthenticated flood', 'Gateway restart: zero-downtime rolling deploy, drain connections before pod shutdown'] }
+    ]
+  },
+  order: {
+    icon: '📋', title: 'Order Service', subtitle: 'Saga orchestrator · State machine',
+    sections: [
+      { title: 'State Machine', text: 'CREATED → FRAUD_CHECK → COMPLIANCE_CHECK → LIMIT_CHECK → EXECUTING → BROADCAST (withdrawals) → CONFIRMING → SETTLED. FAILED is a terminal state reachable from any step. Each transition emits a Kafka event.' },
+      { title: 'Idempotency', items: ['Client sends idempotency_key (UUID) with every order request', 'Gateway stores idempotency_key → response in Redis (TTL: 24h)', 'If duplicate request arrives, return cached response — do NOT re-execute', 'Idempotency key must be bound to specific order params — changing amount invalidates key'] },
+      { title: 'Saga Pattern', items: ['Each step has a corresponding compensating transaction', 'Fiat debit fails → no-op (nothing credited yet)', 'Exchange execution fails → issue fiat credit (compensating tx) and mark order FAILED', 'Ledger credit fails after exchange fill → critical alert, manual reconciliation required (rare)', 'All compensating events are appended to ledger, never deleted'] },
+      { title: 'Concurrency', items: ['Per-user distributed lock via Redlock before executing order — prevents concurrent race on same user balance', 'Lock TTL: 30s. If lock not released in time, order fails (prefer fail over corrupt state)', 'Kafka partitioned by user_id — guarantees per-user event ordering within partition'] }
+    ]
+  },
+  ledger: {
+    icon: '📒', title: 'Ledger Service', subtitle: 'Double-entry · Event sourcing · ACID',
+    sections: [
+      { title: 'Design Philosophy', text: 'Append-only event log. Every balance change is an immutable event with: event_id, user_id, asset, amount (positive=credit, negative=debit), counterparty, order_id, timestamp, event_type. Current balance = sum of all events. This is the source of truth.' },
+      { title: 'Double-Entry Enforcement', items: ['Every transaction has two legs: DEBIT one account, CREDIT another', 'Sum of all debits must always equal sum of all credits across the platform', 'Reconciliation job runs every hour: sum all user balances = sum of platform custody balances (verified against blockchain)', 'Any discrepancy triggers critical alert and trading halt'] },
+      { title: 'Scalability', items: ['User-level sharding: user_id % 64 shards. Each shard is an independent Postgres instance', 'Cross-shard transfers (platform wallet ↔ user) use two-phase commit or saga', 'Periodic snapshots (every 1000 events per user) prevent full-history replay on boot', 'Read replicas serve balance queries — eventual consistency acceptable for reads (lag <100ms)'] },
+      { title: 'CQRS', items: ['Write model: append-only event table (insert only, no updates)', 'Read model: materialized balance view, refreshed from events via CDC stream', 'Separate read/write database pools. Write path uses primary only.'] }
+    ]
+  },
+  price: {
+    icon: '💱', title: 'Price / Quote Service', subtitle: 'Aggregated pricing · Spread engine · Quote TTL',
+    sections: [
+      { title: 'Price Aggregation', text: 'Pulls price ticks from Coinbase, Kraken, Binance via WebSocket feeds. Computes VWAP (Volume-Weighted Average Price) weighted by exchange volume. Outlier rejection: discard prices >2 stddev from median (handles flash crashes on single exchange).' },
+      { title: 'Spread Engine', items: ['Spread = company revenue on each trade (primary revenue source)', 'Base spread: 1.75%. Variables: BTC = lower spread (liquid), small caps = higher spread (wider)', 'Dynamic spread: widens during high volatility (VIX equivalent). Protects against stale quote risk', 'Tier-based: Premium users get lower spread. Power incentive for account upgrade', 'Institutional OTC: zero spread, revenue via fixed fee'] },
+      { title: 'Quote TTL Design', items: ['Quote generated with UUID and 15s TTL stored in Redis', 'On order execution: verify quote_id exists and not expired — reject with 409 if expired', 'Quote TTL prevents arbitrage: user can\'t show 10-min-old price to lock in better rate', 'TTL chosen via analysis: p95 user "confirm" time = 8s. 15s gives margin without excess risk'] },
+      { title: 'Degraded Mode', items: ['If 1/3 exchange feeds down: widen spread by 0.5%, continue serving', 'If 2/3 exchange feeds down: circuit breaker, halt market orders, serve last-known price with warning', 'If all feeds down: halt all trading, alert on-call'] }
+    ]
+  },
+  custody: {
+    icon: '🏛️', title: 'Custody Service', subtitle: 'Hot/Warm/Cold tiering · HSM · Key management',
+    sections: [
+      { title: 'Wallet Tiering', text: 'Hot (5% of assets): online, instant signing. Handles intraday withdrawal flow. Warm (5%): HSM-locked, 30min unlock via M-of-N mobile push approval. Cold (90%): air-gapped, geographically distributed, requires physical quorum.' },
+      { title: 'Address Derivation', items: ['BIP32 HD wallet: master seed → per-user branch → per-transaction address', 'Each user gets a fresh receive address — prevents address reuse (privacy + UTXO management)', 'Address → user mapping stored in DB. Bloom filter for fast "is this ours?" check at scale', 'xpub stored in hot system; master seed never leaves cold HSM'] },
+      { title: 'Signing Architecture', items: ['Key never leaves HSM hardware — signing requests sent to HSM API, signed tx returned', 'For hot wallet: single HSM signer (fast)', 'For warm/cold: M-of-N threshold signatures. N=5 keyholders across 3 geography, M=3 required', 'MPC (multi-party computation) as future direction: eliminates single HSM as point of failure'] },
+      { title: 'Sweep Logic', items: ['Threshold: if hot wallet balance > $10M, trigger sweep to cold', 'Scheduled: daily sweep at 3AM UTC (low mempool fees)', 'UTXO consolidation: fan-in many small UTXOs during low-fee windows — saves future tx fees', 'Sweep requires M-of-N approval from custody ops team via authenticated mobile app'] }
+    ]
+  },
+  broadcast: {
+    icon: '📡', title: 'Transaction Broadcast Service', subtitle: 'Signing · Fee estimation · RBF · Multi-node',
+    sections: [
+      { title: 'UTXO Selection (Bitcoin)', text: 'Goal: minimize fee while avoiding dust outputs. Strategy: prefer UTXOs sized close to output amount (minimize change). Avoid creating sub-dust UTXOs (<546 sat). Consolidate if mempool fees are low — reduce future costs.' },
+      { title: 'Fee Estimation', items: ['Query mempool via Bitcoin Core estimatesmartfee — target: next-block confirmation', 'Cross-validate with external fee estimator (mempool.space API) — use higher of two', 'User-facing: show estimated fee before confirmation. Large withdrawal = user can choose priority', 'EIP-1559 (ETH): set maxFeePerGas based on baseFee + priority tip target'] },
+      { title: 'Stuck Transaction Handling', items: ['Monitor: if tx unconfirmed after 30min, classify as "stuck"', 'BTC RBF: if original tx opted into RBF (sequence = 0xFFFFFFFD), rebroadcast same inputs with higher fee', 'ETH: send replacement tx with same nonce, higher gas. Miner accepts whichever confirms first', 'Alert on-call if stuck transaction >$100K — manual intervention may be needed', 'All replacement transactions logged against original order_id'] },
+      { title: 'Broadcast Reliability', items: ['Broadcast to 3+ nodes simultaneously (own node + 2 third-party RPC endpoints)', 'Record broadcast timestamp + tx_id before returning success', 'Idempotency: check if tx_id already broadcast before re-signing'] }
+    ]
+  },
+  confirm: {
+    icon: '✅', title: 'Confirmation Tracker', subtitle: 'Mempool monitoring · Reorg detection · Bloom filter',
+    sections: [
+      { title: 'Address Watching', text: 'Must watch 100M+ deposit addresses without O(N) lookup per block. Solution: Bloom filter (murmur hash, 10 bits/element, ~0.1% false positive rate). On bloom hit, verify against DB. On miss, skip.' },
+      { title: 'Event Emission', items: ['TX_SEEN (0 conf): show pending in UI. Do NOT credit balance.', 'TX_1_CONF: update UI to "almost confirmed"', 'TX_3_CONF: credit balance for transactions <$10K (risk-acceptable)', 'TX_6_CONF: credit balance for all transactions. Finality assumed.', 'Events published to Kafka → consumed by Ledger, Notification, Order services'] },
+      { title: 'Reorg Handling', items: ['Monitor: compare our stored block hash at height H with current node\'s block hash at H', 'If mismatch detected: identify depth of reorg (walk back until matching ancestor)', 'Emit TX_REORG event for all transactions in orphaned blocks', 'Ledger reverses credits from reorged txns via compensating events', 'Alert on-call for any reorg >2 blocks deep (extremely rare but catastrophic if unhandled)'] },
+      { title: 'Multi-Chain', items: ['BTC: ZMQ socket (rawtx, rawblock topics) from Bitcoin Core', 'ETH: eth_subscribe newHeads + eth_getLogs via WebSocket', 'Each chain has dedicated tracker service — no cross-chain coupling'] }
+    ]
+  },
+  kyc: {
+    icon: '🪪', title: 'KYC / Identity Engine', subtitle: 'ID verification · Risk tiers · Ongoing monitoring',
+    sections: [
+      { title: 'Verification Tiers', text: 'Basic: name + DOB + SSN4 (soft check). Allows <$1K daily. Standard: government ID scan + selfie liveness. Allows $7.5K daily. Enhanced (EDD): document + video verification for high-risk users or high-limit requests. Business: full entity verification + beneficial ownership.' },
+      { title: 'Vendor Integration', items: ['Jumio / Persona: document OCR + NFC chip reading + liveness detection (3D depth map)', 'AI-generated ID defense: active liveness (instruction-following) defeats static deepfakes', 'Fallback: if primary vendor down, queue request and retry — don\'t fail user outright', 'All vendor data encrypted at rest. Only risk score + KYC status stored in hot DB. Documents in S3 WORM.'] },
+      { title: 'Sanctions Screening', items: ['OFAC SDN list (US), HM Treasury (UK), EU Consolidated list', 'Screen at signup + daily re-screen of all users against updated lists', 'Fuzzy name matching: Levenshtein distance to catch spelling variations', 'PEP (Politically Exposed Person) screening → triggers enhanced due diligence automatically'] },
+      { title: 'Ongoing Monitoring', items: ['Re-KYC triggers: address change, large transaction pattern shift, negative news hit', 'Risk score updated dynamically — not just at signup', '7-year document retention required by FinCEN BSA'] }
+    ]
+  },
+  fraud: {
+    icon: '🛡️', title: 'Fraud Detection', subtitle: 'ML scoring · Feature store · <50ms p99',
+    sections: [
+      { title: 'Model Architecture', text: 'Gradient boosted tree (XGBoost / LightGBM) for binary classification: fraud vs. legitimate. Online serving via Triton Inference Server. Feature computation pre-cached in Redis/Feast feature store to keep inference <10ms.' },
+      { title: 'Feature Categories', items: ['Device: fingerprint, age, is_new_device, rooted/jailbroken flag', 'Velocity: txn count last 1h/24h/7d, amount sum last 24h, failed attempts', 'Network: IP risk score, VPN/proxy detection, IP geolocation vs. home address', 'Behavioral: typing pattern (keystroke dynamics), swipe pattern, time-of-day', 'Graph: shared device/IP with known fraudsters (network centrality features)'] },
+      { title: 'Thresholds & Actions', items: ['Score < 0.3: auto-approve', 'Score 0.3–0.5: approve, flag for monitoring', 'Score 0.5–0.8: require step-up authentication (re-enter PIN)', 'Score 0.8–0.9: hold for 1hr, auto-release if no additional signals', 'Score > 0.9: block, route to compliance ops review'] },
+      { title: 'Model Operations', items: ['Shadow mode: new model runs in parallel, compare score distributions before promoting', 'Weekly retraining on labeled outcomes (confirmed fraud, chargebacks)', 'Champion/challenger: split 5% traffic to challenger model for A/B comparison', 'Drift detection: alert if feature distribution shifts significantly (data quality issue)'] }
+    ]
+  },
+  kafka: {
+    icon: '📨', title: 'Kafka Event Bus', subtitle: 'Decoupling · Replay · Schema registry',
+    sections: [
+      { title: 'Topic Design', text: 'order-events (partitioned by user_id, 64 partitions), ledger-events (partitioned by user_id), price-feed (partitioned by asset, low consumer lag required), compliance-signals (partitioned by user_id), blockchain-events (partitioned by chain+address_prefix).' },
+      { title: 'Consumer Groups', items: ['order-events → [ledger-writer, notification-sender, aml-monitor, analytics-pipeline]', 'Each consumer group has independent offset — failure in one does not block others', 'Notification service: real-time consumer. Analytics: batch consumer. Each has different lag tolerance'] },
+      { title: 'Schema Registry', items: ['All messages use Avro schema registered in Confluent Schema Registry', 'Forward/backward compatibility enforced — producers and consumers can evolve independently', 'Schema evolution: add optional fields only. Never rename or remove fields.', 'Deserialization errors → dead letter queue, alert on-call'] },
+      { title: 'Reliability', items: ['Replication factor: 3 (survives 2 broker failures)', 'min.insync.replicas: 2 (producer waits for 2 acks)', '7-day retention for replay capability (compliance events: 30 days)', 'Compacted topics for user profile snapshots — only latest value kept'] }
+    ]
+  },
+  redis: {
+    icon: '⚡', title: 'Redis Cluster', subtitle: 'Cache · Locks · Rate limits · Pub/Sub',
+    sections: [
+      { title: 'Use Cases', text: 'Price quote cache (1s TTL), idempotency key store (24h TTL), distributed locks (Redlock), rate limit sliding window counters, session store (JWT refresh token registry), WebSocket fanout via pub/sub channels, feature flag cache.' },
+      { title: 'Distributed Locking (Redlock)', items: ['Lock acquired across N=3 Redis nodes — valid only if majority (≥2) acquired', 'Lock TTL: 30s. Renewal heartbeat for long operations.', 'On crash/timeout: lock auto-expires. Prevents deadlock.', 'Used for: order execution (per-user), withdrawal broadcast (per-order), sweep execution'] },
+      { title: 'Rate Limiting', items: ['Sliding window counter: ZADD with timestamp, ZREMRANGEBYSCORE to expire old entries, ZCARD to count', 'Atomic via Lua script — ZADD + ZREMRANGEBYSCORE + ZCARD in single script', 'Per-user + per-IP + per-endpoint limits applied independently'] },
+      { title: 'WebSocket Fanout', items: ['Price Service publishes new tick to Redis channel per asset (btc-price-feed)', 'All WebSocket gateway pods subscribe to same channel', 'On message: gateway pushes to all connected clients subscribed to that asset', 'This allows horizontal scaling of gateway pods without direct pod-to-pod communication'] }
+    ]
+  },
+  postgres: {
+    icon: '🐘', title: 'PostgreSQL', subtitle: 'Per-service isolation · ACID · PITR · CDC',
+    sections: [
+      { title: 'Service Isolation', text: 'Each service owns its database. No cross-service joins. Data sharing via API calls or Kafka events only. This enforces service boundaries and allows independent scaling, backup policies, and schema evolution per service.' },
+      { title: 'High Availability', items: ['RDS Multi-AZ: synchronous replication to standby. Automatic failover <30s via Route53 DNS switch', 'Read replicas in same region for analytics/reporting queries', 'Point-in-Time Recovery (PITR) enabled — can restore to any second in last 35 days', 'Automated daily snapshots + continuous WAL archival to S3'] },
+      { title: 'Ledger-Specific', items: ['Append-only event table: no UPDATE or DELETE ever. Enforced via trigger or application-level discipline', 'Partitioned by created_at (monthly partitions) for query performance and archival', 'pg_partman for automated partition management', 'Logical replication slot → Debezium → Kafka for CDC pipeline to data warehouse'] },
+      { title: 'Connection Management', items: ['PgBouncer for connection pooling — Postgres can handle ~300 connections, pooler handles thousands', 'Transaction-mode pooling for short-lived queries; session-mode for long-running compliance queries', 'Connection limits per service — prevent one runaway service from starving others'] }
+    ]
+  },
+  hsm: {
+    icon: '🔒', title: 'HSM + Vault (Key Management)', subtitle: 'Zero plaintext keys · MPC roadmap',
+    sections: [
+      { title: 'HSM Architecture', text: 'AWS CloudHSM or Thales Luna Network HSM. FIPS 140-2 Level 3 certified. Private keys generated inside hardware, never exported. All signing operations (transaction signatures) happen inside HSM. HSM logs every signing operation for audit.' },
+      { title: 'HashiCorp Vault', items: ['Service-to-service credentials: dynamic secrets with TTL (expire automatically)', 'AWS IAM roles for service auth — no static credentials in config files ever', 'Vault unsealing: Shamir Secret Sharing — 3-of-5 key shards to unseal on restart', 'Transit secrets engine: encrypt/decrypt API for application data (KYC PII fields)'] },
+      { title: 'MPC (Future Direction)', items: ['Multi-Party Computation: private key never exists in one place', 'Key shards held by: custody service, hardware token held by security team, third-party custodian', 'Transaction requires interactive protocol between 2-of-3 parties — no single compromise = full key loss', 'Fireblocks, Curv, Zengo are vendors providing MPC-as-a-service'] },
+      { title: 'Key Ceremony', items: ['New master key: ceremony conducted in Faraday-caged room. N witnesses. Photographed. Documented.', 'Key shards distributed to offline hardware wallets stored in geographically separate secure facilities', 'Annual key ceremony to verify shard holders still have access and understand recovery procedure'] }
+    ]
+  },
+  aml: {
+    icon: '🔍', title: 'Transaction Monitoring (AML)', subtitle: 'Chainalysis · SAR filing · 90-day lookback',
+    sections: [
+      { title: 'On-Chain Analysis', text: 'Chainalysis Reactor traces fund flows through blockchain transaction graph. Identifies proximity to: mixers/tumblers, darknet markets, ransomware addresses, exchange hacks. Exposure calculated in "hops" — direct = 1 hop, through intermediary = 2 hops.' },
+      { title: 'Rule Engine', items: ['Structuring detection: multiple transactions just below $10K threshold within 24h window', 'Round-trip detection: funds leave and return to similar addresses (layering)', 'Velocity rules: same user sending to 50+ unique addresses in 7 days (smurfing)', 'Jurisdiction rules: transaction patterns inconsistent with user\'s stated location'] },
+      { title: 'SAR Filing (Suspicious Activity Reports)', items: ['Auto-SAR: if transaction meets specific rule thresholds, SAR auto-generated and queued for compliance officer review', 'Manual SAR: compliance ops can initiate for any flagged transaction', 'FinCEN CTR (Currency Transaction Report): required for cash transactions >$10K. Crypto equivalent filed where applicable', 'Filed within 30 days of detecting suspicious activity'] },
+      { title: 'Lookback & Governance', items: ['90-day rolling window for pattern analysis', 'Post-settlement freeze capability: if AML flags a transaction after settlement, freeze user account and hold remaining funds', 'Cannot reverse completed blockchain transactions — hold is on platform balance only'] }
+    ]
+  },
+  travel: {
+    icon: '✈️', title: 'Travel Rule Service', subtitle: 'FATF compliance · TRISA protocol · VASP resolution',
+    sections: [
+      { title: 'What Is It', text: 'FATF Travel Rule (Recommendation 16): for transfers ≥$3K (US) or €1K (EU), originating VASP must collect and transmit originator + beneficiary information to receiving VASP. Equivalent to wire transfer rules applied to crypto.' },
+      { title: 'VASP Resolution', items: ['Given a destination wallet address, identify which VASP controls it', 'Lookup: Notabene, TRISA, Sygna Bridge VASP directories', 'Methods: address ownership attestation, domain inference from address metadata', 'Unresolvable addresses: if ≥$3K and VASP unknown, human review required before release'] },
+      { title: 'Data Transmission', items: ['Use TRISA protocol (mTLS, gRPC) for secure VASP-to-VASP communication', 'Data includes: originator name, account number (or address), originator address, beneficiary name', 'Encrypted in transit and at rest. Receiving VASP must confirm receipt before transaction proceeds.', 'Retention: 5 years minimum per FinCEN BSA'] },
+      { title: 'Edge Cases', items: ['Self-hosted wallet (no VASP): user must attest they own the destination address. Higher friction.', 'Non-compliant VASP: cannot transfer to VASPs who do not support Travel Rule. Block transaction.', 'Threshold aggregation: multiple small transfers to same counterparty in 24h may aggregate above threshold'] }
+    ]
+  },
+  limits: {
+    icon: '🚦', title: 'Limits & Controls Engine', subtitle: 'Rolling windows · Redis counters · Hard blocks',
+    sections: [
+      { title: 'Limit Types', text: 'Daily buy limit (e.g. $7,500 Basic / $50K Advanced), daily withdrawal limit, single-transaction maximum, 30-day rolling volume cap. Limits are per-asset and per-direction (buy vs. sell vs. withdraw).' },
+      { title: 'Counter Design', items: ['Redis sorted set per user per limit type: ZADD timestamp → amount', 'ZREMRANGEBYSCORE to expire events outside the rolling window', 'ZINCRBY to accumulate — Lua script for atomicity', 'TTL on the key = window duration (avoids orphaned keys)'] },
+      { title: 'Concurrency Safety', items: ['Distributed lock acquired before limit check + debit — prevents TOCTOU race', 'If lock unavailable after 500ms, fail fast with 429 (retry will succeed)', 'On order failure: reverse the counter increment (compensating update)'] },
+      { title: 'Limit Changes', items: ['Limit upgrades (KYC tier change): take effect immediately. New limit checked from Redis.', 'Limit decreases (account downgrade): new limit applies at next window reset to avoid retroactive blocking', 'Emergency global limits: ops team can set platform-wide emergency caps during incidents'] }
+    ]
+  },
+  fiat: {
+    icon: '🏦', title: 'Fiat Payment Service', subtitle: 'ACH · Card · NSF handling · Instant buy',
+    sections: [
+      { title: 'Payment Rails', text: 'ACH pull (Automated Clearing House): bank account linked via Plaid. 2–5 day settlement. Used for large amounts. Card funding: tokenized network token via Stripe/Adyen. Instant settlement, higher cost (1.5%). RTP (Real-Time Payments): instant ACH via The Clearing House. Available at select banks.' },
+      { title: 'Instant Buy Mechanics', items: ['User buys crypto before ACH settles — platform extends credit', 'Credit limit based on: account history, bank balance verification via Plaid, NSF history', 'ACH initiated immediately. Crypto credited immediately. If ACH fails: debt recovery saga begins', 'Instant buy fee: 1.5% extra spread. Revenue for risk taken by platform'] },
+      { title: 'NSF / Return Handling', items: ['ACH return codes: R01=NSF, R02=Account Closed, R10=Not Authorized', 'On NSF: attempt debt recovery by selling user\'s crypto equivalent', 'If insufficient crypto: suspend account, open collections case', 'NSF counter per user — 3 NSFs = instant buy suspended, ACH-only with hold period'] },
+      { title: 'Reconciliation', items: ['Daily reconciliation with bank partner: sum of all ACH pulls in window matches expected', 'Discrepancy triggers immediate investigation — could indicate bank error or internal bug', 'Settlement files (NACHA format) archived to S3 for 7 years'] }
+    ]
+  },
+  notif: {
+    icon: '🔔', title: 'Notification Service', subtitle: 'Idempotent delivery · Multi-channel · Preferences',
+    sections: [
+      { title: 'Architecture', text: 'Kafka consumer listening to order-events, ledger-events, compliance-events. Stateless pods. Deduplication via event_id in Redis (TTL: 48h). Fan-out to push (FCM/APNS), email (SendGrid), SMS (Twilio) based on user preferences and notification type.' },
+      { title: 'Idempotency', items: ['Check event_id in Redis before processing — skip if already seen', 'Prevents duplicate notifications on Kafka consumer restart (at-least-once delivery)', 'event_id stored as Redis SET member. SETNX + TTL.'] },
+      { title: 'Channel Priority', items: ['Critical (large withdrawal): push + SMS + email simultaneously', 'Standard (buy complete): push notification only', 'Informational (price alert): push only, respects quiet hours', 'User can opt out of SMS/email — push always sent for security events'] },
+      { title: 'Failure Handling', items: ['Push token invalid: remove from DB, skip push, fall back to email/SMS', 'SendGrid API down: queue to SQS, retry with exponential backoff', 'SMS carrier failure: retry up to 3x over 10min, then log and alert ops', 'Never block the critical order path on notification failure — it\'s fire-and-forget'] }
+    ]
+  },
+  sweep: {
+    icon: '🧹', title: 'Sweep / Consolidation Service', subtitle: 'Hot→Cold · UTXO consolidation · M-of-N approval',
+    sections: [
+      { title: 'Trigger Conditions', text: 'Hot wallet balance exceeds configured threshold (e.g. $10M BTC equivalent). OR scheduled daily sweep at 3AM UTC (low mempool activity = lower fees). OR emergency sweep if unusual withdrawal velocity detected.' },
+      { title: 'UTXO Consolidation', items: ['BTC: many small UTXOs = high future transaction fees (each UTXO = input in next tx)', 'During low-fee windows: consolidate 100 UTXOs → 1 UTXO. Reduces fee debt.', 'Algorithm: bin-pack UTXOs targeting total ~$500K per consolidated output', 'Ethereum: consolidation not needed (account-based, not UTXO-based)'] },
+      { title: 'Approval Workflow', items: ['Sweep request created by service, routed to custody ops approval queue', 'N=5 authorized custodians hold hardware keys. M=3 required to approve.', 'Approval via authenticated mobile app with biometric confirmation', 'Time-locked: cold wallet transactions have 24h delay by design (detect unauthorized sweep)'] },
+      { title: 'Monitoring', items: ['Hot wallet balance dashboard: real-time % of total assets in hot tier', 'Alert if hot wallet drops below 2% of total (risk of withdrawal queue forming)', 'Alert if sweep fails — manual intervention triggers'] }
+    ]
+  },
+  liquidity: {
+    icon: '💧', title: 'Liquidity / Exchange Connector', subtitle: 'Smart order routing · OTC · VWAP execution',
+    sections: [
+      { title: 'Counterparty Mix', text: 'OTC desks for large orders: B2C2, Galaxy Digital, Cumberland, Wintermute. Exchange APIs for smaller orders: Coinbase Prime, Kraken. Smart routing: send order to best available price across active counterparties.' },
+      { title: 'Order Execution', items: ['Market order: immediate fill at best available price. Used for <$10K orders.', 'VWAP execution: for large orders ($50K+), slice into smaller child orders over 5–10min to reduce market impact', 'TWAP: time-weighted average price execution for very large institutional-scale orders', 'Slippage protection: if fill price deviates >0.5% from quoted price, reject fill, retry on alternate venue'] },
+      { title: 'Counterparty Risk', items: ['Exposure limits: max $10M outstanding with any single counterparty at any time', 'Credit limits managed by treasury team. Real-time tracking in dedicated service.', 'Counterparty failure during fill: trigger Saga compensating transaction (refund user fiat)', 'Diversification requirement: no single counterparty >40% of monthly volume'] },
+      { title: 'Inventory Model', items: ['Two models: agency (platform buys from market on demand) vs. principal (platform holds inventory, sells from own book)', 'CashApp uses principal model for small orders: better user experience (instant), directional risk managed by treasury', 'Large orders: always agency (immediately hedge on market)'] }
+    ]
+  },
+  user: {
+    icon: '👤', title: 'User Service', subtitle: 'Identity · KYC state · Feature access',
+    sections: [
+      { title: 'Responsibilities', text: 'Source of truth for: user identity (not PII — just reference IDs), KYC tier, account status (active/suspended/closed), feature flags per user, jurisdictional restrictions, daily limit tier, linked payment method status.' },
+      { title: 'KYC State Machine', items: ['UNVERIFIED → PENDING → BASIC_VERIFIED → STANDARD_VERIFIED → ENHANCED', 'Each tier unlocks higher limits and features', 'SUSPENDED: trading halted. RESTRICTED: limits reduced. CLOSED: terminal.', 'State change events published to Kafka — downstream services react (e.g. limits engine updates limits)'] },
+      { title: 'Jurisdictional Control', items: ['User registered jurisdiction stored and verified against IP/device geolocation', 'NY users: BitLicense restrictions applied (some coins unavailable)', 'Sanctioned country IP: all crypto features blocked. VPN detection applied.', 'Feature rollout: percentage-based via feature flags. Canary → 1% → 10% → full.'] },
+      { title: 'Privacy', items: ['PII (name, SSN, DOB) never stored in User Service DB — only in encrypted compliance store', 'User Service stores: user_id, kyc_tier, status, created_at, jurisdiction_code', 'GDPR right to erasure: pseudonymize PII fields in compliance store. Ledger events cannot be deleted (financial records).'] }
+    ]
+  },
+  ws: {
+    icon: '⚡', title: 'WebSocket / SSE Gateway', subtitle: 'Real-time price · Order status · Thundering herd',
+    sections: [
+      { title: 'Architecture', text: '100 stateless WebSocket gateway pods. Each pod manages ~100K persistent connections. Redis pub/sub distributes price tick broadcasts to all pods simultaneously. Any pod can serve any user — no sticky sessions.' },
+      { title: 'Thundering Herd Prevention', items: ['On gateway restart: clients must reconnect with exponential backoff + jitter', 'Without jitter: 1M clients reconnect simultaneously = gateway overload', 'Client backoff: base 1s, max 60s, jitter ±50%. Server-side: accept connections at rate-limited burst', 'Kubernetes rolling deploy: drain connections before pod termination (SIGTERM → 30s drain → SIGKILL)'] },
+      { title: 'Price Feed Optimization', items: ['Delta compression: send only changed fields (price changed, not full tick object)', 'Throttle: cap at 1 update/second per client even if upstream publishes faster', 'Asset subscription: client subscribes to specific assets — not all-or-nothing', 'Heartbeat: server pings every 30s. Client disconnects if no pong in 10s.'] },
+      { title: 'Order Status Push', items: ['On ORDER_SETTLED Kafka event, notification service publishes to Redis channel: user:{user_id}:orders', 'WebSocket gateway subscribes and pushes to connected client', 'Client always polls once on reconnect — in case event was missed during disconnect'] }
+    ]
+  },
+  bff: {
+    icon: '🔀', title: 'BFF (Backend for Frontend)', subtitle: 'Fan-out aggregation · Response shaping · Latency optimization',
+    sections: [
+      { title: 'Purpose', text: 'Mobile app needs: current balance (fiat + BTC), price, user status, recent orders, and pending transactions — all for the home screen. Without BFF: 5 separate API calls. With BFF: 1 call that fans out in parallel, assembles response.' },
+      { title: 'Parallel Fan-out', items: ['Promise.all() equivalent: fire all downstream calls simultaneously', 'Timeout: 200ms budget per downstream call. On timeout: return cached value or omit field with partial response flag', 'Partial response is better than full failure for home screen load'] },
+      { title: 'Response Shaping', items: ['Transform internal data models to mobile-optimized format', 'Collapse nested structures for mobile rendering performance', 'Localize: format currency amounts per user locale', 'Sensitive fields stripped (never return full bank account number — only masked last 4)'] },
+      { title: 'Caching', items: ['User profile + KYC status cached 5min in BFF layer — changes rarely', 'Price cached 1s — still fresh enough for display purposes', 'Balance always fetched fresh — never cache balance (stale balance = trust issue)', 'ETag-based caching for mobile HTTP cache integration'] }
+    ]
+  },
+  auth: {
+    icon: '🔐', title: 'Auth Service', subtitle: 'OAuth 2.0 + PKCE · Step-up · Token rotation',
+    sections: [
+      { title: 'Token Design', text: 'Access token: JWT RS256, 15min expiry. Contains: user_id, kyc_tier, device_id, issued_at. Refresh token: opaque random string, 90-day expiry, stored in DB. On use: rotated (old token invalidated immediately — prevents token replay).' },
+      { title: 'Step-Up Authentication', items: ['Standard ops (view balance, small buy): access token sufficient', 'Large transaction (>$500): require PIN re-entry or biometric confirmation', 'New device first transaction: require email OTP in addition to PIN', 'Withdrawal to new address: always require step-up regardless of amount', 'Step-up token: short-lived (5min), scoped to specific operation'] },
+      { title: 'MFA Architecture', items: ['TOTP (Google Authenticator): preferred. Validated server-side with 30s window ±1 step.', 'SMS OTP: fallback. Rate-limited 5/hour. SIM-swap attack mitigation: delay SMS if SIM changed in last 24h.', 'Passkeys (WebAuthn): future direction. Phishing-resistant, device-bound credentials.'] },
+      { title: 'Device Fingerprinting', items: ['Device ID generated on first install, stored in Keychain/Keystore', 'Device trust: new device starts untrusted. Trust builds over 7 days of normal usage.', 'Unknown device + large withdrawal = auto-flag, require email confirmation', 'Device revocation: user can see and revoke all trusted devices from app'] }
+    ]
+  },
+  dw: {
+    icon: '📊', title: 'Data Warehouse', subtitle: 'CDC pipeline · dbt transforms · Regulatory reporting',
+    sections: [
+      { title: 'Pipeline Architecture', text: 'PostgreSQL → Debezium (CDC) → Kafka → Kinesis Firehose → S3 (raw) → Redshift/BigQuery (transformed). dbt handles SQL-based transformations and data modeling. Airbyte for additional source connectors.' },
+      { title: 'Use Cases', items: ['Fraud model training: labeled outcome data with feature snapshots', 'Revenue analytics: spread earned per coin per day per tier', 'Regulatory reporting: CTR/SAR aggregate reports for FinCEN', 'Product analytics: funnel analysis, feature adoption, retention cohorts', 'Proof of reserves: periodic snapshot of total user balances vs. custody holdings'] },
+      { title: 'Data Governance', items: ['PII masking in DW: SSN replaced with hash, name truncated for analytics use', 'Row-level security: compliance analysts see all; product analysts see anonymized', 'Audit log of all DW queries — who accessed what and when', 'Data retention: ledger data kept forever. Behavioral/analytics data: 2 years.'] },
+      { title: 'Freshness SLA', items: ['Ledger events: 5min lag acceptable for analytics', 'Fraud model features: refreshed hourly', 'Regulatory reports: T+1 day (batch, not real-time)'] }
+    ]
+  },
+  s3: {
+    icon: '🪣', title: 'Object Storage (S3)', subtitle: 'Immutable audit trail · WORM · KYC docs',
+    sections: [
+      { title: 'Usage Patterns', text: 'KYC documents (ID scans, selfies): WORM storage with Object Lock (Compliance mode — even root cannot delete before retention period). Compliance audit logs: streamed from Kafka via Firehose. Transaction records archive. Blockchain node data backups.' },
+      { title: 'Security', items: ['AES-256 SSE-S3 or SSE-KMS encryption at rest', 'VPC endpoint — S3 access never goes through public internet', 'Bucket policies: deny all public access. Service role access only.', 'MFA Delete: deleting versioned objects requires MFA (additional protection)'] },
+      { title: 'Immutability', items: ['Object Lock (Compliance mode): not even AWS root account can delete before retention period', 'Used for: compliance audit trail, KYC documents, SAR records', 'Retention periods: KYC docs = 7 years, transaction records = 7 years, SAR = 5 years post-filing'] },
+      { title: 'Access Patterns', items: ['Write once, rarely read: compliance documents retrieved on regulator request or dispute', 'Hot logs: queried via Athena (S3 Select) for compliance analytics — no ETL needed', 'Lifecycle policies: move to Glacier after 1 year for cost savings (retrieval time acceptable for compliance use)'] }
+    ]
+  },
+  ops: {
+    icon: '🧑‍💼', title: 'Compliance Ops Queue', subtitle: 'Manual review · Case management · SLA tracking',
+    sections: [
+      { title: 'Queue Design', text: 'Cases routed based on severity + type. SLAs: HIGH (potential sanctions match, large suspicious withdrawal): 2-hour review window. MEDIUM (AML flag, pattern anomaly): 8-hour window. LOW (KYC edge case, routine enhanced DD): 24-hour window.' },
+      { title: 'Case Enrichment', items: ['Auto-enriched before reaching agent: full transaction history, KYC documents, AML score, Chainalysis report, fraud score, linked accounts', 'Agent sees complete picture immediately — no manual data gathering', 'Decision options: APPROVE (release), DENY (return funds), SAR_FILED (suspicious, monitor), ESCALATE (legal team)'] },
+      { title: 'Tooling', items: ['Internal case management system (often built on Retool or internal tooling)', 'Full audit trail: which agent reviewed, decision timestamp, decision rationale (required text)', 'Agent performance metrics: cases reviewed/hour, error rate (cases reversed on appeal)', 'Escalation matrix: patterns → senior compliance officer → Chief Compliance Officer → Legal'] },
+      { title: 'Workflow Automation', items: ['80% of cases auto-resolved by rule engine — only ambiguous cases reach humans', 'ML-assisted triage: suggest likely outcome based on similar historical cases', 'Batch similar cases: multiple $9,999 transactions from same user → single structuring case'] }
+    ]
+  }
+};
+
+function openPanel(key) {
+  const data = panels[key];
+  if (!data) return;
+  document.getElementById('dp-icon').textContent = data.icon;
+  document.getElementById('dp-title').textContent = data.title;
+  document.getElementById('dp-subtitle').textContent = data.subtitle;
+  const body = document.getElementById('dp-body');
+  body.innerHTML = '';
+  data.sections.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'dp-section';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'dp-sec-title';
+    titleEl.textContent = sec.title;
+    div.appendChild(titleEl);
+    if (sec.text) {
+      const p = document.createElement('p');
+      p.className = 'dp-text';
+      p.textContent = sec.text;
+      div.appendChild(p);
+    }
+    if (sec.items) {
+      const ul = document.createElement('ul');
+      ul.className = 'dp-list';
+      sec.items.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = item;
+        ul.appendChild(li);
+      });
+      div.appendChild(ul);
+    }
+    body.appendChild(div);
+  });
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closePanel() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function toggleDb(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleLayer(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleFlow(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    el.classList.remove('active');
+  });
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
