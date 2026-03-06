@@ -327,6 +327,7 @@ footer{
   <div class="nav-logo">⬡ SYSTEM DESIGN</div>
   <div class="nav-links">
     <a href="#designs" class="nav-link">Designs</a>
+    <a href="#interviews" class="nav-link">Interview Answers</a>
     <a href="#topics" class="nav-link">Core Topics</a>
     <a href="#principles" class="nav-link">Principles</a>
   </div>
@@ -339,9 +340,10 @@ footer{
   <div class="hero-title">System Design<br><span>Library</span></div>
   <div class="hero-sub">Production-grade reference designs covering architecture, APIs, data models, state machines, scalability, and tradeoffs. Built for Staff+ engineering interviews.</div>
   <div class="hero-stats">
-    <div class="hero-stat"><div class="stat-val">4</div><div class="stat-label">Complete Designs</div></div>
+    <div class="hero-stat"><div class="stat-val">3</div><div class="stat-label">Complete Designs</div></div>
     <div class="hero-stat"><div class="stat-val">20+</div><div class="stat-label">Sections / Design</div></div>
     <div class="hero-stat"><div class="stat-val">Staff+</div><div class="stat-label">Target Level</div></div>
+    <div class="hero-stat"><div class="stat-val">1</div><div class="stat-label">Interview Answers</div></div>
     <div class="hero-stat"><div class="stat-val">Deep Dive</div><div class="stat-label">DB Schema + APIs</div></div>
   </div>
 </div>
@@ -445,36 +447,6 @@ footer{
         </div>
       </a>
 
-      <!-- Payment Service (Interview Mode) -->
-      <a class="design-card" href="payment-service-interview.html">
-        <div class="card-accent" style="background:linear-gradient(90deg,var(--teal),var(--gold))"></div>
-        <div class="card-body">
-          <div class="card-top">
-            <div class="card-icon">&#128176;</div>
-            <div class="card-badge">Interview Mode · Staff</div>
-          </div>
-          <div class="card-title">Payment Service (Interview)</div>
-          <div class="card-sub">Amazon-scale payment system · Interview-style answer · 3rd Party PSP · Sharded architecture · Multi-region active-active</div>
-          <div class="card-chips">
-            <span class="chip hi">Exactly-Once Payment</span>
-            <span class="chip hi">Outbox Pattern</span>
-            <span class="chip hi">Vitess Sharding</span>
-            <span class="chip">Multi-PSP Failover</span>
-            <span class="chip">Double-Entry Ledger</span>
-            <span class="chip">Multi-Region</span>
-          </div>
-          <div class="card-metrics">
-            <div class="card-metric"><div class="cm-val" style="color:var(--teal)">50M+</div><div class="cm-label">Peak Txns/Day</div></div>
-            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">3,000</div><div class="cm-label">Peak TPS</div></div>
-            <div class="card-metric"><div class="cm-val" style="color:var(--blue)">30B+</div><div class="cm-label">Ledger Rows/Yr</div></div>
-          </div>
-        </div>
-        <div class="card-footer">
-          <span class="card-link" style="color:var(--teal)">Open Design &#x2192;</span>
-          <span class="card-sections">10 sections · State machine · Idempotency flow · Scalability deep dive</span>
-        </div>
-      </a>
-
       <!-- Coming Soon: Ride Share -->
       <div class="design-card soon">
         <div class="card-accent" style="background:linear-gradient(90deg,var(--blue),var(--teal))"></div>
@@ -509,6 +481,64 @@ footer{
             <span class="chip">WebSocket</span>
             <span class="chip">Message Ordering</span>
             <span class="chip">Fanout at Scale</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-sections">Coming soon</span>
+        </div>
+        <div class="soon-overlay"><div class="soon-badge">Coming Soon</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- INTERVIEW ANSWERS -->
+  <div id="interviews" style="margin-bottom:64px;">
+    <div class="section-label">Interview Answers</div>
+    <div class="designs-grid">
+
+      <!-- Payment Service Interview -->
+      <a class="design-card" href="payment-service-interview.html">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--gold),var(--teal))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">🎤</div>
+            <div class="card-badge">Interview Mode · Staff</div>
+          </div>
+          <div class="card-title">Payment Service</div>
+          <div class="card-sub">Amazon-scale · 3rd Party PSP · Sharded architecture · Multi-region active-active · Written as a real interview answer</div>
+          <div class="card-chips">
+            <span class="chip hi">Exactly-Once Payment</span>
+            <span class="chip hi">Outbox Pattern</span>
+            <span class="chip hi">Vitess Sharding</span>
+            <span class="chip">Multi-PSP Failover</span>
+            <span class="chip">Double-Entry Ledger</span>
+            <span class="chip">Multi-Region</span>
+          </div>
+          <div class="card-metrics">
+            <div class="card-metric"><div class="cm-val" style="color:var(--teal)">50M+</div><div class="cm-label">Peak Txns/Day</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">3,000</div><div class="cm-label">Peak TPS</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--blue)">30B+</div><div class="cm-label">Ledger Rows/Yr</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-link" style="color:var(--gold)">Open Answer →</span>
+          <span class="card-sections">10 sections · State machine · Idempotency · Scalability deep dive</span>
+        </div>
+      </a>
+
+      <!-- Coming Soon: Interview 2 -->
+      <div class="design-card soon">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--gold),var(--purple))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">🎤</div>
+          </div>
+          <div class="card-title">More Coming Soon</div>
+          <div class="card-sub">Additional interview-mode answers covering different system design problems</div>
+          <div class="card-chips">
+            <span class="chip">Interview Format</span>
+            <span class="chip">Staff Level</span>
           </div>
         </div>
         <div class="card-footer">
