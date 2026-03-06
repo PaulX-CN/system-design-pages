@@ -217,30 +217,49 @@ We verify the HMAC signature, map the PSP event to our internal state machine, a
                     │  └──────────┘  └─────┬─────┘  └────────────────┘  │
                     └──────────┬───────────┼────────────────────────────┘
                                │           │
-              ┌────────────────┼───────┐   │   ┌───────────────┐
-              │                │       │   ├──▶│  PSP A (Stripe)│
-              ▼                ▼       ▼   │   └───────────────┘
-  ┌────────────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────┐
-  │  Payment DB    │  │ Ledger DB│  │  Redis   │  │  PSP B (Adyen)│
-  │  (Vitess,      │  │ (sharded │  │  Cluster │  └───────┬───────┘
-  │   sharded by   │  │  by      │  │ (idempot)│          │
-  │   payment_id)  │  │ acct_id) │  └──────────┘          │
-  └───────┬────────┘  └────┬─────┘                        │
-          │                │                    ┌─────────▼────────┐
-          │    CDC / Outbox │                    │  Webhook Consumer│
-          │    ─────────────┘                    │  Fleet           │
-          │                                     └──────────────────┘
-          ▼
-  ┌────────────────┐     ┌───────────────────┐
-  │  Elasticsearch │     │  Reconciliation   │
-  │  (merchant     │     │  Worker (batch)   │
-  │   dashboards)  │     └───────────────────┘
-  └────────────────┘
+                    ┌──────────┤           │    ┌───────────────┐
+                    │          │           ├───▶│  PSP A (Stripe)│
+                    ▼          ▼           │    └───────────────┘
+          ┌────────────────┐ ┌──────────┐  │   ┌───────────────┐
+          │  Payment DB    │ │  Redis   │  └──▶│  PSP B (Adyen)│
+          │  (Vitess,      │ │  Cluster │      └───────┬───────┘
+          │   sharded by   │ │ (idempot)│              │
+          │   payment_id)  │ └──────────┘    ┌─────────▼────────┐
+          └──────┬─────────┘                 │  Webhook Consumer│
+                 │ outbox / CDC              │  Fleet           │
+                 │                           └──────────────────┘
+        ┌────────▼──────────┐
+        │   Event Stream    │
+        │  (Kafka / SQS)    │
+        └───┬──────────┬────┘
+            │          │
+   ┌────────▼──┐  ┌────▼───────────┐    ┌───────────────────┐
+   │  Ledger   │  │  Elasticsearch │    │  Reconciliation   │
+   │  Service  │  │  (merchant     │    │  Worker (batch)   │
+   │           │  │   dashboards)  │    └───────────────────┘
+   │  ┌──────┐ │  └────────────────┘
+   │  │Ledger│ │
+   │  │  DB  │ │
+   │  │(shard│ │
+   │  │by    │ │
+   │  │acct) │ │
+   │  └──────┘ │
+   └───────────┘
 ```
+
+**✍️ Note: Why is the Ledger Service separate from the Payment Service?**
+
+In the earlier version of this design, the Payment Service wrote to both the Payment DB and the Ledger DB. But since we shard these two databases by different keys (`payment_id` vs `account_id`), there is no cross-DB transaction anyway — we already use the outbox pattern for eventual consistency. The async event processor that reads the outbox and writes ledger entries is, in effect, already a separate service. We formalize this separation because:
+
+1. **Different shard keys** — The Payment DB is sharded by `payment_id`; the Ledger DB by `account_id`. No single transaction can span both. The payment service should not need to understand ledger sharding.
+2. **Different scaling profiles** — The ledger writes 2-5x more rows than payments (each payment produces multiple debit/credit entries). The Ledger Service can scale its consumer fleet independently.
+3. **Different ownership / domain** — Ledger logic (double-entry balancing, compaction, tiered storage, audit) is a distinct domain from payment orchestration (state machine, PSP integration, idempotency). Separate teams can own each.
+4. **Reusability** — Other services (payout service, refund service, subscription billing) also need to write ledger entries. A Ledger Service exposes a clean API for all producers rather than duplicating ledger logic in every service.
+5. **Auditability** — The Ledger Service is the single source of truth for money movement. A single entry point makes it easier to enforce invariants (every write is balanced) and audit access.
 
 ### Payment Service Fleet
 
-Stateless application tier (20-30+ instances behind a load balancer). Receives pay/refund requests, enforces idempotency, drives the state machine, calls the PSP via the PSP Router, and writes to the payment DB. Horizontally scalable — add instances to handle more TPS.
+Stateless application tier (20-30+ instances behind a load balancer). Receives pay/refund requests, enforces idempotency, drives the state machine, calls the PSP via the PSP Router, and writes to the Payment DB. On successful state transitions, it writes events to the **outbox table** within the same Payment DB transaction. It does **NOT** write directly to the Ledger DB.
 
 ### PSP Router
 
@@ -248,11 +267,26 @@ Selects which PSP to use per transaction based on success rate, cost, region, an
 
 ### Payment DB (Sharded PostgreSQL via Vitess)
 
-Stores payment records with current state, order mapping, PSP references. **Sharded by `payment_id`** for uniform write distribution. 16+ shards, each shard is a PostgreSQL primary + replicas. Vitess VTGate handles routing.
+Stores payment records with current state, order mapping, PSP references. **Sharded by `payment_id`** for uniform write distribution. 16+ shards, each shard is a PostgreSQL primary + replicas. Vitess VTGate handles routing. Contains the **outbox table** for CDC.
+
+### Event Stream (Kafka / SQS)
+
+CDC (Change Data Capture) from the Payment DB outbox publishes events (PAYMENT_CAPTURED, PAYMENT_REFUNDED, etc.) to a durable event stream. Multiple consumers subscribe: the Ledger Service, Elasticsearch indexer, notification service, analytics pipeline, etc.
+
+### Ledger Service
+
+Consumes payment events from the event stream. For each event, writes the appropriate double-entry ledger entries (debit + credit pairs) to the Ledger DB. Enforces the invariant that every write is balanced (sum of debits == sum of credits). Owns the Ledger DB exclusively — no other service writes to it.
+
+Also exposes a **query API** for balance lookups:
+
+```
+GET /v1/accounts/{account_id}/balance
+Response: { "account_id": "merchant:m_456", "balance": 1250000, "currency": "USD" }
+```
 
 ### Ledger DB (Sharded PostgreSQL)
 
-Append-only double-entry ledger. Every money movement is a pair of debit + credit entries. **Sharded by `account_id`** so that balance queries are single-shard. Separate shard cluster from Payment DB because different shard key.
+Append-only double-entry ledger. Every money movement is a pair of debit + credit entries. **Sharded by `account_id`** so that balance queries are single-shard. Separate shard cluster from Payment DB because different shard key. Owned exclusively by the Ledger Service.
 
 ### Redis Cluster (Idempotency Store)
 
@@ -260,11 +294,11 @@ Maps `idempotency_key → (status, response)` with a TTL (e.g. 24h). Used for fa
 
 ### Webhook Consumer Fleet
 
-Dedicated stateless workers that receive PSP webhooks, verify HMAC signatures, de-duplicate by `psp_event_id`, and apply state transitions. Separated from the main payment service to isolate webhook burst traffic (PSPs can replay large batches).
+Dedicated stateless workers that receive PSP webhooks, verify HMAC signatures, de-duplicate by `psp_event_id`, and apply state transitions to the Payment DB. Separated from the main payment service to isolate webhook burst traffic (PSPs can replay large batches). State transitions also write to the outbox, which triggers downstream Ledger Service updates.
 
 ### Elasticsearch (CQRS Read Store)
 
-Receives payment data via CDC (Change Data Capture) from the Payment DB outbox. Powers merchant dashboards and search queries ("show me all payments for merchant X last month") without scatter-gather across payment shards.
+Consumes payment events from the same event stream. Powers merchant dashboards and search queries ("show me all payments for merchant X last month") without scatter-gather across payment shards.
 
 ### Reconciliation Worker
 
@@ -332,31 +366,42 @@ This is the most critical design element. Here's how it works:
 
 ```
 1. Receive request with Idempotency-Key = "key_abc"
-2. BEGIN TRANSACTION
-3.   Look up "key_abc" in idempotency_keys table
-4.   IF found:
-       - IF status = COMPLETED → return cached response (HTTP 200)
-       - IF status = IN_PROGRESS → return HTTP 409 (concurrent request)
-5.   IF not found:
-       - INSERT idempotency_keys (key, status=IN_PROGRESS, request_hash)
-6.   INSERT payments (payment_id, status=CREATED, ...)
-7. COMMIT TRANSACTION
-8. Call PSP (this is OUTSIDE the transaction — network call)
-9. BEGIN TRANSACTION
-10.  Update payments status based on PSP response
-11.  Write ledger entries (debit buyer, credit merchant)
-12.  Update idempotency_keys status=COMPLETED, cached_response=<response>
-13. COMMIT TRANSACTION
+2. Check Redis: does "key_abc" exist?
+   - IF COMPLETED → return cached response (HTTP 200)
+   - IF IN_PROGRESS → return HTTP 409 (concurrent request)
+   - IF not found → SET "key_abc" IN_PROGRESS (NX + TTL)
+3. BEGIN TRANSACTION (Payment DB shard)
+4.   INSERT payments (payment_id, status=CREATED, ...)
+5.   INSERT idempotency_keys (key, status=IN_PROGRESS, request_hash)
+6. COMMIT TRANSACTION
+7. Call PSP (this is OUTSIDE the transaction — network call)
+8. BEGIN TRANSACTION (Payment DB shard — same shard as step 3)
+9.   Update payments status based on PSP response
+10.  INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount, accounts, ...)
+11.  Update idempotency_keys status=COMPLETED, cached_response=<response>
+12. COMMIT TRANSACTION
+13. Update Redis: SET "key_abc" → cached_response (with TTL)
 14. Return response
+
+--- ASYNC (downstream, eventually consistent) ---
+15. CDC reads outbox → publishes to event stream (Kafka)
+16. Ledger Service consumes event → writes debit/credit entries to Ledger DB
+17. Elasticsearch indexer consumes event → indexes for merchant dashboard
 ```
+
+**✍️ Note**: Steps 1-14 are the synchronous payment path. The Payment Service only touches the **Payment DB** and **Redis**. It does NOT write to the Ledger DB directly. Ledger entries are written **asynchronously** by the Ledger Service (steps 15-16), triggered by the outbox CDC pipeline. This is the key architectural boundary.
 
 **❓ Why is the PSP call outside the transaction?**
 
 Database transactions should not hold open during external network calls. The PSP call can take 300-800ms. Holding a DB transaction that long causes lock contention and connection pool exhaustion.
 
-**❓ What if the service crashes between step 8 and step 9?**
+**❓ What if the service crashes between step 7 and step 8?**
 
-The payment is stuck in `CREATED` state with the idempotency key `IN_PROGRESS`. A background reconciliation worker picks up stuck payments (CREATED for > 5 minutes), polls the PSP to check actual status, and resolves them.
+The payment is stuck in `CREATED` state with the idempotency key `IN_PROGRESS` in both Redis and the Payment DB. A background reconciliation worker picks up stuck payments (CREATED for > 5 minutes), polls the PSP to check actual status, and resolves them. The outbox event is then written, and the Ledger Service picks it up normally.
+
+**❓ What if the Ledger Service is behind or down?**
+
+Payments continue to succeed — the user sees "payment captured" immediately. Ledger entries are written asynchronously, so the ledger may be seconds (or minutes, during an outage) behind the payment state. The outbox + Kafka guarantees at-least-once delivery, so entries are never lost — just delayed. The daily reconciliation job catches any gaps.
 
 **❓ What if the PSP call times out?**
 
@@ -740,7 +785,7 @@ shard_id = hash(account_id) % num_shards
 
 Yes, a merchant processing 10M transactions/day will have a hot shard. Mitigations:
 
-1. **Account splitting** — Split a hot merchant's ledger into sub-accounts (e.g., `merchant:m_456:shard_0` through `merchant:m_456:shard_7`). The payment service round-robins writes across sub-accounts. Balance query sums across all sub-accounts (fan-out of 8 is acceptable).
+1. **Account splitting** — Split a hot merchant's ledger into sub-accounts (e.g., `merchant:m_456:shard_0` through `merchant:m_456:shard_7`). The Ledger Service round-robins writes across sub-accounts. Balance query sums across all sub-accounts (fan-out of 8 is acceptable).
 
 2. **Materialized balance table** — Instead of summing all ledger entries on every query, maintain a `account_balances` table updated in the same transaction as each ledger write:
 
@@ -773,33 +818,47 @@ This reduces the balance query to a single-row lookup, regardless of how many le
 
 If Redis loses the key (eviction, failover), the DB table acts as fallback. This is acceptable because Redis misses just cause a redundant DB lookup, not a double-charge.
 
-### Cross-Shard Transaction Problem
+### Cross-Shard Consistency: Payment DB ↔ Ledger DB
 
-After sharding, we lose the ability to do atomic cross-shard transactions. This matters for the payment flow because steps 6-12 of the idempotency flow (update payment + write ledger + update idempotency key) may now span shards.
+The Payment DB (sharded by `payment_id`) and Ledger DB (sharded by `account_id`) cannot participate in a single ACID transaction. This is the fundamental reason the Ledger Service exists as a separate service.
 
-**Solutions:**
-
-1. **Colocate payment + ledger on the same shard** — If we shard both by `payment_id`, they land on the same shard and we keep ACID. But this breaks ledger balance queries (see above).
-
-2. **Saga pattern with outbox** — The preferred approach at scale:
+**Our approach: Outbox + Ledger Service (eventual consistency)**
 
 ```
-Payment Shard:
-  BEGIN TX
+Payment Service (synchronous path):
+  BEGIN TX (Payment DB shard)
     UPDATE payments SET status = CAPTURED
-    INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount, ...)
+    INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount,
+                        debit_account="buyer:u_123", credit_accounts=["merchant:m_456", "platform:fees"], ...)
   COMMIT
 
-Async event processor (reads outbox via CDC):
-  → Write ledger entries to Ledger Shard
-  → Update idempotency cache
+CDC pipeline (Debezium / custom):
+  → Reads new outbox rows → publishes to Kafka topic "payment-events"
+
+Ledger Service (async consumer):
+  → Consumes PAYMENT_CAPTURED event
+  → BEGIN TX (Ledger DB shard for buyer:u_123's account)
+       INSERT ledger_entry (DEBIT, buyer:u_123, 5999)
+     COMMIT
+  → BEGIN TX (Ledger DB shard for merchant:m_456's account)
+       INSERT ledger_entry (CREDIT, merchant:m_456, 5795)
+     COMMIT
+  → BEGIN TX (Ledger DB shard for platform:fees)
+       INSERT ledger_entry (CREDIT, platform:fees, 204)
+     COMMIT
 ```
 
-The outbox pattern guarantees that the event is published if and only if the payment update commits. The ledger write is eventually consistent but guaranteed to happen. If the ledger write fails, the event processor retries.
+**✍️ Note**: Even within the Ledger Service, the debit and credit entries may land on **different ledger shards** (because `buyer:u_123` and `merchant:m_456` hash to different shards). The Ledger Service handles this by writing each entry in its own shard-local transaction. The "balanced ledger" invariant (sum of debits == sum of credits) is enforced **per event** in application logic and verified by the daily reconciliation job, not by a single ACID transaction.
 
-**✍️ Note**: This is a **classic staff-level trade-off**. We trade strong consistency (single-DB ACID) for scalability (sharded DBs + eventual consistency via outbox/saga). The reconciliation job (section 7) catches any drift.
+**✍️ Note**: This is a **classic staff-level trade-off**. We trade strong consistency (single-DB ACID) for scalability (sharded DBs + eventual consistency via outbox/saga). The reconciliation job catches any drift.
 
-3. **Two-phase commit (2PC)** — Technically possible but adds latency and a coordinator as a single point of failure. Not recommended for payment systems at scale.
+**❓ Why not two-phase commit (2PC)?**
+
+2PC adds latency (extra round-trip for prepare/commit) and introduces a coordinator as a single point of failure. At 3,000 TPS, 2PC coordinator contention becomes a bottleneck. Not recommended for payment systems at scale.
+
+**❓ What if the Ledger Service processes events out of order?**
+
+The Ledger Service is append-only — it only adds entries, never updates them. Out-of-order processing is safe because each event independently produces balanced entries. The balance is computed by summing all entries, regardless of insertion order.
 
 ### Read Scaling
 
