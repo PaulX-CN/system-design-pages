@@ -1134,26 +1134,16 @@ def charge_via_psp(payment):
   <div class="sec-head">
     <span class="sec-num">09</span>
     <span class="sec-title">Ledger &amp; Database Design</span>
-    <span class="sec-tag">Double-entry bookkeeping &amp; schema</span>
+    <span class="sec-tag">Double-entry bookkeeping, schema &amp; sharding</span>
   </div>
 
   <h3 class="sub-head">Double-Entry Ledger</h3>
   <p class="body-text">Every money movement is recorded as a balanced pair of entries. This is how we maintain an auditable, tamper-evident financial record.</p>
 
-  <div class="code-label">Ledger Schema</div>
-  <pre class="code-block">CREATE TABLE ledger_entries (
-    entry_id        BIGSERIAL PRIMARY KEY,
-    payment_id      UUID NOT NULL,
-    account_id      VARCHAR(64) NOT NULL,   -- e.g. "buyer:u_123", "merchant:m_456", "platform:fees"
-    entry_type      VARCHAR(16) NOT NULL,   -- DEBIT or CREDIT
-    amount          BIGINT NOT NULL,        -- in cents, always positive
-    currency        VARCHAR(3) NOT NULL,
-    description     VARCHAR(256),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Index for account balance queries
-CREATE INDEX idx_ledger_account ON ledger_entries (account_id, created_at);</pre>
+  <div class="note-card">
+    <div class="note-label">&#128451;&#65039; Ledger Schema</div>
+    <div class="note-body">The <strong>ledger_entries</strong> table is append-only with columns: <code>entry_id</code>, <code>payment_id</code>, <code>account_id</code> (e.g. "buyer:u_123", "merchant:m_456"), <code>entry_type</code> (DEBIT/CREDIT), <code>amount</code> (in cents), <code>currency</code>, <code>description</code>, <code>created_at</code>. Indexed on <code>(account_id, created_at)</code> for balance queries.</div>
+  </div>
 
   <h4 class="sub-head-sm">Example: Customer pays $59.99, platform takes 2.9% + $0.30 fee</h4>
   <table class="scale-table">
@@ -1192,132 +1182,35 @@ CREATE INDEX idx_ledger_account ON ledger_entries (account_id, created_at);</pre
 FROM ledger_entries
 WHERE account_id = 'merchant:m_456';</pre>
 
-  <h3 class="sub-head">Payment DB Schema</h3>
+  <h3 class="sub-head">Payment DB (Sharded PostgreSQL via Vitess)</h3>
 
-  <div class="code-label">Payments Table</div>
-  <pre class="code-block">CREATE TABLE payments (
-    payment_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id            VARCHAR(64) NOT NULL,
-    idempotency_key     VARCHAR(128) UNIQUE NOT NULL,
-    status              VARCHAR(32) NOT NULL DEFAULT 'CREATED',
-    amount              BIGINT NOT NULL,
-    currency            VARCHAR(3) NOT NULL DEFAULT 'USD',
-    refunded_amount     BIGINT NOT NULL DEFAULT 0,
-    payment_method_token VARCHAR(256),
-    psp_transaction_id  VARCHAR(128),
-    merchant_id         VARCHAR(64) NOT NULL,
-    buyer_id            VARCHAR(64) NOT NULL,
-    metadata            JSONB,
-    version             INT NOT NULL DEFAULT 1,    -- optimistic lock
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+  <p class="body-text">Four key tables, all colocated on the same shard:</p>
 
-CREATE INDEX idx_payments_order ON payments (order_id);
-CREATE INDEX idx_payments_psp_txn ON payments (psp_transaction_id);</pre>
-
-  <div class="code-label">Idempotency Keys Table</div>
-  <pre class="code-block">CREATE TABLE idempotency_keys (
-    idempotency_key     VARCHAR(128) PRIMARY KEY,
-    status              VARCHAR(16) NOT NULL,       -- IN_PROGRESS, COMPLETED
-    request_hash        VARCHAR(64) NOT NULL,       -- SHA256 of request body
-    cached_response     JSONB,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at          TIMESTAMPTZ NOT NULL         -- TTL, e.g. created_at + 24h
-);</pre>
-
-  <div class="code-label">Webhook Events Table</div>
-  <pre class="code-block">CREATE TABLE webhook_events (
-    psp_event_id        VARCHAR(128) PRIMARY KEY,
-    payment_id          UUID NOT NULL,
-    event_type          VARCHAR(64) NOT NULL,
-    processed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);</pre>
+  <div class="comp-grid">
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128179;</span><span class="comp-name">payments</span></div>
+      <div class="comp-detail">Core table. <code>payment_id</code> (PK, UUID), <code>order_id</code>, <code>idempotency_key</code> (unique), <code>status</code>, <code>amount</code>/<code>currency</code>, <code>refunded_amount</code>, <code>payment_method_token</code>, <code>psp_transaction_id</code>, <code>merchant_id</code>, <code>buyer_id</code>, <code>metadata</code> (JSONB), <code>version</code> (optimistic lock), timestamps. Indexed on <code>order_id</code> and <code>psp_transaction_id</code>.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128273;</span><span class="comp-name">idempotency_keys</span></div>
+      <div class="comp-detail"><code>idempotency_key</code> (PK), <code>status</code> (IN_PROGRESS/COMPLETED), <code>request_hash</code> (SHA256), <code>cached_response</code> (JSONB), <code>expires_at</code> (TTL).</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128229;</span><span class="comp-name">webhook_events</span></div>
+      <div class="comp-detail">De-duplication table. <code>psp_event_id</code> (PK), <code>payment_id</code>, <code>event_type</code>, <code>processed_at</code>.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128230;</span><span class="comp-name">outbox</span></div>
+      <div class="comp-detail">CDC source for downstream consumers. Stores event payload for Kafka publishing.</div>
+    </div>
+  </div>
 
   <div class="qa-card">
     <div class="qa-q">&#10067; Why PostgreSQL (sharded)?</div>
     <div class="qa-a">
-      <strong>ACID transactions</strong> are essential for the payment state machine + ledger writes. JSONB for flexible metadata without schema migrations. At ~3,000 TPS peak, a single PostgreSQL primary is at its limit. We shard from the start using Vitess (or Citus).
+      <strong>ACID transactions</strong> are essential for the payment state machine. JSONB for flexible metadata without schema migrations. At ~3,000 TPS peak, a single PostgreSQL primary is at its limit. We shard from the start using Vitess (or Citus).
     </div>
   </div>
-
-  <div class="qa-card">
-    <div class="qa-q">&#10067; How is the DB sharded?</div>
-    <div class="qa-a">
-      <strong>Payment DB</strong> &rarr; sharded by payment_id (UUID, uniform distribution, no hot shards).<br>
-      <strong>Ledger DB</strong> &rarr; sharded by account_id (balance queries are single-shard).<br>
-      <strong>Idempotency</strong> &rarr; Redis Cluster by idempotency_key, with DB fallback.<br><br>
-      The payment and ledger tables live on <strong>different shard clusters</strong> because they have different optimal shard keys. Cross-shard consistency is achieved via the <strong>outbox pattern</strong>.
-    </div>
-  </div>
-
-  <h3 class="sub-head">Reconciliation</h3>
-  <p class="body-text">Reconciliation is the process of comparing our internal records with the PSP's records (and ultimately the bank's settlement files) to catch discrepancies.</p>
-
-  <h4 class="sub-head-sm">Types of Discrepancies</h4>
-  <ul class="styled-list">
-    <li><strong>We charged, PSP has no record</strong> &mdash; Possible if our PSP call succeeded but PSP lost the record (extremely rare).</li>
-    <li><strong>PSP charged, we have no record</strong> &mdash; Our service crashed after PSP call but before DB write. The reconciliation worker fixes this.</li>
-    <li><strong>Amount mismatch</strong> &mdash; Currency conversion issues or PSP applied a different fee.</li>
-    <li><strong>Status mismatch</strong> &mdash; We think it's CAPTURED, PSP says REFUNDED (e.g. chargeback we missed).</li>
-  </ul>
-
-  <div class="arch-diagram">
-    <div class="arch-title">&#128736;&#65039; Reconciliation Flow</div>
-    <pre class="arch-pre">Daily Batch Job:
-1. Pull settlement report from PSP (CSV/API)
-2. For each PSP transaction:
-   a. Match by psp_transaction_id to our payments table
-   b. Compare amount, currency, status
-   c. Flag discrepancies &rarr; write to reconciliation_exceptions table
-3. For each unmatched internal payment (we have it, PSP doesn't):
-   a. Flag for investigation
-4. Generate reconciliation report
-5. Alert on-call if exception count > threshold</pre>
-  </div>
-
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Staff-Level Must-Mention</div>
-    <div class="note-body">At staff level, you MUST mention reconciliation. It's the <strong>safety net</strong> that catches all the edge cases your online system misses. Real-world payment systems always have reconciliation jobs.</div>
-  </div>
-
-  <h3 class="sub-head">Failure Handling &amp; Retry Strategy</h3>
-  <table class="scale-table">
-    <tr><th>Scenario</th><th>Action</th></tr>
-    <tr><td>PSP returns 4xx (bad request, card declined)</td><td>Mark payment FAILED. Do NOT retry.</td></tr>
-    <tr><td>PSP returns 5xx (server error)</td><td>Mark payment UNKNOWN. Poll PSP for status.</td></tr>
-    <tr><td>PSP call timeout</td><td>Mark payment UNKNOWN. Do NOT retry charge. Poll or wait for webhook.</td></tr>
-    <tr><td>Our DB write fails after PSP success</td><td>Retry DB write with backoff. Payment is safe (PSP idempotency key protects against double-charge).</td></tr>
-    <tr><td>Webhook signature invalid</td><td>Reject (HTTP 401). Log for security audit.</td></tr>
-    <tr><td>Webhook for unknown payment_id</td><td>Queue for retry with backoff (payment record may not be committed yet).</td></tr>
-  </table>
-
-  <div class="qa-card">
-    <div class="qa-q">&#10067; Why do we NEVER blindly retry a charge on timeout?</div>
-    <div class="qa-a">Because the PSP may have actually processed it. Retrying would create a second charge. Instead, we query the PSP to check the actual status, or rely on the PSP's webhook to tell us. This is the <strong>cardinal rule</strong> of payment engineering.</div>
-  </div>
-</section>
-
-<!-- 10 SCALABILITY DEEP DIVE -->
-<section id="scalability">
-  <div class="sec-head">
-    <span class="sec-num">10</span>
-    <span class="sec-title">Scalability Deep Dive</span>
-    <span class="sec-tag">Sharding, multi-region, tiered storage</span>
-  </div>
-
-  <p class="body-text">At Amazon-scale (~50M payment transactions/day peak, ~3,000 TPS burst), sharding is not optional &mdash; it's a core architectural requirement from day one.</p>
-
-  <h3 class="sub-head">Scaling Overview</h3>
-  <table class="scale-table">
-    <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
-    <tr><td>Payment Service</td><td>~3,000 TPS peak</td><td>20-30 stateless instances</td></tr>
-    <tr><td>Payment DB</td><td>~50M rows/day peak</td><td>Vitess, 16 shards by payment_id</td></tr>
-    <tr><td>Ledger DB</td><td>~250M rows/day peak</td><td>Separate cluster, 16 shards by account_id</td></tr>
-    <tr><td>Idempotency</td><td>~3,000 checks/sec peak</td><td>Redis Cluster (6+ nodes)</td></tr>
-    <tr><td>Webhook ingestion</td><td>Burst-heavy</td><td>Dedicated consumer fleet + SQS/Kafka</td></tr>
-    <tr><td>Merchant dashboards</td><td>Scatter-gather too slow</td><td>Elasticsearch via CDC</td></tr>
-  </table>
 
   <h3 class="sub-head">Sharding the Payment DB</h3>
   <h4 class="sub-head-sm">Shard Key: payment_id</h4>
@@ -1339,22 +1232,13 @@ CREATE INDEX idx_payments_psp_txn ON payments (psp_transaction_id);</pre>
 
   <div class="qa-card">
     <div class="qa-q">&#10067; How do we handle "get all payments for merchant X" after sharding by payment_id?</div>
-    <div class="qa-a">This is a <strong>scatter-gather</strong> query &mdash; the API server fans out to all shards, each shard filters by merchant_id, and the API server merges results. Acceptable because merchant dashboard queries are low frequency, paginated, and cacheable. For high-volume merchants, we maintain a secondary index or use <strong>Elasticsearch via CDC</strong>.</div>
+    <div class="qa-a">This is a <strong>scatter-gather</strong> query &mdash; the API server fans out to all shards, each shard filters by merchant_id, and the API server merges results. Acceptable because merchant dashboard queries are low frequency, paginated, and cacheable. For high-volume merchants, we maintain a secondary index in <strong>Elasticsearch via CDC</strong>.</div>
   </div>
 
   <div class="qa-card">
     <div class="qa-q">&#10067; How do we route requests to the correct shard?</div>
     <div class="qa-a">Consistent hashing on payment_id: <code>shard_id = hash(payment_id) % num_shards</code>. We use Vitess VTGate as the shard routing layer. The application code is ideally shard-unaware.</div>
   </div>
-
-  <div class="code-label">Vitess VSchema Definition</div>
-  <pre class="code-block">-- VSchema definition
-CREATE VINDEX payment_hash USING hash;
-
-CREATE TABLE payments (
-    payment_id UUID,
-    ...
-) VINDEXED ON (payment_id) USING payment_hash;</pre>
 
   <div class="qa-card">
     <div class="qa-q">&#10067; How many shards?</div>
@@ -1387,21 +1271,10 @@ WHERE account_id = ?;</pre>
 
   <h3 class="sub-head">Sharding the Idempotency Store</h3>
   <ul class="styled-list">
-    <li><strong>Option A: Redis Cluster</strong> &mdash; Shard by idempotency_key using Redis Cluster's hash slots. Simple, fast, TTL-based expiry built-in. Preferred approach.</li>
-    <li><strong>Option B: Colocate with Payment DB</strong> &mdash; Store in idempotency_keys table. Tricky: we don't know the payment_id yet when checking the key.</li>
-    <li><strong>Solution</strong>: Use Redis for the fast-path (check + reserve) and write to the DB table as durable backup in the same transaction as payment creation.</li>
+    <li><strong>Redis Cluster</strong> handles the fast-path: shard by idempotency_key using hash slots. TTL-based expiry built-in.</li>
+    <li><strong>DB fallback</strong>: The idempotency_keys table in the Payment DB is the durable backup, written in the same transaction as payment creation.</li>
+    <li>If Redis loses the key (eviction, failover), the DB table acts as fallback. Redis misses just cause a redundant DB lookup, not a double-charge.</li>
   </ul>
-
-  <div class="arch-diagram">
-    <div class="arch-title">&#128736;&#65039; Idempotency Store Strategy</div>
-    <pre class="arch-pre">1. Check Redis: does idempotency_key exist?
-   - Yes &rarr; return cached response
-   - No &rarr; SET idempotency_key IN_PROGRESS (with NX + TTL)
-2. Create payment in DB (idempotency_key stored in payments table)
-3. After PSP call, update Redis with cached response</pre>
-  </div>
-
-  <p class="body-text">If Redis loses the key (eviction, failover), the DB table acts as fallback. Redis misses just cause a redundant DB lookup, not a double-charge.</p>
 
   <h3 class="sub-head">Cross-Shard Consistency: Payment DB &harr; Ledger DB</h3>
   <p class="body-text">The Payment DB (sharded by payment_id) and Ledger DB (sharded by account_id) cannot participate in a single ACID transaction. This is the fundamental reason the Ledger Service exists as a separate service.</p>
@@ -1451,6 +1324,72 @@ Ledger Service (async consumer):
     <div class="qa-q">&#10067; What if the Ledger Service processes events out of order?</div>
     <div class="qa-a">The Ledger Service is append-only &mdash; it only adds entries, never updates them. Out-of-order processing is safe because each event independently produces balanced entries. The balance is computed by summing all entries, regardless of insertion order.</div>
   </div>
+
+  <h3 class="sub-head">Reconciliation</h3>
+  <p class="body-text">Reconciliation is the process of comparing our internal records with the PSP's records (and ultimately the bank's settlement files) to catch discrepancies.</p>
+
+  <h4 class="sub-head-sm">Types of Discrepancies</h4>
+  <ul class="styled-list">
+    <li><strong>We charged, PSP has no record</strong> &mdash; Possible if our PSP call succeeded but PSP lost the record (extremely rare).</li>
+    <li><strong>PSP charged, we have no record</strong> &mdash; Our service crashed after PSP call but before DB write. The reconciliation worker fixes this.</li>
+    <li><strong>Amount mismatch</strong> &mdash; Currency conversion issues or PSP applied a different fee.</li>
+    <li><strong>Status mismatch</strong> &mdash; We think it's CAPTURED, PSP says REFUNDED (e.g. chargeback we missed).</li>
+  </ul>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128736;&#65039; Reconciliation Flow</div>
+    <pre class="arch-pre">Daily Batch Job:
+1. Pull settlement report from PSP (CSV/API)
+2. For each PSP transaction:
+   a. Match by psp_transaction_id to our payments table
+   b. Compare amount, currency, status
+   c. Flag discrepancies &rarr; write to reconciliation_exceptions table
+3. For each unmatched internal payment (we have it, PSP doesn't):
+   a. Flag for investigation
+4. Generate reconciliation report
+5. Alert on-call if exception count > threshold</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Staff-Level Must-Mention</div>
+    <div class="note-body">At staff level, you MUST mention reconciliation. It's the <strong>safety net</strong> that catches all the edge cases your online system misses. Real-world payment systems always have reconciliation jobs.</div>
+  </div>
+
+  <h3 class="sub-head">Failure Handling &amp; Retry Strategy</h3>
+  <table class="scale-table">
+    <tr><th>Scenario</th><th>Action</th></tr>
+    <tr><td>PSP returns 4xx (bad request, card declined)</td><td>Mark payment FAILED. Do NOT retry.</td></tr>
+    <tr><td>PSP returns 5xx (server error)</td><td>Mark payment UNKNOWN. Poll PSP for status.</td></tr>
+    <tr><td>PSP call timeout</td><td>Mark payment UNKNOWN. Do NOT retry charge. Poll or wait for webhook.</td></tr>
+    <tr><td>Our DB write fails after PSP success</td><td>Retry DB write with backoff. Payment is safe (PSP idempotency key protects against double-charge).</td></tr>
+    <tr><td>Webhook signature invalid</td><td>Reject (HTTP 401). Log for security audit.</td></tr>
+    <tr><td>Webhook for unknown payment_id</td><td>Queue for retry with backoff (payment record may not be committed yet).</td></tr>
+  </table>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why do we NEVER blindly retry a charge on timeout?</div>
+    <div class="qa-a">Because the PSP may have actually processed it. Retrying would create a second charge. Instead, we query the PSP to check the actual status, or rely on the PSP's webhook to tell us. This is the <strong>cardinal rule</strong> of payment engineering.</div>
+  </div>
+</section>
+
+<!-- 10 SCALABILITY -->
+<section id="scalability">
+  <div class="sec-head">
+    <span class="sec-num">10</span>
+    <span class="sec-title">Scalability</span>
+    <span class="sec-tag">Read scaling, multi-region, tiered storage</span>
+  </div>
+
+  <h3 class="sub-head">Scale Overview</h3>
+  <table class="scale-table">
+    <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
+    <tr><td>Payment Service</td><td>~3,000 TPS peak</td><td>20-30 stateless instances</td></tr>
+    <tr><td>Payment DB</td><td>~50M rows/day peak</td><td>Vitess, 16 shards by payment_id</td></tr>
+    <tr><td>Ledger DB</td><td>~250M rows/day peak</td><td>Separate cluster, 16 shards by account_id</td></tr>
+    <tr><td>Idempotency</td><td>~3,000 checks/sec peak</td><td>Redis Cluster (6+ nodes)</td></tr>
+    <tr><td>Webhook ingestion</td><td>Burst-heavy</td><td>Dedicated consumer fleet + SQS/Kafka</td></tr>
+    <tr><td>Merchant dashboards</td><td>Scatter-gather too slow</td><td>Elasticsearch via CDC</td></tr>
+  </table>
 
   <h3 class="sub-head">Read Scaling</h3>
   <ul class="styled-list">

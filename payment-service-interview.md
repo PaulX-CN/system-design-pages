@@ -498,23 +498,7 @@ PSP webhooks are async notifications about events we may or may not have already
 
 Every money movement is recorded as a balanced pair of entries. This is how we maintain an auditable, tamper-evident financial record.
 
-### Ledger schema:
-
-```sql
-CREATE TABLE ledger_entries (
-    entry_id        BIGSERIAL PRIMARY KEY,
-    payment_id      UUID NOT NULL,
-    account_id      VARCHAR(64) NOT NULL,   -- e.g. "buyer:u_123", "merchant:m_456", "platform:fees"
-    entry_type      VARCHAR(16) NOT NULL,   -- DEBIT or CREDIT
-    amount          BIGINT NOT NULL,        -- in cents, always positive
-    currency        VARCHAR(3) NOT NULL,
-    description     VARCHAR(256),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Index for account balance queries
-CREATE INDEX idx_ledger_account ON ledger_entries (account_id, created_at);
-```
+The `ledger_entries` table is append-only with columns: `entry_id`, `payment_id`, `account_id` (e.g. "buyer:u_123", "merchant:m_456"), `entry_type` (DEBIT/CREDIT), `amount` (in cents), `currency`, `description`, `created_at`. Indexed on `(account_id, created_at)` for balance queries.
 
 ### Example: Customer pays \$59.99 for an order, platform takes 2.9\% + $0.30 fee
 
@@ -549,61 +533,150 @@ WHERE account_id = 'merchant:m_456';
 
 For hot accounts (millions of entries), we maintain a materialized `account_balances` table updated in the same transaction as ledger writes.
 
-## 6. Database Schema (Payment DB)
+## 6. Database Design
 
-```sql
-CREATE TABLE payments (
-    payment_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id            VARCHAR(64) NOT NULL,
-    idempotency_key     VARCHAR(128) UNIQUE NOT NULL,
-    status              VARCHAR(32) NOT NULL DEFAULT 'CREATED',
-    amount              BIGINT NOT NULL,
-    currency            VARCHAR(3) NOT NULL DEFAULT 'USD',
-    refunded_amount     BIGINT NOT NULL DEFAULT 0,
-    payment_method_token VARCHAR(256),
-    psp_transaction_id  VARCHAR(128),
-    merchant_id         VARCHAR(64) NOT NULL,
-    buyer_id            VARCHAR(64) NOT NULL,
-    metadata            JSONB,
-    version             INT NOT NULL DEFAULT 1,    -- optimistic lock
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+### Payment DB (Sharded PostgreSQL via Vitess)
 
-CREATE INDEX idx_payments_order ON payments (order_id);
-CREATE INDEX idx_payments_psp_txn ON payments (psp_transaction_id);
+Three key tables, all colocated on the same shard:
 
-CREATE TABLE idempotency_keys (
-    idempotency_key     VARCHAR(128) PRIMARY KEY,
-    status              VARCHAR(16) NOT NULL,       -- IN_PROGRESS, COMPLETED
-    request_hash        VARCHAR(64) NOT NULL,       -- SHA256 of request body
-    cached_response     JSONB,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at          TIMESTAMPTZ NOT NULL         -- TTL, e.g. created_at + 24h
-);
-
-CREATE TABLE webhook_events (
-    psp_event_id        VARCHAR(128) PRIMARY KEY,
-    payment_id          UUID NOT NULL,
-    event_type          VARCHAR(64) NOT NULL,
-    processed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
+- **`payments`** — Core table. Stores `payment_id` (PK, UUID), `order_id`, `idempotency_key` (unique), `status`, `amount`/`currency`, `refunded_amount`, `payment_method_token`, `psp_transaction_id`, `merchant_id`, `buyer_id`, `metadata` (JSONB), `version` (optimistic lock), timestamps. Indexed on `order_id` and `psp_transaction_id`.
+- **`idempotency_keys`** — Stores `idempotency_key` (PK), `status` (IN_PROGRESS/COMPLETED), `request_hash` (SHA256), `cached_response` (JSONB), `expires_at` (TTL).
+- **`webhook_events`** — De-duplication table. Stores `psp_event_id` (PK), `payment_id`, `event_type`, `processed_at`.
+- **`outbox`** — CDC source for downstream consumers. Stores event payload for Kafka publishing.
 
 **❓ Why PostgreSQL (sharded)?**
 
-- ACID transactions are essential for the payment state machine + ledger writes.
+- ACID transactions are essential for the payment state machine.
 - JSONB for flexible metadata without schema migrations.
 - At ~3,000 TPS peak, a single PostgreSQL primary is at its limit. We shard from the start using Vitess (or Citus).
-- See **Scalability Deep Dive** below for detailed shard key selection and cross-shard consistency patterns.
 
-**❓ How is the DB sharded?**
+### Sharding the Payment DB
 
-- **Payment DB** → sharded by `payment_id` (UUID, uniform distribution, no hot shards).
-- **Ledger DB** → sharded by `account_id` (balance queries are single-shard).
-- **Idempotency** → Redis Cluster by `idempotency_key`, with DB fallback.
+**Shard key: `payment_id`**
 
-The payment and ledger tables live on **different shard clusters** because they have different optimal shard keys. Cross-shard consistency is achieved via the **outbox pattern** (see Scalability section).
+Why `payment_id` and not `merchant_id` or `buyer_id`?
+
+| Shard key candidate | Pros | Cons |
+|---|---|---|
+| `payment_id` (UUID) | Even distribution, no hot shards, primary lookup is single-shard | Looking up "all payments for merchant X" requires scatter-gather |
+| `merchant_id` | All payments for one merchant on one shard, good for merchant dashboards | Hot merchant problem — a merchant doing 50% of volume creates a hot shard |
+| `buyer_id` | All payments for one buyer on one shard | Same hot-key problem for power buyers; most queries are by payment_id not buyer_id |
+
+**We choose `payment_id`** because:
+1. Payment creation and state updates are the hottest path — and they're always by `payment_id`.
+2. UUID-based keys give near-perfect uniform distribution across shards.
+3. The hot-merchant problem is real. Amazon on your platform could skew one shard to 100x the load of others.
+
+**❓ How do we handle "get all payments for merchant X" after sharding by payment_id?**
+
+This is a **scatter-gather** query — the API server fans out to all shards, each shard filters by `merchant_id`, and the API server merges results. This is acceptable because merchant dashboard queries are:
+- Low frequency (dashboard, not checkout path)
+- Paginated (LIMIT 50 per page)
+- Cacheable (merchant dashboards can tolerate 5-10s staleness)
+
+For high-volume merchants that need fast dashboard access, we maintain a **secondary index** in a separate read-optimized store like Elasticsearch, updated asynchronously via CDC.
+
+**❓ How do we route requests to the correct shard?**
+
+Consistent hashing on `payment_id`:
+
+```
+shard_id = hash(payment_id) % num_shards
+```
+
+We use a shard routing layer (e.g., Vitess VTGate). The application code is ideally shard-unaware — it talks to the proxy as if it's a single database.
+
+**❓ How many shards?**
+
+Start with a power of 2 (e.g., 16 shards). At 100M payments/day:
+- ~1,200 TPS avg, ~6,000 TPS peak
+- 16 shards → ~375 TPS peak per shard (comfortable for PostgreSQL)
+- Each shard holds ~6M payments/day → ~2.2B payments/year per shard
+
+Over-sharding upfront (e.g., 256 logical shards mapped to 16 physical nodes) gives you room to split without resharding later.
+
+### Sharding the Ledger DB
+
+The ledger is the first table to hit scale limits because each payment produces 2-5 ledger entries. At 100M payments/day, that's **200M-500M rows/day**.
+
+**Shard key: `account_id`**
+
+Why `account_id` and not `payment_id`?
+
+- The most critical ledger query is **"what is the balance of account X?"** — this sums all entries for one `account_id`.
+- If we shard by `payment_id`, a balance query requires scatter-gather across ALL shards (every shard has entries for the same merchant). This is unacceptable for a hot-path query.
+- Sharding by `account_id` puts all entries for one account on one shard → balance is a single-shard query.
+
+```
+shard_id = hash(account_id) % num_shards
+```
+
+**❓ Doesn't this create hot shards for high-volume merchants?**
+
+Yes, a merchant processing 10M transactions/day will have a hot shard. Mitigations:
+
+1. **Account splitting** — Split a hot merchant's ledger into sub-accounts (e.g., `merchant:m_456:shard_0` through `merchant:m_456:shard_7`). The Ledger Service round-robins writes across sub-accounts. Balance query sums across all sub-accounts (fan-out of 8 is acceptable).
+
+2. **Materialized balance table** — Instead of summing all ledger entries on every query, maintain a `account_balances` table updated in the same transaction as each ledger write:
+
+```sql
+-- In the same transaction as ledger INSERT:
+UPDATE account_balances
+SET balance = balance + <delta>, version = version + 1
+WHERE account_id = ?;
+```
+
+This reduces the balance query to a single-row lookup, regardless of how many ledger entries exist.
+
+3. **Time-based compaction** — Periodically roll up old ledger entries into summary rows. For example, collapse all entries for merchant X from January 2025 into a single "opening balance" entry. The raw entries move to cold storage (S3 / archival DB) for audit purposes.
+
+### Sharding the Idempotency Store
+
+- **Redis Cluster** handles the fast-path: shard by `idempotency_key` using hash slots. TTL-based expiry built-in.
+- **DB fallback**: The `idempotency_keys` table in the Payment DB is the durable backup, written in the same transaction as payment creation.
+- If Redis loses the key (eviction, failover), the DB table acts as fallback. Redis misses just cause a redundant DB lookup, not a double-charge.
+
+### Cross-Shard Consistency: Payment DB ↔ Ledger DB
+
+The Payment DB (sharded by `payment_id`) and Ledger DB (sharded by `account_id`) cannot participate in a single ACID transaction. This is the fundamental reason the Ledger Service exists as a separate service.
+
+**Our approach: Outbox + Ledger Service (eventual consistency)**
+
+```
+Payment Service (synchronous path):
+  BEGIN TX (Payment DB shard)
+    UPDATE payments SET status = CAPTURED
+    INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount,
+                        debit_account="buyer:u_123", credit_accounts=["merchant:m_456", "platform:fees"], ...)
+  COMMIT
+
+CDC pipeline (Debezium / custom):
+  → Reads new outbox rows → publishes to Kafka topic "payment-events"
+
+Ledger Service (async consumer):
+  → Consumes PAYMENT_CAPTURED event
+  → BEGIN TX (Ledger DB shard for buyer:u_123's account)
+       INSERT ledger_entry (DEBIT, buyer:u_123, 5999)
+     COMMIT
+  → BEGIN TX (Ledger DB shard for merchant:m_456's account)
+       INSERT ledger_entry (CREDIT, merchant:m_456, 5795)
+     COMMIT
+  → BEGIN TX (Ledger DB shard for platform:fees)
+       INSERT ledger_entry (CREDIT, platform:fees, 204)
+     COMMIT
+```
+
+**✍️ Note**: Even within the Ledger Service, the debit and credit entries may land on **different ledger shards** (because `buyer:u_123` and `merchant:m_456` hash to different shards). The Ledger Service handles this by writing each entry in its own shard-local transaction. The "balanced ledger" invariant (sum of debits == sum of credits) is enforced **per event** in application logic and verified by the daily reconciliation job, not by a single ACID transaction.
+
+**✍️ Note**: This is a **classic staff-level trade-off**. We trade strong consistency (single-DB ACID) for scalability (sharded DBs + eventual consistency via outbox/saga). The reconciliation job catches any drift.
+
+**❓ Why not two-phase commit (2PC)?**
+
+2PC adds latency (extra round-trip for prepare/commit) and introduces a coordinator as a single point of failure. At 3,000 TPS, 2PC coordinator contention becomes a bottleneck. Not recommended for payment systems at scale.
+
+**❓ What if the Ledger Service processes events out of order?**
+
+The Ledger Service is append-only — it only adds entries, never updates them. Out-of-order processing is safe because each event independently produces balanced entries. The balance is computed by summing all entries, regardless of insertion order.
 
 ---
 
@@ -680,9 +753,9 @@ Key metrics:
 - **Reconciliation exception count** — alert if > 0.
 - **Ledger balance check** — daily sum(debit) vs sum(credit) assertion.
 
-## Scalability Deep Dive
+## Scalability
 
-At Amazon-scale (~50M payment transactions/day peak, ~3,000 TPS burst), sharding is not optional — it's a core architectural requirement from day one.
+### Scale Overview
 
 | Component | Scale | Architecture |
 |---|---|---|
@@ -692,147 +765,6 @@ At Amazon-scale (~50M payment transactions/day peak, ~3,000 TPS burst), sharding
 | Idempotency | ~3,000 checks/sec peak | Redis Cluster (6+ nodes) |
 | Webhook ingestion | Burst-heavy | Dedicated consumer fleet + SQS/Kafka |
 | Merchant dashboards | Scatter-gather too slow | Elasticsearch via CDC |
-
-### Sharding the Payment DB
-
-**Shard key: `payment_id`**
-
-Why `payment_id` and not `merchant_id` or `buyer_id`?
-
-| Shard key candidate | Pros | Cons |
-|---|---|---|
-| `payment_id` (UUID) | Even distribution, no hot shards, primary lookup is single-shard | Looking up "all payments for merchant X" requires scatter-gather |
-| `merchant_id` | All payments for one merchant on one shard, good for merchant dashboards | Hot merchant problem — a merchant doing 50% of volume creates a hot shard |
-| `buyer_id` | All payments for one buyer on one shard | Same hot-key problem for power buyers; most queries are by payment_id not buyer_id |
-
-**We choose `payment_id`** because:
-1. Payment creation and state updates are the hottest path — and they're always by `payment_id`.
-2. UUID-based keys give near-perfect uniform distribution across shards.
-3. The hot-merchant problem is real. Amazon on your platform could skew one shard to 100x the load of others.
-
-**❓ How do we handle "get all payments for merchant X" after sharding by payment_id?**
-
-This is a **scatter-gather** query — the API server fans out to all shards, each shard filters by `merchant_id`, and the API server merges results. This is acceptable because merchant dashboard queries are:
-- Low frequency (dashboard, not checkout path)
-- Paginated (LIMIT 50 per page)
-- Cacheable (merchant dashboards can tolerate 5-10s staleness)
-
-For high-volume merchants that need fast dashboard access, we can maintain a **secondary index table** (or a read-optimized view in a separate store like Elasticsearch):
-
-```
-merchant_payments_index:
-  merchant_id → [payment_id_1, payment_id_2, ...]
-```
-
-This index is updated asynchronously via CDC (Change Data Capture) from the payment DB.
-
-**❓ How do we route requests to the correct shard?**
-
-Consistent hashing on `payment_id`:
-
-```
-shard_id = hash(payment_id) % num_shards
-```
-
-We use a shard routing layer (e.g., Vitess VTGate, Citus coordinator, or a custom proxy). The application code is ideally shard-unaware — it talks to the proxy as if it's a single database.
-
-For Vitess-style sharding:
-
-```sql
--- VSchema definition
-CREATE VINDEX payment_hash USING hash;
-
-CREATE TABLE payments (
-    payment_id UUID,
-    ...
-) VINDEXED ON (payment_id) USING payment_hash;
-```
-
-**❓ How many shards?**
-
-Start with a power of 2 (e.g., 16 shards). At 100M payments/day:
-- ~1,200 TPS avg, ~6,000 TPS peak
-- 16 shards → ~375 TPS peak per shard (comfortable for PostgreSQL)
-- Each shard holds ~6M payments/day → ~2.2B payments/year per shard
-
-Over-sharding upfront (e.g., 256 logical shards mapped to 16 physical nodes) gives you room to split without resharding later.
-
-### Sharding the Ledger DB
-
-The ledger is the first table to hit scale limits because each payment produces 2-5 ledger entries. At 100M payments/day, that's **200M-500M rows/day**.
-
-**Shard key: `account_id`**
-
-Why `account_id` and not `payment_id`?
-
-- The most critical ledger query is **"what is the balance of account X?"** — this sums all entries for one `account_id`.
-- If we shard by `payment_id`, a balance query requires scatter-gather across ALL shards (every shard has entries for the same merchant). This is unacceptable for a hot-path query.
-- Sharding by `account_id` puts all entries for one account on one shard → balance is a single-shard query.
-
-```
-shard_id = hash(account_id) % num_shards
-```
-
-**❓ Doesn't this create hot shards for high-volume merchants?**
-
-Yes, a merchant processing 10M transactions/day will have a hot shard. Mitigations:
-
-1. **Account splitting** — Split a hot merchant's ledger into sub-accounts (e.g., `merchant:m_456:shard_0` through `merchant:m_456:shard_7`). The Ledger Service round-robins writes across sub-accounts. Balance query sums across all sub-accounts (fan-out of 8 is acceptable).
-
-2. **Materialized balance table** — Instead of summing all ledger entries on every query, maintain a `account_balances` table updated in the same transaction as each ledger write:
-
-```sql
--- In the same transaction as ledger INSERT:
-UPDATE account_balances
-SET balance = balance + <delta>, version = version + 1
-WHERE account_id = ?;
-```
-
-This reduces the balance query to a single-row lookup, regardless of how many ledger entries exist.
-
-3. **Time-based compaction** — Periodically roll up old ledger entries into summary rows. For example, collapse all entries for merchant X from January 2025 into a single "opening balance" entry. The raw entries move to cold storage (S3 / archival DB) for audit purposes.
-
-### Cross-Shard Consistency: Payment DB ↔ Ledger DB
-
-The Payment DB (sharded by `payment_id`) and Ledger DB (sharded by `account_id`) cannot participate in a single ACID transaction. This is the fundamental reason the Ledger Service exists as a separate service.
-
-**Our approach: Outbox + Ledger Service (eventual consistency)**
-
-```
-Payment Service (synchronous path):
-  BEGIN TX (Payment DB shard)
-    UPDATE payments SET status = CAPTURED
-    INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount,
-                        debit_account="buyer:u_123", credit_accounts=["merchant:m_456", "platform:fees"], ...)
-  COMMIT
-
-CDC pipeline (Debezium / custom):
-  → Reads new outbox rows → publishes to Kafka topic "payment-events"
-
-Ledger Service (async consumer):
-  → Consumes PAYMENT_CAPTURED event
-  → BEGIN TX (Ledger DB shard for buyer:u_123's account)
-       INSERT ledger_entry (DEBIT, buyer:u_123, 5999)
-     COMMIT
-  → BEGIN TX (Ledger DB shard for merchant:m_456's account)
-       INSERT ledger_entry (CREDIT, merchant:m_456, 5795)
-     COMMIT
-  → BEGIN TX (Ledger DB shard for platform:fees)
-       INSERT ledger_entry (CREDIT, platform:fees, 204)
-     COMMIT
-```
-
-**✍️ Note**: Even within the Ledger Service, the debit and credit entries may land on **different ledger shards** (because `buyer:u_123` and `merchant:m_456` hash to different shards). The Ledger Service handles this by writing each entry in its own shard-local transaction. The "balanced ledger" invariant (sum of debits == sum of credits) is enforced **per event** in application logic and verified by the daily reconciliation job, not by a single ACID transaction.
-
-**✍️ Note**: This is a **classic staff-level trade-off**. We trade strong consistency (single-DB ACID) for scalability (sharded DBs + eventual consistency via outbox/saga). The reconciliation job catches any drift.
-
-**❓ Why not two-phase commit (2PC)?**
-
-2PC adds latency (extra round-trip for prepare/commit) and introduces a coordinator as a single point of failure. At 3,000 TPS, 2PC coordinator contention becomes a bottleneck. Not recommended for payment systems at scale.
-
-**❓ What if the Ledger Service processes events out of order?**
-
-The Ledger Service is append-only — it only adds entries, never updates them. Out-of-order processing is safe because each event independently produces balanced entries. The balance is computed by summing all entries, regardless of insertion order.
 
 ### Read Scaling
 
