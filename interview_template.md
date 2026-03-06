@@ -9,10 +9,6 @@
 - Slow and fast path  
 - Downsampling
 
-# Preread
-
-This article feels different from Alex Xu’s design but is very similar. The reason is that he is trying to teach you all the details of this problem, while I am trying to give an answer as if I am attending the interview. 
-
 # Another pre-read: context of ads industry
 
 Imagine we are Google and there are advertisers (say, Temu) who want to place their ads on Google. The ads can appear either above or below search results, or in places such as Google Map, or Gmail. 
@@ -101,6 +97,8 @@ Response: \[{ad\_id, count}...\]
 **✍️Note2**: filter can be a POST request body or can be a URL encoded string. We return nothing if the filter is not matched with any data.
 
 # High level Design
+
+INSERT HIGH LEVEL FLOW CHART HERE.
 
 ### DB
 

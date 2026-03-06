@@ -10,12 +10,6 @@
 
 # Context
 
-Imagine we are building the payment system for an Amazon-scale e-commerce platform. Some real-world reference numbers:
-
-- **Amazon** processes ~1.6M orders/day on average, but each order can generate 3-5 payment transactions (authorization, capture, marketplace seller splits, refunds, disputes). That's **~5-8M payment transactions/day**, and on **Prime Day / Black Friday, 5-10x** that (~50M+/day).
-- **Adyen** (a major PSP) hit **160,000 transactions/minute** (~2,700 TPS) during Black Friday 2024.
-- **Stripe** processed **$1.4 trillion** in total payment volume across 2024.
-
 For this design, we target **Amazon marketplace scale**: a platform with millions of buyers, hundreds of thousands of sellers, and a payment system that must handle tens of millions of transactions per day with peak bursts in the thousands of TPS.
 
 When a customer places an order, our system needs to:
@@ -27,8 +21,6 @@ When a customer places an order, our system needs to:
 5. Record every money movement in an internal ledger for accounting.
 6. Handle refunds and disputes initiated by either the merchant or the customer.
 7. Split payments across marketplace sellers and the platform (multi-party payments).
-
-As a staff engineer, the core challenges at this scale are: **exactly-once payment execution** under high concurrency, **sharding for throughput** without losing transactional guarantees, **multi-region availability**, and a **ledger system** that can handle billions of rows while staying auditable.
 
 # Requirements
 
@@ -524,7 +516,7 @@ CREATE TABLE ledger_entries (
 CREATE INDEX idx_ledger_account ON ledger_entries (account_id, created_at);
 ```
 
-### Example: Customer pays $59.99 for an order, platform takes 2.9% + $0.30 fee
+### Example: Customer pays \$59.99 for an order, platform takes 2.9\% + $0.30 fee
 
 | entry_id | payment_id | account_id | type | amount | description |
 |---|---|---|---|---|---|
@@ -799,24 +791,6 @@ WHERE account_id = ?;
 This reduces the balance query to a single-row lookup, regardless of how many ledger entries exist.
 
 3. **Time-based compaction** — Periodically roll up old ledger entries into summary rows. For example, collapse all entries for merchant X from January 2025 into a single "opening balance" entry. The raw entries move to cold storage (S3 / archival DB) for audit purposes.
-
-### Sharding the Idempotency Store
-
-**Option A: Redis Cluster** — Shard by `idempotency_key` using Redis Cluster's hash slots. Simple, fast, and TTL-based expiry is built-in. This is the preferred approach.
-
-**Option B: Colocate with Payment DB** — If idempotency keys are stored in the `idempotency_keys` table, they naturally shard with the payment DB. But this requires the idempotency key to map to the same shard as the payment, which is tricky since we don't know the `payment_id` yet when we first check the idempotency key.
-
-**Solution**: Use Redis for the idempotency fast-path (check + reserve), and write to the DB table as a durable backup in the same transaction as the payment creation:
-
-```
-1. Check Redis: does idempotency_key exist?
-   - Yes → return cached response
-   - No → SET idempotency_key IN_PROGRESS (with NX + TTL)
-2. Create payment in DB (idempotency_key stored in payments table)
-3. After PSP call, update Redis with cached response
-```
-
-If Redis loses the key (eviction, failover), the DB table acts as fallback. This is acceptable because Redis misses just cause a redundant DB lookup, not a double-charge.
 
 ### Cross-Shard Consistency: Payment DB ↔ Ledger DB
 
