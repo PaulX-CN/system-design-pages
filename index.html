@@ -339,7 +339,7 @@ footer{
   <div class="hero-title">System Design<br><span>Library</span></div>
   <div class="hero-sub">Production-grade reference designs covering architecture, APIs, data models, state machines, scalability, and tradeoffs. Built for Staff+ engineering interviews.</div>
   <div class="hero-stats">
-    <div class="hero-stat"><div class="stat-val">3</div><div class="stat-label">Complete Designs</div></div>
+    <div class="hero-stat"><div class="stat-val">4</div><div class="stat-label">Complete Designs</div></div>
     <div class="hero-stat"><div class="stat-val">20+</div><div class="stat-label">Sections / Design</div></div>
     <div class="hero-stat"><div class="stat-val">Staff+</div><div class="stat-label">Target Level</div></div>
     <div class="hero-stat"><div class="stat-val">Deep Dive</div><div class="stat-label">DB Schema + APIs</div></div>
@@ -442,6 +442,36 @@ footer{
         <div class="card-footer">
           <span class="card-link" style="color:var(--blue)">Open Design &#x2192;</span>
           <span class="card-sections">9 sections · 5 API groups · 5 data flows · Full DB schema</span>
+        </div>
+      </a>
+
+      <!-- Payment Service (Interview Mode) -->
+      <a class="design-card" href="payment-service-interview.html">
+        <div class="card-accent" style="background:linear-gradient(90deg,var(--teal),var(--gold))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">&#128176;</div>
+            <div class="card-badge">Interview Mode · Staff</div>
+          </div>
+          <div class="card-title">Payment Service (Interview)</div>
+          <div class="card-sub">Amazon-scale payment system · Interview-style answer · 3rd Party PSP · Sharded architecture · Multi-region active-active</div>
+          <div class="card-chips">
+            <span class="chip hi">Exactly-Once Payment</span>
+            <span class="chip hi">Outbox Pattern</span>
+            <span class="chip hi">Vitess Sharding</span>
+            <span class="chip">Multi-PSP Failover</span>
+            <span class="chip">Double-Entry Ledger</span>
+            <span class="chip">Multi-Region</span>
+          </div>
+          <div class="card-metrics">
+            <div class="card-metric"><div class="cm-val" style="color:var(--teal)">50M+</div><div class="cm-label">Peak Txns/Day</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">3,000</div><div class="cm-label">Peak TPS</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--blue)">30B+</div><div class="cm-label">Ledger Rows/Yr</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-link" style="color:var(--teal)">Open Design &#x2192;</span>
+          <span class="card-sections">10 sections · State machine · Idempotency flow · Scalability deep dive</span>
         </div>
       </a>
 

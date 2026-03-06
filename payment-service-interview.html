@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Service System Design — Staff Engineer Interview</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --teal: #00d4aa;
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --orange: #f97316;
+  --green: #22c55e;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;
+  line-height:1.6;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999;
+}
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:14px;font-weight:800;
+  color:var(--teal);
+  letter-spacing:0.05em;
+  padding:14px 24px 14px 0;
+  border-right:1px solid var(--border);
+  margin-right:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-item{
+  padding:14px 16px;
+  font-size:12px;
+  color:var(--muted2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color 0.15s;
+  border-bottom:2px solid transparent;
+  flex-shrink:0;
+}
+.nav-item:hover,.nav-item.active{color:var(--teal);border-bottom-color:var(--teal);}
+.page{max-width:1320px;margin:0 auto;padding:48px 28px 80px;}
+
+/* hero */
+.hero{
+  padding:64px 0 48px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:48px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-60px;right:-80px;
+  width:480px;height:480px;
+  background:radial-gradient(circle,rgba(0,212,170,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-tag{
+  font-size:11px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-tag::before{content:'';width:32px;height:1px;background:var(--teal);}
+.hero-title{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(28px,4vw,44px);
+  font-weight:800;
+  line-height:1.1;
+  color:#fff;
+  margin-bottom:10px;
+}
+.hero-title span{color:var(--teal);}
+.hero-sub{
+  font-size:13px;color:var(--muted2);
+  margin-bottom:32px;
+}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.pill{
+  font-size:11px;padding:4px 12px;
+  border:1px solid var(--border2);
+  border-radius:2px;
+  color:var(--muted);
+}
+.pill.hi{border-color:rgba(0,212,170,0.4);color:var(--teal);}
+
+/* section headers */
+.sec-head{
+  display:flex;align-items:baseline;gap:16px;
+  margin-bottom:24px;padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.sec-num{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--border2);}
+.sec-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;}
+.sec-tag{font-size:11px;color:var(--muted);letter-spacing:0.1em;margin-left:auto;}
+section{margin-bottom:64px;scroll-margin-top:60px;}
+
+/* metrics */
+.metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:2px;
+  margin-bottom:32px;
+}
+.metric{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+}
+.metric-val{
+  font-family:'Syne',sans-serif;
+  font-size:22px;font-weight:800;
+  color:var(--teal);
+  margin-bottom:4px;
+}
+.metric-label{font-size:11px;color:var(--muted);letter-spacing:0.05em;}
+
+/* principle cards */
+.principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:16px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--teal);
+}
+.principle-title{
+  font-size:13px;font-weight:600;color:var(--teal);
+  margin-bottom:6px;
+}
+.principle-desc{font-size:12px;color:var(--muted2);line-height:1.6;}
+
+/* component grid */
+.comp-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:16px;
+}
+.comp{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:14px 16px;
+  border-radius:3px;
+}
+.comp:hover{border-color:var(--border2);background:var(--s2);}
+.comp-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.comp-icon{font-size:17px;}
+.comp-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;}
+.comp-role{font-size:11px;color:var(--teal);margin-bottom:6px;letter-spacing:0.05em;}
+.comp-detail{font-size:12px;color:var(--muted2);line-height:1.5;}
+
+/* code blocks */
+.code-block{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:16px 18px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;
+  color:var(--text);
+  overflow-x:auto;
+  margin-bottom:12px;
+  line-height:1.7;
+  white-space:pre;
+}
+.code-label{
+  font-size:11px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+}
+.code-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Q&A card */
+.qa-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-left:3px solid var(--gold);
+  padding:16px;
+  margin-bottom:8px;
+  border-radius:0 4px 4px 0;
+}
+.qa-q{
+  color:var(--gold2);
+  font-size:13px;
+  font-weight:600;
+  margin-bottom:8px;
+}
+.qa-a{
+  color:var(--muted2);
+  font-size:12px;
+  line-height:1.7;
+}
+.qa-a strong{color:var(--text);}
+
+/* note card */
+.note-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-left:3px solid var(--teal);
+  padding:16px;
+  margin-bottom:8px;
+  border-radius:0 4px 4px 0;
+}
+.note-label{
+  color:var(--teal);
+  font-size:13px;
+  font-weight:600;
+  margin-bottom:8px;
+}
+.note-body{
+  color:var(--muted2);
+  font-size:12px;
+  line-height:1.7;
+}
+.note-body strong{color:var(--text);}
+
+/* architecture diagram */
+.arch-diagram{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:24px;
+  margin-bottom:16px;
+}
+.arch-title{
+  font-family:'Syne',sans-serif;
+  font-size:15px;font-weight:700;
+  color:#fff;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
+}
+.arch-pre{
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;
+  line-height:1.4;
+  color:var(--text);
+  overflow-x:auto;
+  white-space:pre;
+}
+
+/* scale table */
+.scale-table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+.scale-table th{
+  background:var(--s2);
+  padding:10px 14px;
+  text-align:left;
+  font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:2px solid var(--border);
+}
+.scale-table td{
+  padding:10px 14px;
+  font-size:12px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+.scale-table td:first-child{color:var(--gold2);font-weight:600;}
+.scale-table td:nth-child(2){color:var(--teal);}
+.scale-table tr:last-child td{border-bottom:none;}
+.scale-table tr:hover td{background:var(--s2);}
+
+/* lists */
+.styled-list{list-style:none;margin-bottom:16px;}
+.styled-list li{
+  font-size:12px;color:var(--muted2);line-height:1.7;
+  padding:4px 0 4px 16px;position:relative;
+}
+.styled-list li::before{content:'>';position:absolute;left:0;color:var(--teal);font-weight:600;}
+.styled-list li strong{color:var(--text);}
+
+/* numbered steps */
+.step-list{list-style:none;counter-reset:steps;margin-bottom:16px;}
+.step-list li{
+  font-size:12px;color:var(--muted2);line-height:1.7;
+  padding:8px 0 8px 40px;position:relative;
+  counter-increment:steps;
+  border-bottom:1px solid var(--border);
+}
+.step-list li:last-child{border-bottom:none;}
+.step-list li::before{
+  content:counter(steps);
+  position:absolute;left:0;top:8px;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:800;
+  color:var(--teal);
+  background:rgba(0,212,170,0.1);
+  border:1px solid rgba(0,212,170,0.2);
+  padding:2px 10px;border-radius:2px;
+}
+.step-list li strong{color:var(--text);}
+
+/* sub-section headers */
+.sub-head{
+  font-family:'Syne',sans-serif;
+  font-size:16px;font-weight:700;
+  color:#fff;
+  margin:32px 0 16px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+.sub-head-sm{
+  font-family:'Syne',sans-serif;
+  font-size:14px;font-weight:700;
+  color:#fff;
+  margin:24px 0 12px;
+}
+
+/* concept cards (context) */
+.concept-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:2px;
+  margin-bottom:24px;
+}
+.concept-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:14px 16px;
+  border-left:3px solid var(--gold);
+}
+.concept-card .cc-title{
+  font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:4px;
+}
+.concept-card .cc-desc{font-size:11px;color:var(--muted2);line-height:1.5;}
+
+/* paragraph text */
+.body-text{
+  font-size:13px;
+  color:var(--muted2);
+  line-height:1.7;
+  margin-bottom:16px;
+}
+.body-text strong{color:var(--text);}
+
+/* API endpoint styling */
+.api-endpoint{margin-bottom:20px;}
+.api-sig{
+  font-size:13px;font-weight:600;margin-bottom:10px;
+  display:flex;align-items:center;gap:10px;
+}
+.api-method{
+  font-size:11px;font-weight:700;padding:2px 8px;border-radius:2px;
+  letter-spacing:0.05em;
+}
+.api-method.get{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);}
+.api-method.post{background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.3);}
+.api-path{font-size:12px;color:var(--text);}
+
+/* summary cards */
+.summary-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+  gap:2px;
+}
+.summary-card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--teal);
+}
+.summary-card .sc-num{
+  font-family:'Syne',sans-serif;font-size:11px;font-weight:800;
+  color:var(--teal);margin-bottom:4px;
+}
+.summary-card .sc-title{
+  font-size:13px;font-weight:600;color:#fff;margin-bottom:6px;
+}
+.summary-card .sc-desc{
+  font-size:12px;color:var(--muted2);line-height:1.5;
+}
+
+/* responsive */
+@media(max-width:768px){
+  .page{padding:32px 16px 60px;}
+  nav{padding:0 16px;}
+  .arch-diagram{padding:16px;}
+  .arch-pre{font-size:10px;}
+  .comp-grid{grid-template-columns:1fr;}
+  .principles{grid-template-columns:1fr;}
+  .concept-grid{grid-template-columns:1fr;}
+  .metrics-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));}
+  .summary-grid{grid-template-columns:1fr;}
+}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.metrics-grid,.principles{animation:fadeUp 0.4s ease both;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">PAYMENT SERVICE</div>
+  <div class="nav-item active" data-section="context" onclick="scrollToSection('context')">Context</div>
+  <div class="nav-item" data-section="requirements" onclick="scrollToSection('requirements')">Requirements</div>
+  <div class="nav-item" data-section="edge-cases" onclick="scrollToSection('edge-cases')">Edge Cases</div>
+  <div class="nav-item" data-section="api" onclick="scrollToSection('api')">API Design</div>
+  <div class="nav-item" data-section="hld" onclick="scrollToSection('hld')">High Level Design</div>
+  <div class="nav-item" data-section="state-machine" onclick="scrollToSection('state-machine')">State Machine</div>
+  <div class="nav-item" data-section="idempotency" onclick="scrollToSection('idempotency')">Idempotency</div>
+  <div class="nav-item" data-section="psp" onclick="scrollToSection('psp')">PSP & Webhooks</div>
+  <div class="nav-item" data-section="ledger" onclick="scrollToSection('ledger')">Ledger & DB</div>
+  <div class="nav-item" data-section="scalability" onclick="scrollToSection('scalability')">Scalability</div>
+</nav>
+
+<div class="page">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">Interview Mode &middot; Staff Engineer</div>
+  <h1 class="hero-title">Payment Service<br><span>System Design</span></h1>
+  <p class="hero-sub">Amazon-scale &middot; 3rd Party PSP &middot; Sharded Architecture &middot; Multi-Region</p>
+  <div class="hero-pills">
+    <span class="pill hi">Exactly-Once Payment</span>
+    <span class="pill hi">Outbox Pattern</span>
+    <span class="pill hi">Vitess Sharding</span>
+    <span class="pill hi">Multi-PSP Failover</span>
+    <span class="pill hi">Double-Entry Ledger</span>
+    <span class="pill hi">Multi-Region</span>
+  </div>
+</div>
+
+<!-- 01 CONTEXT -->
+<section id="context">
+  <div class="sec-head">
+    <span class="sec-num">01</span>
+    <span class="sec-title">Context</span>
+    <span class="sec-tag">Pre-read &amp; scale reference</span>
+  </div>
+
+  <h3 class="sub-head-sm">Important Concepts</h3>
+  <div class="concept-grid">
+    <div class="concept-card">
+      <div class="cc-title">Payment State Machine</div>
+      <div class="cc-desc">Idempotency, exactly-once semantics</div>
+    </div>
+    <div class="concept-card">
+      <div class="cc-title">Double-Entry Ledger</div>
+      <div class="cc-desc">Bookkeeping for every money movement</div>
+    </div>
+    <div class="concept-card">
+      <div class="cc-title">PSP Integration</div>
+      <div class="cc-desc">Hosted checkout vs. API integration patterns</div>
+    </div>
+    <div class="concept-card">
+      <div class="cc-title">Reconciliation</div>
+      <div class="cc-desc">Internal records vs PSP/bank statements</div>
+    </div>
+    <div class="concept-card">
+      <div class="cc-title">PCI-DSS Compliance</div>
+      <div class="cc-desc">Tokenization to reduce PCI scope</div>
+    </div>
+  </div>
+
+  <p class="body-text">Imagine we are building the payment system for an <strong>Amazon-scale e-commerce platform</strong>. Some real-world reference numbers:</p>
+
+  <div class="metrics-grid">
+    <div class="metric">
+      <div class="metric-val">~1.6M</div>
+      <div class="metric-label">Amazon orders/day (avg)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">5-8M</div>
+      <div class="metric-label">Payment txns/day (normal)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">50M+</div>
+      <div class="metric-label">Peak day txns (Prime Day)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">160K/min</div>
+      <div class="metric-label">Adyen Black Friday 2024</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">~2,700</div>
+      <div class="metric-label">Adyen peak TPS</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">$1.4T</div>
+      <div class="metric-label">Stripe 2024 total volume</div>
+    </div>
+  </div>
+
+  <p class="body-text">For this design, we target <strong>Amazon marketplace scale</strong>: a platform with millions of buyers, hundreds of thousands of sellers, and a payment system that must handle tens of millions of transactions per day with peak bursts in the thousands of TPS.</p>
+
+  <p class="body-text">When a customer places an order, our system needs to:</p>
+  <ol class="step-list">
+    <li>Accept a payment intent from the order service.</li>
+    <li>Collect payment method details securely (via PSP-hosted UI / tokenization).</li>
+    <li>Charge the customer through the PSP.</li>
+    <li>Track the payment lifecycle (authorized &rarr; captured &rarr; settled, or failed/refunded).</li>
+    <li>Record every money movement in an internal ledger for accounting.</li>
+    <li>Handle refunds and disputes initiated by either the merchant or the customer.</li>
+    <li>Split payments across marketplace sellers and the platform (multi-party payments).</li>
+  </ol>
+
+  <p class="body-text">As a staff engineer, the core challenges at this scale are: <strong>exactly-once payment execution</strong> under high concurrency, <strong>sharding for throughput</strong> without losing transactional guarantees, <strong>multi-region availability</strong>, and a <strong>ledger system</strong> that can handle billions of rows while staying auditable.</p>
+</section>
+
+<!-- 02 REQUIREMENTS -->
+<section id="requirements">
+  <div class="sec-head">
+    <span class="sec-num">02</span>
+    <span class="sec-title">Requirements</span>
+    <span class="sec-tag">Functional &amp; Non-functional</span>
+  </div>
+
+  <h3 class="sub-head">Functional Requirements</h3>
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-title">Pay</div>
+      <div class="principle-desc">Accept a payment for an order. Supports credit/debit card, wallet (Apple Pay / Google Pay), and bank transfer via PSP.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Refund</div>
+      <div class="principle-desc">Full or partial refund of a completed payment.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Payment Status Query</div>
+      <div class="principle-desc">Get current state of a payment by order ID or payment ID.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Webhook Ingestion</div>
+      <div class="principle-desc">Receive and process async status updates from the PSP (e.g. settlement confirmation, dispute opened).</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Ledger</div>
+      <div class="principle-desc">Maintain a double-entry ledger that records every debit/credit.</div>
+    </div>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Interview Tip</div>
+    <div class="note-body">We are NOT designing the order service, the product catalog, or the shopping cart. We assume an upstream order service calls us with a confirmed order.</div>
+  </div>
+
+  <h3 class="sub-head">Scale</h3>
+  <div class="metrics-grid">
+    <div class="metric">
+      <div class="metric-val">~50M</div>
+      <div class="metric-label">Peak day txns (Prime Day)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">~3,000</div>
+      <div class="metric-label">Peak TPS</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">250M</div>
+      <div class="metric-label">Ledger rows/day (peak)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">30B+</div>
+      <div class="metric-label">Ledger rows/year</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">100K+</div>
+      <div class="metric-label">Sellers (high cardinality)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val">3 Regions</div>
+      <div class="metric-label">US, EU, APAC</div>
+    </div>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Interview Tip</div>
+    <div class="note-body">At Amazon scale, the challenge is BOTH <strong>correctness AND throughput</strong>. We must shard from day one. Unlike ad serving (which tolerates approximate answers), every single payment must be exactly right &mdash; but we also can't afford a single-primary bottleneck at 3,000 TPS peak.</div>
+  </div>
+
+  <h3 class="sub-head">Consistency</h3>
+  <ul class="styled-list">
+    <li><strong>Exactly-once payment execution</strong> &mdash; A retry of the same pay request must not create a duplicate charge. This is the single most important requirement.</li>
+    <li>Strong consistency for payment state transitions (no phantom reads of stale state).</li>
+    <li>Ledger must always balance (sum of debits == sum of credits).</li>
+  </ul>
+
+  <h3 class="sub-head">Availability</h3>
+  <ul class="styled-list">
+    <li><strong>99.99% uptime</strong> target &rarr; ~52 minutes of downtime per year max. Payments are revenue-critical.</li>
+    <li><strong>Multi-region active-active</strong> deployment. A regional outage should not take down payments globally.</li>
+    <li>Graceful degradation: if one PSP is down, failover to a secondary PSP. If all PSPs are down, queue the intent and retry (do NOT lose the payment intent).</li>
+    <li><strong>Multi-PSP strategy</strong> is mandatory at this scale &mdash; a single PSP is a single point of failure.</li>
+  </ul>
+
+  <h3 class="sub-head">Latency</h3>
+  <ul class="styled-list">
+    <li><strong>Pay API: &lt; 2s p99</strong> (dominated by PSP round-trip, typically 300-800ms).</li>
+    <li><strong>Status query: &lt; 50ms p99</strong> (hot path, must be cached or single-shard lookup).</li>
+    <li><strong>Webhook processing: &lt; 5s</strong> end-to-end.</li>
+    <li><strong>Merchant dashboard: &lt; 500ms p99</strong> (can tolerate slight staleness via read replicas or CQRS).</li>
+  </ul>
+
+  <h3 class="sub-head">Security / Compliance</h3>
+  <ul class="styled-list">
+    <li>No raw card numbers touch our servers (PCI-DSS scope reduction via PSP tokenization).</li>
+    <li>All API calls authenticated; internal service-to-service mTLS.</li>
+    <li>Sensitive data (PII, tokens) encrypted at rest.</li>
+  </ul>
+</section>
+
+<!-- 03 EDGE CASES -->
+<section id="edge-cases">
+  <div class="sec-head">
+    <span class="sec-num">03</span>
+    <span class="sec-title">Edge Cases</span>
+    <span class="sec-tag">Failure modes &amp; tricky scenarios</span>
+  </div>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-title">Idempotency</div>
+      <div class="principle-desc">The client (order service) sends a unique <code>idempotency_key</code> with every pay/refund request. If we receive the same key again, we return the cached result instead of creating a new charge.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">PSP Timeout / Ambiguous Response</div>
+      <div class="principle-desc">If the PSP call times out or returns a 5xx, we do NOT know if the charge went through. We must: (1) Mark the payment as UNKNOWN. (2) Poll the PSP or wait for a webhook to resolve. (3) Never retry the charge blindly &mdash; this could double-charge.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Partial Capture</div>
+      <div class="principle-desc">Some business models authorize first, then capture later (e.g. hotel booking). The auth expires after 7 days (card network rule). We need to track auth expiry.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Dispute / Chargeback</div>
+      <div class="principle-desc">The PSP notifies us via webhook. We mark the payment as DISPUTED, debit the merchant's balance, and potentially trigger a review workflow.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Webhook Replay / Out-of-Order</div>
+      <div class="principle-desc">Webhooks can arrive out of order or be replayed. We use the payment state machine to reject invalid transitions (e.g. ignoring a CAPTURED webhook if we already processed REFUNDED).</div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 API DESIGN -->
+<section id="api">
+  <div class="sec-head">
+    <span class="sec-num">04</span>
+    <span class="sec-title">API Design</span>
+    <span class="sec-tag">External &amp; Internal endpoints</span>
+  </div>
+
+  <h3 class="sub-head">External API (called by order service)</h3>
+
+  <div class="api-endpoint">
+    <div class="api-sig">
+      <span class="api-method post">POST</span>
+      <span class="api-path">/v1/payments</span>
+    </div>
+    <div class="code-label">Create Payment &mdash; Request &amp; Response</div>
+    <pre class="code-block">POST /v1/payments
+Headers: Idempotency-Key: &lt;uuid&gt;
+
+Request Body:
+{
+  "order_id": "order_abc123",
+  "amount": 5999,              // in smallest currency unit (cents)
+  "currency": "USD",
+  "payment_method_token": "pm_tok_xxx",  // PSP token from client-side
+  "capture": true,             // auto-capture or auth-only
+  "metadata": { "user_id": "u_123", "merchant_id": "m_456" }
+}
+
+Response 200:
+{
+  "payment_id": "pay_xyz789",
+  "status": "CAPTURED",        // or "AUTHORIZED" if capture=false
+  "psp_transaction_id": "pi_stripe_abc",
+  "amount": 5999,
+  "currency": "USD",
+  "created_at": "2026-03-05T10:00:00Z"
+}</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Interview Tip</div>
+    <div class="note-body"><code>payment_method_token</code> is created by the PSP's client-side SDK (Stripe Elements, Adyen Drop-in). Raw card numbers never reach our API.</div>
+  </div>
+
+  <div class="api-endpoint" style="margin-top:24px;">
+    <div class="api-sig">
+      <span class="api-method post">POST</span>
+      <span class="api-path">/v1/payments/{payment_id}/refund</span>
+    </div>
+    <div class="code-label">Refund Payment &mdash; Request &amp; Response</div>
+    <pre class="code-block">POST /v1/payments/{payment_id}/refund
+Headers: Idempotency-Key: &lt;uuid&gt;
+
+Request Body:
+{
+  "amount": 2000,              // partial refund; omit for full refund
+  "reason": "CUSTOMER_REQUEST"
+}
+
+Response 200:
+{
+  "refund_id": "ref_abc",
+  "payment_id": "pay_xyz789",
+  "status": "REFUND_PENDING",
+  "amount": 2000
+}</pre>
+  </div>
+
+  <div class="api-endpoint" style="margin-top:24px;">
+    <div class="api-sig">
+      <span class="api-method get">GET</span>
+      <span class="api-path">/v1/payments/{payment_id}</span>
+    </div>
+    <div class="code-label">Get Payment Status &mdash; Response</div>
+    <pre class="code-block">GET /v1/payments/{payment_id}
+
+Response 200:
+{
+  "payment_id": "pay_xyz789",
+  "order_id": "order_abc123",
+  "status": "CAPTURED",
+  "amount": 5999,
+  "currency": "USD",
+  "refunded_amount": 2000,
+  "psp_transaction_id": "pi_stripe_abc",
+  "created_at": "...",
+  "updated_at": "..."
+}</pre>
+  </div>
+
+  <h3 class="sub-head">Internal API (PSP &rarr; Us)</h3>
+
+  <div class="api-endpoint">
+    <div class="api-sig">
+      <span class="api-method post">POST</span>
+      <span class="api-path">/v1/webhooks/psp</span>
+    </div>
+    <div class="code-label">Webhook Endpoint</div>
+    <pre class="code-block">POST /v1/webhooks/psp
+Headers: X-PSP-Signature: &lt;hmac&gt;
+
+Body: (PSP-specific payload)
+{
+  "event_type": "payment.captured",
+  "psp_transaction_id": "pi_stripe_abc",
+  "amount": 5999,
+  ...
+}</pre>
+  </div>
+
+  <p class="body-text">We verify the HMAC signature, map the PSP event to our internal state machine, and update accordingly.</p>
+</section>
+
+<!-- 05 HIGH LEVEL DESIGN -->
+<section id="hld">
+  <div class="sec-head">
+    <span class="sec-num">05</span>
+    <span class="sec-title">High Level Design</span>
+    <span class="sec-tag">Architecture overview</span>
+  </div>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128208; System Architecture</div>
+    <pre class="arch-pre">                              ┌─────────────────────────────────────┐
+                              │         Load Balancer / API GW      │
+                              └──────────────┬──────────────────────┘
+                                             │
+┌─────────────┐     ┌────────────────────────▼───────────────────────────┐
+│ Order Service│────▶│           Payment Service Fleet (stateless)        │
+│  (upstream)  │     │  ┌──────────┐  ┌───────────┐  ┌────────────────┐  │
+└─────────────┘     │  │  State   │  │   PSP     │  │   Idempotency  │  │
+                    │  │  Machine │  │   Router  │  │   Checker      │  │
+                    │  └──────────┘  └─────┬─────┘  └────────────────┘  │
+                    └──────────┬───────────┼────────────────────────────┘
+                               │           │
+                    ┌──────────┤           │    ┌───────────────┐
+                    │          │           ├───▶│  PSP A (Stripe)│
+                    ▼          ▼           │    └───────────────┘
+          ┌────────────────┐ ┌──────────┐  │   ┌───────────────┐
+          │  Payment DB    │ │  Redis   │  └──▶│  PSP B (Adyen)│
+          │  (Vitess,      │ │  Cluster │      └───────┬───────┘
+          │   sharded by   │ │ (idempot)│              │
+          │   payment_id)  │ └──────────┘    ┌─────────▼────────┐
+          └──────┬─────────┘                 │  Webhook Consumer│
+                 │ outbox / CDC              │  Fleet           │
+                 │                           └──────────────────┘
+        ┌────────▼──────────┐
+        │   Event Stream    │
+        │  (Kafka / SQS)    │
+        └───┬──────────┬────┘
+            │          │
+   ┌────────▼──┐  ┌────▼───────────┐    ┌───────────────────┐
+   │  Ledger   │  │  Elasticsearch │    │  Reconciliation   │
+   │  Service  │  │  (merchant     │    │  Worker (batch)   │
+   │           │  │   dashboards)  │    └───────────────────┘
+   │  ┌──────┐ │  └────────────────┘
+   │  │Ledger│ │
+   │  │  DB  │ │
+   │  │(shard│ │
+   │  │by    │ │
+   │  │acct) │ │
+   │  └──────┘ │
+   └───────────┘</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Why is the Ledger Service separate from the Payment Service?</div>
+    <div class="note-body">
+      In the earlier version of this design, the Payment Service wrote to both the Payment DB and the Ledger DB. But since we shard these two databases by different keys (<strong>payment_id</strong> vs <strong>account_id</strong>), there is no cross-DB transaction anyway &mdash; we already use the outbox pattern for eventual consistency. We formalize this separation because:
+    </div>
+  </div>
+
+  <ul class="styled-list">
+    <li><strong>Different shard keys</strong> &mdash; The Payment DB is sharded by payment_id; the Ledger DB by account_id. No single transaction can span both.</li>
+    <li><strong>Different scaling profiles</strong> &mdash; The ledger writes 2-5x more rows than payments. The Ledger Service can scale its consumer fleet independently.</li>
+    <li><strong>Different ownership / domain</strong> &mdash; Ledger logic (double-entry balancing, compaction, tiered storage, audit) is a distinct domain from payment orchestration.</li>
+    <li><strong>Reusability</strong> &mdash; Other services (payout service, refund service, subscription billing) also need to write ledger entries.</li>
+    <li><strong>Auditability</strong> &mdash; A single entry point makes it easier to enforce invariants and audit access.</li>
+  </ul>
+
+  <h3 class="sub-head">Components</h3>
+
+  <div class="comp-grid">
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#9881;&#65039;</span><span class="comp-name">Payment Service Fleet</span></div>
+      <div class="comp-role">Stateless application tier</div>
+      <div class="comp-detail">20-30+ instances behind a load balancer. Receives pay/refund requests, enforces idempotency, drives the state machine, calls the PSP via the PSP Router, and writes to the Payment DB. Writes events to the outbox table within the same DB transaction. Does NOT write directly to the Ledger DB.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128268;</span><span class="comp-name">PSP Router</span></div>
+      <div class="comp-role">Intelligent routing layer</div>
+      <div class="comp-detail">Selects which PSP to use per transaction based on success rate, cost, region, and card network coverage. Provides automatic failover if a PSP is degraded. Implements adapter/strategy pattern.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128451;&#65039;</span><span class="comp-name">Payment DB (Vitess)</span></div>
+      <div class="comp-role">Sharded PostgreSQL</div>
+      <div class="comp-detail">Stores payment records with current state. Sharded by payment_id for uniform write distribution. 16+ shards, each with primary + replicas. Contains the outbox table for CDC.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128232;</span><span class="comp-name">Event Stream (Kafka/SQS)</span></div>
+      <div class="comp-role">Durable event bus</div>
+      <div class="comp-detail">CDC from Payment DB outbox publishes events (PAYMENT_CAPTURED, PAYMENT_REFUNDED, etc.). Multiple consumers: Ledger Service, Elasticsearch indexer, notification service, analytics.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128218;</span><span class="comp-name">Ledger Service</span></div>
+      <div class="comp-role">Async event consumer</div>
+      <div class="comp-detail">Consumes payment events, writes balanced double-entry ledger entries (debit + credit pairs) to the Ledger DB. Enforces sum(debits) == sum(credits). Exposes balance query API.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128202;</span><span class="comp-name">Ledger DB (Sharded PG)</span></div>
+      <div class="comp-role">Append-only ledger store</div>
+      <div class="comp-detail">Sharded by account_id so balance queries are single-shard. Separate cluster from Payment DB. Owned exclusively by the Ledger Service.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#9889;</span><span class="comp-name">Redis Cluster</span></div>
+      <div class="comp-role">Idempotency store</div>
+      <div class="comp-detail">Maps idempotency_key to (status, response) with TTL (24h). Used for fast de-duplication of retries. Auto-shards by key across hash slots.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128229;</span><span class="comp-name">Webhook Consumer Fleet</span></div>
+      <div class="comp-role">Dedicated webhook workers</div>
+      <div class="comp-detail">Receives PSP webhooks, verifies HMAC signatures, de-duplicates by psp_event_id, applies state transitions. Separated to isolate webhook burst traffic.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128270;</span><span class="comp-name">Elasticsearch (CQRS)</span></div>
+      <div class="comp-role">Read-optimized store</div>
+      <div class="comp-detail">Consumes payment events via CDC. Powers merchant dashboards and search queries without scatter-gather across payment shards.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#128736;&#65039;</span><span class="comp-name">Reconciliation Worker</span></div>
+      <div class="comp-role">Daily batch job</div>
+      <div class="comp-detail">Pulls settlement reports from each PSP and compares against internal records. Catches discrepancies the online system missed.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top"><span class="comp-icon">&#127974;</span><span class="comp-name">3rd Party PSPs</span></div>
+      <div class="comp-role">Stripe / Adyen / Braintree</div>
+      <div class="comp-detail">Handle card tokenization, 3DS, charge execution, and settlement with card networks and issuing banks. We integrate at least 2 PSPs for redundancy.</div>
+    </div>
+  </div>
+
+  <div class="code-label">Ledger Service &mdash; Balance Query API</div>
+  <pre class="code-block">GET /v1/accounts/{account_id}/balance
+Response: { "account_id": "merchant:m_456", "balance": 1250000, "currency": "USD" }</pre>
+</section>
+
+<!-- 06 STATE MACHINE -->
+<section id="state-machine">
+  <div class="sec-head">
+    <span class="sec-num">06</span>
+    <span class="sec-title">Payment State Machine</span>
+    <span class="sec-tag">Heart of the system</span>
+  </div>
+
+  <p class="body-text">Every payment transitions through well-defined states. <strong>Invalid transitions are rejected.</strong></p>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128260; Payment State Transitions</div>
+    <pre class="arch-pre">                    ┌──────────────┐
+                    │   CREATED    │
+                    └──────┬───────┘
+                           │ call PSP
+                    ┌──────▼───────┐
+              ┌─────│  PROCESSING  │─────┐
+              │     └──────┬───────┘     │
+           timeout         │          PSP error
+              │         success          │
+              ▼            ▼             ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │ UNKNOWN  │ │AUTHORIZED│ │  FAILED  │
+        └────┬─────┘ └────┬─────┘ └──────────┘
+             │            │
+        poll/webhook   capture
+             │            │
+             ▼            ▼
+        (resolves)  ┌──────────┐
+                    │ CAPTURED │
+                    └────┬─────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼                     ▼
+        ┌──────────┐          ┌──────────┐
+        │ REFUNDED │          │ DISPUTED │
+        │(full/    │          │          │
+        │ partial) │          └──────────┘
+        └──────────┘</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Implementation Detail</div>
+    <div class="note-body">The state machine is enforced at the DB level. Every state update uses an <strong>optimistic lock</strong>:</div>
+  </div>
+
+  <div class="code-label">Optimistic Locking &mdash; State Transition</div>
+  <pre class="code-block">UPDATE payments
+SET status = 'CAPTURED', version = version + 1, updated_at = NOW()
+WHERE payment_id = ? AND status = 'AUTHORIZED' AND version = ?;
+-- If affected rows = 0, the transition is invalid &rarr; reject</pre>
+
+  <p class="body-text">This prevents race conditions between the synchronous API path and async webhook path trying to update the same payment concurrently.</p>
+</section>
+
+<!-- 07 IDEMPOTENCY -->
+<section id="idempotency">
+  <div class="sec-head">
+    <span class="sec-num">07</span>
+    <span class="sec-title">Idempotency &mdash; Exactly-Once Execution</span>
+    <span class="sec-tag">Most critical design element</span>
+  </div>
+
+  <h3 class="sub-head">Step-by-step flow for POST /v1/payments</h3>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128736;&#65039; Idempotency Flow</div>
+    <pre class="arch-pre">1. Receive request with Idempotency-Key = "key_abc"
+2. Check Redis: does "key_abc" exist?
+   - IF COMPLETED &rarr; return cached response (HTTP 200)
+   - IF IN_PROGRESS &rarr; return HTTP 409 (concurrent request)
+   - IF not found &rarr; SET "key_abc" IN_PROGRESS (NX + TTL)
+3. BEGIN TRANSACTION (Payment DB shard)
+4.   INSERT payments (payment_id, status=CREATED, ...)
+5.   INSERT idempotency_keys (key, status=IN_PROGRESS, request_hash)
+6. COMMIT TRANSACTION
+7. Call PSP (this is OUTSIDE the transaction &mdash; network call)
+8. BEGIN TRANSACTION (Payment DB shard &mdash; same shard as step 3)
+9.   Update payments status based on PSP response
+10.  INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount, accounts, ...)
+11.  Update idempotency_keys status=COMPLETED, cached_response=&lt;response&gt;
+12. COMMIT TRANSACTION
+13. Update Redis: SET "key_abc" &rarr; cached_response (with TTL)
+14. Return response
+
+--- ASYNC (downstream, eventually consistent) ---
+15. CDC reads outbox &rarr; publishes to event stream (Kafka)
+16. Ledger Service consumes event &rarr; writes debit/credit entries to Ledger DB
+17. Elasticsearch indexer consumes event &rarr; indexes for merchant dashboard</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Key Architectural Boundary</div>
+    <div class="note-body">Steps 1-14 are the synchronous payment path. The Payment Service only touches the <strong>Payment DB</strong> and <strong>Redis</strong>. It does NOT write to the Ledger DB directly. Ledger entries are written <strong>asynchronously</strong> by the Ledger Service (steps 15-16), triggered by the outbox CDC pipeline.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why is the PSP call outside the transaction?</div>
+    <div class="qa-a">Database transactions should not hold open during external network calls. The PSP call can take 300-800ms. Holding a DB transaction that long causes <strong>lock contention</strong> and <strong>connection pool exhaustion</strong>.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What if the service crashes between step 7 and step 8?</div>
+    <div class="qa-a">The payment is stuck in <strong>CREATED</strong> state with the idempotency key <strong>IN_PROGRESS</strong> in both Redis and the Payment DB. A background reconciliation worker picks up stuck payments (CREATED for &gt; 5 minutes), polls the PSP to check actual status, and resolves them. The outbox event is then written, and the Ledger Service picks it up normally.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What if the Ledger Service is behind or down?</div>
+    <div class="qa-a">Payments continue to succeed &mdash; the user sees "payment captured" immediately. Ledger entries are written asynchronously, so the ledger may be seconds (or minutes, during an outage) behind the payment state. The outbox + Kafka guarantees <strong>at-least-once delivery</strong>, so entries are never lost &mdash; just delayed. The daily reconciliation job catches any gaps.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What if the PSP call times out?</div>
+    <div class="qa-a">We set the payment to <strong>UNKNOWN</strong> and do NOT retry the charge. Instead: (1) A scheduled poller queries the PSP: <code>GET /v1/payment_intents/{psp_id}</code>. (2) Or we wait for the PSP webhook to tell us the actual outcome. (3) Once resolved, we transition to CAPTURED or FAILED. This prevents <strong>double-charging</strong>.</div>
+  </div>
+</section>
+
+<!-- 08 PSP INTEGRATION & WEBHOOKS -->
+<section id="psp">
+  <div class="sec-head">
+    <span class="sec-num">08</span>
+    <span class="sec-title">PSP Integration &amp; Webhooks</span>
+    <span class="sec-tag">Tokenization, charging, webhook processing</span>
+  </div>
+
+  <h3 class="sub-head">Tokenization Flow (client-side)</h3>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128274; Client-Side Tokenization</div>
+    <pre class="arch-pre">┌──────────┐        ┌─────────┐        ┌──────────────┐
+│  Browser /│        │   PSP   │        │   Payment    │
+│  Mobile   │        │  (SDK)  │        │   Service    │
+└─────┬─────┘        └────┬────┘        └──────┬───────┘
+      │  1. Enter card     │                   │
+      │  details in PSP    │                   │
+      │  iframe/SDK        │                   │
+      │───────────────────▶│                   │
+      │                    │                   │
+      │  2. Return token   │                   │
+      │◀───────────────────│                   │
+      │                    │                   │
+      │  3. Submit order   │                   │
+      │  + token           │                   │
+      │────────────────────────────────────────▶│
+      │                    │                   │
+      │                    │  4. Charge using  │
+      │                    │◀──────────────────│
+      │                    │     token         │
+      │                    │                   │
+      │                    │  5. Charge result │
+      │                    │──────────────────▶│
+      │                    │                   │
+      │  6. Payment result │                   │
+      │◀───────────────────────────────────────│</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; PCI-DSS Scope Reduction</div>
+    <div class="note-body">Card numbers go directly from the browser to the PSP. Our server only sees the token (e.g. <code>pm_tok_xxx</code>). This keeps us <strong>out of PCI-DSS scope</strong> for card data handling.</div>
+  </div>
+
+  <h3 class="sub-head">PSP API Call (server-side)</h3>
+
+  <div class="code-label">PSP Charge &mdash; Python Pseudo Code</div>
+  <pre class="code-block"># Pseudo code for PSP charge
+def charge_via_psp(payment):
+    try:
+        result = psp_client.create_charge(
+            amount=payment.amount,
+            currency=payment.currency,
+            payment_method=payment.token,
+            idempotency_key=payment.payment_id,  # use our payment_id as PSP idempotency key
+            metadata={"order_id": payment.order_id}
+        )
+        return PSPResult(success=True, txn_id=result.id, status=result.status)
+    except PSPTimeout:
+        return PSPResult(success=False, status="UNKNOWN")
+    except PSPError as e:
+        return PSPResult(success=False, status="FAILED", error=str(e))</pre>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why do we pass our payment_id as the PSP's idempotency key?</div>
+    <div class="qa-a">If our service crashes and retries the same charge, the PSP de-duplicates on their end and returns the original result. This is a <strong>belt-and-suspenders</strong> approach &mdash; idempotency on both our side AND the PSP side.</div>
+  </div>
+
+  <h3 class="sub-head">Webhook Processing</h3>
+
+  <h4 class="sub-head-sm">Design Principles</h4>
+  <ul class="styled-list">
+    <li><strong>Signature verification</strong> &mdash; Every webhook is HMAC-signed by the PSP. We reject any webhook with an invalid signature.</li>
+    <li><strong>Idempotent processing</strong> &mdash; The same webhook event can arrive multiple times. We use <code>psp_event_id</code> to de-duplicate.</li>
+    <li><strong>State machine enforcement</strong> &mdash; We only apply valid transitions. If a CAPTURED webhook arrives for a payment already in REFUNDED, we log a warning and skip.</li>
+    <li><strong>At-least-once delivery</strong> &mdash; PSPs guarantee at-least-once, not exactly-once. Our de-duplication handles this.</li>
+  </ul>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128229; Webhook Processing Flow</div>
+    <pre class="arch-pre">1. Receive POST /v1/webhooks/psp
+2. Verify HMAC signature &rarr; reject if invalid (HTTP 401)
+3. Parse event, extract psp_transaction_id and event_type
+4. Look up psp_event_id in webhook_events table
+   - If found &rarr; return HTTP 200 (already processed)
+5. Look up payment by psp_transaction_id
+   - If not found &rarr; queue for retry (payment may not be created yet due to race)
+6. Validate state transition (e.g. AUTHORIZED &rarr; CAPTURED is valid)
+7. BEGIN TRANSACTION
+   - Update payment state
+   - Write outbox event
+   - Insert webhook_events (psp_event_id) for de-dup
+8. COMMIT
+9. Return HTTP 200</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Interview Tip</div>
+    <div class="note-body">Always return HTTP 200 quickly. If processing takes too long, the PSP will retry, causing duplicate work. For heavy processing, ack immediately and process asynchronously via a queue.</div>
+  </div>
+</section>
+
+<!-- 09 LEDGER & DATABASE -->
+<section id="ledger">
+  <div class="sec-head">
+    <span class="sec-num">09</span>
+    <span class="sec-title">Ledger &amp; Database Design</span>
+    <span class="sec-tag">Double-entry bookkeeping &amp; schema</span>
+  </div>
+
+  <h3 class="sub-head">Double-Entry Ledger</h3>
+  <p class="body-text">Every money movement is recorded as a balanced pair of entries. This is how we maintain an auditable, tamper-evident financial record.</p>
+
+  <div class="code-label">Ledger Schema</div>
+  <pre class="code-block">CREATE TABLE ledger_entries (
+    entry_id        BIGSERIAL PRIMARY KEY,
+    payment_id      UUID NOT NULL,
+    account_id      VARCHAR(64) NOT NULL,   -- e.g. "buyer:u_123", "merchant:m_456", "platform:fees"
+    entry_type      VARCHAR(16) NOT NULL,   -- DEBIT or CREDIT
+    amount          BIGINT NOT NULL,        -- in cents, always positive
+    currency        VARCHAR(3) NOT NULL,
+    description     VARCHAR(256),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Index for account balance queries
+CREATE INDEX idx_ledger_account ON ledger_entries (account_id, created_at);</pre>
+
+  <h4 class="sub-head-sm">Example: Customer pays $59.99, platform takes 2.9% + $0.30 fee</h4>
+  <table class="scale-table">
+    <tr><th>Entry ID</th><th>Payment ID</th><th>Account</th><th>Type</th><th>Amount</th><th>Description</th></tr>
+    <tr><td>1</td><td>pay_xyz</td><td>buyer:u_123</td><td>DEBIT</td><td>5999</td><td>Order payment</td></tr>
+    <tr><td>2</td><td>pay_xyz</td><td>merchant:m_456</td><td>CREDIT</td><td>5795</td><td>Order revenue</td></tr>
+    <tr><td>3</td><td>pay_xyz</td><td>platform:fees</td><td>CREDIT</td><td>204</td><td>Platform fee (2.9% + 30c)</td></tr>
+  </table>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Invariant</div>
+    <div class="note-body">sum(DEBIT) = sum(CREDIT) = 5999. The ledger always balances. This invariant can be checked by a daily batch job.</div>
+  </div>
+
+  <h4 class="sub-head-sm">Example: Partial refund of $20.00</h4>
+  <table class="scale-table">
+    <tr><th>Entry ID</th><th>Payment ID</th><th>Account</th><th>Type</th><th>Amount</th><th>Description</th></tr>
+    <tr><td>4</td><td>pay_xyz</td><td>merchant:m_456</td><td>DEBIT</td><td>2000</td><td>Partial refund</td></tr>
+    <tr><td>5</td><td>pay_xyz</td><td>buyer:u_123</td><td>CREDIT</td><td>2000</td><td>Partial refund</td></tr>
+  </table>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why not just update a balance column?</div>
+    <div class="qa-a">An append-only ledger is auditable. You can reconstruct the balance of any account at any point in time by replaying entries. A mutable balance column loses history and is harder to debug when something goes wrong.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How do we get the current balance of an account?</div>
+    <div class="qa-a">For hot accounts (millions of entries), we maintain a materialized <strong>account_balances</strong> table updated in the same transaction as ledger writes.</div>
+  </div>
+
+  <div class="code-label">Balance Query</div>
+  <pre class="code-block">SELECT
+  SUM(CASE WHEN entry_type = 'CREDIT' THEN amount ELSE 0 END) -
+  SUM(CASE WHEN entry_type = 'DEBIT' THEN amount ELSE 0 END) AS balance
+FROM ledger_entries
+WHERE account_id = 'merchant:m_456';</pre>
+
+  <h3 class="sub-head">Payment DB Schema</h3>
+
+  <div class="code-label">Payments Table</div>
+  <pre class="code-block">CREATE TABLE payments (
+    payment_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id            VARCHAR(64) NOT NULL,
+    idempotency_key     VARCHAR(128) UNIQUE NOT NULL,
+    status              VARCHAR(32) NOT NULL DEFAULT 'CREATED',
+    amount              BIGINT NOT NULL,
+    currency            VARCHAR(3) NOT NULL DEFAULT 'USD',
+    refunded_amount     BIGINT NOT NULL DEFAULT 0,
+    payment_method_token VARCHAR(256),
+    psp_transaction_id  VARCHAR(128),
+    merchant_id         VARCHAR(64) NOT NULL,
+    buyer_id            VARCHAR(64) NOT NULL,
+    metadata            JSONB,
+    version             INT NOT NULL DEFAULT 1,    -- optimistic lock
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payments_order ON payments (order_id);
+CREATE INDEX idx_payments_psp_txn ON payments (psp_transaction_id);</pre>
+
+  <div class="code-label">Idempotency Keys Table</div>
+  <pre class="code-block">CREATE TABLE idempotency_keys (
+    idempotency_key     VARCHAR(128) PRIMARY KEY,
+    status              VARCHAR(16) NOT NULL,       -- IN_PROGRESS, COMPLETED
+    request_hash        VARCHAR(64) NOT NULL,       -- SHA256 of request body
+    cached_response     JSONB,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at          TIMESTAMPTZ NOT NULL         -- TTL, e.g. created_at + 24h
+);</pre>
+
+  <div class="code-label">Webhook Events Table</div>
+  <pre class="code-block">CREATE TABLE webhook_events (
+    psp_event_id        VARCHAR(128) PRIMARY KEY,
+    payment_id          UUID NOT NULL,
+    event_type          VARCHAR(64) NOT NULL,
+    processed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);</pre>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why PostgreSQL (sharded)?</div>
+    <div class="qa-a">
+      <strong>ACID transactions</strong> are essential for the payment state machine + ledger writes. JSONB for flexible metadata without schema migrations. At ~3,000 TPS peak, a single PostgreSQL primary is at its limit. We shard from the start using Vitess (or Citus).
+    </div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How is the DB sharded?</div>
+    <div class="qa-a">
+      <strong>Payment DB</strong> &rarr; sharded by payment_id (UUID, uniform distribution, no hot shards).<br>
+      <strong>Ledger DB</strong> &rarr; sharded by account_id (balance queries are single-shard).<br>
+      <strong>Idempotency</strong> &rarr; Redis Cluster by idempotency_key, with DB fallback.<br><br>
+      The payment and ledger tables live on <strong>different shard clusters</strong> because they have different optimal shard keys. Cross-shard consistency is achieved via the <strong>outbox pattern</strong>.
+    </div>
+  </div>
+
+  <h3 class="sub-head">Reconciliation</h3>
+  <p class="body-text">Reconciliation is the process of comparing our internal records with the PSP's records (and ultimately the bank's settlement files) to catch discrepancies.</p>
+
+  <h4 class="sub-head-sm">Types of Discrepancies</h4>
+  <ul class="styled-list">
+    <li><strong>We charged, PSP has no record</strong> &mdash; Possible if our PSP call succeeded but PSP lost the record (extremely rare).</li>
+    <li><strong>PSP charged, we have no record</strong> &mdash; Our service crashed after PSP call but before DB write. The reconciliation worker fixes this.</li>
+    <li><strong>Amount mismatch</strong> &mdash; Currency conversion issues or PSP applied a different fee.</li>
+    <li><strong>Status mismatch</strong> &mdash; We think it's CAPTURED, PSP says REFUNDED (e.g. chargeback we missed).</li>
+  </ul>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128736;&#65039; Reconciliation Flow</div>
+    <pre class="arch-pre">Daily Batch Job:
+1. Pull settlement report from PSP (CSV/API)
+2. For each PSP transaction:
+   a. Match by psp_transaction_id to our payments table
+   b. Compare amount, currency, status
+   c. Flag discrepancies &rarr; write to reconciliation_exceptions table
+3. For each unmatched internal payment (we have it, PSP doesn't):
+   a. Flag for investigation
+4. Generate reconciliation report
+5. Alert on-call if exception count > threshold</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Staff-Level Must-Mention</div>
+    <div class="note-body">At staff level, you MUST mention reconciliation. It's the <strong>safety net</strong> that catches all the edge cases your online system misses. Real-world payment systems always have reconciliation jobs.</div>
+  </div>
+
+  <h3 class="sub-head">Failure Handling &amp; Retry Strategy</h3>
+  <table class="scale-table">
+    <tr><th>Scenario</th><th>Action</th></tr>
+    <tr><td>PSP returns 4xx (bad request, card declined)</td><td>Mark payment FAILED. Do NOT retry.</td></tr>
+    <tr><td>PSP returns 5xx (server error)</td><td>Mark payment UNKNOWN. Poll PSP for status.</td></tr>
+    <tr><td>PSP call timeout</td><td>Mark payment UNKNOWN. Do NOT retry charge. Poll or wait for webhook.</td></tr>
+    <tr><td>Our DB write fails after PSP success</td><td>Retry DB write with backoff. Payment is safe (PSP idempotency key protects against double-charge).</td></tr>
+    <tr><td>Webhook signature invalid</td><td>Reject (HTTP 401). Log for security audit.</td></tr>
+    <tr><td>Webhook for unknown payment_id</td><td>Queue for retry with backoff (payment record may not be committed yet).</td></tr>
+  </table>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why do we NEVER blindly retry a charge on timeout?</div>
+    <div class="qa-a">Because the PSP may have actually processed it. Retrying would create a second charge. Instead, we query the PSP to check the actual status, or rely on the PSP's webhook to tell us. This is the <strong>cardinal rule</strong> of payment engineering.</div>
+  </div>
+</section>
+
+<!-- 10 SCALABILITY DEEP DIVE -->
+<section id="scalability">
+  <div class="sec-head">
+    <span class="sec-num">10</span>
+    <span class="sec-title">Scalability Deep Dive</span>
+    <span class="sec-tag">Sharding, multi-region, tiered storage</span>
+  </div>
+
+  <p class="body-text">At Amazon-scale (~50M payment transactions/day peak, ~3,000 TPS burst), sharding is not optional &mdash; it's a core architectural requirement from day one.</p>
+
+  <h3 class="sub-head">Scaling Overview</h3>
+  <table class="scale-table">
+    <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
+    <tr><td>Payment Service</td><td>~3,000 TPS peak</td><td>20-30 stateless instances</td></tr>
+    <tr><td>Payment DB</td><td>~50M rows/day peak</td><td>Vitess, 16 shards by payment_id</td></tr>
+    <tr><td>Ledger DB</td><td>~250M rows/day peak</td><td>Separate cluster, 16 shards by account_id</td></tr>
+    <tr><td>Idempotency</td><td>~3,000 checks/sec peak</td><td>Redis Cluster (6+ nodes)</td></tr>
+    <tr><td>Webhook ingestion</td><td>Burst-heavy</td><td>Dedicated consumer fleet + SQS/Kafka</td></tr>
+    <tr><td>Merchant dashboards</td><td>Scatter-gather too slow</td><td>Elasticsearch via CDC</td></tr>
+  </table>
+
+  <h3 class="sub-head">Sharding the Payment DB</h3>
+  <h4 class="sub-head-sm">Shard Key: payment_id</h4>
+  <p class="body-text">Why <strong>payment_id</strong> and not <strong>merchant_id</strong> or <strong>buyer_id</strong>?</p>
+
+  <table class="scale-table">
+    <tr><th>Shard Key Candidate</th><th>Pros</th><th>Cons</th></tr>
+    <tr><td>payment_id (UUID)</td><td>Even distribution, no hot shards, primary lookup is single-shard</td><td>Looking up "all payments for merchant X" requires scatter-gather</td></tr>
+    <tr><td>merchant_id</td><td>All payments for one merchant on one shard, good for dashboards</td><td>Hot merchant problem &mdash; a merchant doing 50% of volume creates a hot shard</td></tr>
+    <tr><td>buyer_id</td><td>All payments for one buyer on one shard</td><td>Same hot-key problem; most queries are by payment_id not buyer_id</td></tr>
+  </table>
+
+  <p class="body-text"><strong>We choose payment_id</strong> because:</p>
+  <ul class="styled-list">
+    <li>Payment creation and state updates are the hottest path &mdash; and they're always by <strong>payment_id</strong>.</li>
+    <li>UUID-based keys give near-perfect uniform distribution across shards.</li>
+    <li>The hot-merchant problem is real. Amazon on your platform could skew one shard to 100x the load of others.</li>
+  </ul>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How do we handle "get all payments for merchant X" after sharding by payment_id?</div>
+    <div class="qa-a">This is a <strong>scatter-gather</strong> query &mdash; the API server fans out to all shards, each shard filters by merchant_id, and the API server merges results. Acceptable because merchant dashboard queries are low frequency, paginated, and cacheable. For high-volume merchants, we maintain a secondary index or use <strong>Elasticsearch via CDC</strong>.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How do we route requests to the correct shard?</div>
+    <div class="qa-a">Consistent hashing on payment_id: <code>shard_id = hash(payment_id) % num_shards</code>. We use Vitess VTGate as the shard routing layer. The application code is ideally shard-unaware.</div>
+  </div>
+
+  <div class="code-label">Vitess VSchema Definition</div>
+  <pre class="code-block">-- VSchema definition
+CREATE VINDEX payment_hash USING hash;
+
+CREATE TABLE payments (
+    payment_id UUID,
+    ...
+) VINDEXED ON (payment_id) USING payment_hash;</pre>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How many shards?</div>
+    <div class="qa-a">Start with a power of 2 (e.g., <strong>16 shards</strong>). At 100M payments/day: ~1,200 TPS avg, ~6,000 TPS peak. 16 shards &rarr; ~375 TPS peak per shard (comfortable for PostgreSQL). Each shard holds ~6M payments/day &rarr; ~2.2B payments/year per shard. Over-sharding upfront (e.g., 256 logical shards mapped to 16 physical nodes) gives room to split without resharding later.</div>
+  </div>
+
+  <h3 class="sub-head">Sharding the Ledger DB</h3>
+  <p class="body-text">The ledger is the first table to hit scale limits because each payment produces 2-5 ledger entries. At 100M payments/day, that's <strong>200M-500M rows/day</strong>.</p>
+
+  <h4 class="sub-head-sm">Shard Key: account_id</h4>
+  <ul class="styled-list">
+    <li>The most critical ledger query is <strong>"what is the balance of account X?"</strong> &mdash; this sums all entries for one account_id.</li>
+    <li>If we shard by payment_id, a balance query requires scatter-gather across ALL shards. Unacceptable for a hot-path query.</li>
+    <li>Sharding by account_id puts all entries for one account on one shard &rarr; balance is a single-shard query.</li>
+  </ul>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Doesn't this create hot shards for high-volume merchants?</div>
+    <div class="qa-a">Yes, a merchant processing 10M transactions/day will have a hot shard. Mitigations:
+      <br><br><strong>1. Account splitting</strong> &mdash; Split a hot merchant's ledger into sub-accounts (e.g., merchant:m_456:shard_0 through merchant:m_456:shard_7). Round-robin writes; sum across sub-accounts for balance (fan-out of 8 is acceptable).
+      <br><br><strong>2. Materialized balance table</strong> &mdash; Instead of summing all entries on every query, maintain an account_balances table updated in the same transaction as each ledger write.
+      <br><br><strong>3. Time-based compaction</strong> &mdash; Periodically roll up old ledger entries into summary rows. Raw entries move to cold storage for audit.</div>
+  </div>
+
+  <div class="code-label">Materialized Balance Update (same transaction as ledger INSERT)</div>
+  <pre class="code-block">-- In the same transaction as ledger INSERT:
+UPDATE account_balances
+SET balance = balance + &lt;delta&gt;, version = version + 1
+WHERE account_id = ?;</pre>
+
+  <h3 class="sub-head">Sharding the Idempotency Store</h3>
+  <ul class="styled-list">
+    <li><strong>Option A: Redis Cluster</strong> &mdash; Shard by idempotency_key using Redis Cluster's hash slots. Simple, fast, TTL-based expiry built-in. Preferred approach.</li>
+    <li><strong>Option B: Colocate with Payment DB</strong> &mdash; Store in idempotency_keys table. Tricky: we don't know the payment_id yet when checking the key.</li>
+    <li><strong>Solution</strong>: Use Redis for the fast-path (check + reserve) and write to the DB table as durable backup in the same transaction as payment creation.</li>
+  </ul>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128736;&#65039; Idempotency Store Strategy</div>
+    <pre class="arch-pre">1. Check Redis: does idempotency_key exist?
+   - Yes &rarr; return cached response
+   - No &rarr; SET idempotency_key IN_PROGRESS (with NX + TTL)
+2. Create payment in DB (idempotency_key stored in payments table)
+3. After PSP call, update Redis with cached response</pre>
+  </div>
+
+  <p class="body-text">If Redis loses the key (eviction, failover), the DB table acts as fallback. Redis misses just cause a redundant DB lookup, not a double-charge.</p>
+
+  <h3 class="sub-head">Cross-Shard Consistency: Payment DB &harr; Ledger DB</h3>
+  <p class="body-text">The Payment DB (sharded by payment_id) and Ledger DB (sharded by account_id) cannot participate in a single ACID transaction. This is the fundamental reason the Ledger Service exists as a separate service.</p>
+
+  <h4 class="sub-head-sm">Outbox + Ledger Service (eventual consistency)</h4>
+  <div class="arch-diagram">
+    <div class="arch-title">&#128260; Cross-Shard Consistency via Outbox Pattern</div>
+    <pre class="arch-pre">Payment Service (synchronous path):
+  BEGIN TX (Payment DB shard)
+    UPDATE payments SET status = CAPTURED
+    INSERT INTO outbox (event_type=PAYMENT_CAPTURED, payment_id, amount,
+                        debit_account="buyer:u_123", credit_accounts=["merchant:m_456", "platform:fees"], ...)
+  COMMIT
+
+CDC pipeline (Debezium / custom):
+  &rarr; Reads new outbox rows &rarr; publishes to Kafka topic "payment-events"
+
+Ledger Service (async consumer):
+  &rarr; Consumes PAYMENT_CAPTURED event
+  &rarr; BEGIN TX (Ledger DB shard for buyer:u_123's account)
+       INSERT ledger_entry (DEBIT, buyer:u_123, 5999)
+     COMMIT
+  &rarr; BEGIN TX (Ledger DB shard for merchant:m_456's account)
+       INSERT ledger_entry (CREDIT, merchant:m_456, 5795)
+     COMMIT
+  &rarr; BEGIN TX (Ledger DB shard for platform:fees)
+       INSERT ledger_entry (CREDIT, platform:fees, 204)
+     COMMIT</pre>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Cross-Shard Ledger Writes</div>
+    <div class="note-body">Even within the Ledger Service, the debit and credit entries may land on <strong>different ledger shards</strong> (because buyer:u_123 and merchant:m_456 hash to different shards). The Ledger Service writes each entry in its own shard-local transaction. The "balanced ledger" invariant is enforced <strong>per event</strong> in application logic and verified by the daily reconciliation job, not by a single ACID transaction.</div>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">&#9997;&#65039; Classic Staff-Level Trade-off</div>
+    <div class="note-body">We trade <strong>strong consistency</strong> (single-DB ACID) for <strong>scalability</strong> (sharded DBs + eventual consistency via outbox/saga). The reconciliation job catches any drift.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; Why not two-phase commit (2PC)?</div>
+    <div class="qa-a">2PC adds latency (extra round-trip for prepare/commit) and introduces a coordinator as a single point of failure. At 3,000 TPS, 2PC coordinator contention becomes a bottleneck. <strong>Not recommended</strong> for payment systems at scale.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What if the Ledger Service processes events out of order?</div>
+    <div class="qa-a">The Ledger Service is append-only &mdash; it only adds entries, never updates them. Out-of-order processing is safe because each event independently produces balanced entries. The balance is computed by summing all entries, regardless of insertion order.</div>
+  </div>
+
+  <h3 class="sub-head">Read Scaling</h3>
+  <ul class="styled-list">
+    <li><strong>Read replicas</strong> &mdash; Each shard has 2+ read replicas. Route read-only queries to replicas. Acceptable for ~100ms replication lag.</li>
+    <li><strong>Caching</strong> &mdash; Cache payment status in Redis with short TTL (30s). At 3,000 TPS, caching avoids ~90% of DB reads.</li>
+    <li><strong>CQRS with Elasticsearch</strong> &mdash; Merchant dashboard queries would require scatter-gather across all 16 payment shards. Instead, replicate to ES via CDC. Fast, filterable, doesn't load OLTP shards.</li>
+  </ul>
+
+  <h3 class="sub-head">Multi-Region Architecture</h3>
+  <p class="body-text">At Amazon scale, a single-region deployment is unacceptable &mdash; both for latency (users are global) and availability (a regional AWS outage takes down payments).</p>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#127760; Multi-Region Deployment</div>
+    <pre class="arch-pre">┌──────────────────────────────────────────────────────────────┐
+│                    Global DNS / Load Balancer                │
+│              (Route53 latency-based routing)                 │
+└────────┬──────────────────┬──────────────────┬───────────────┘
+         │                  │                  │
+    ┌────▼────┐        ┌────▼────┐        ┌────▼────┐
+    │ US-EAST │        │ EU-WEST │        │ AP-EAST │
+    │ Region  │        │ Region  │        │ Region  │
+    │         │        │         │        │         │
+    │ Payment │        │ Payment │        │ Payment │
+    │ Service │        │ Service │        │ Service │
+    │ Fleet   │        │ Fleet   │        │ Fleet   │
+    │         │        │         │        │         │
+    │ Payment │        │ Payment │        │ Payment │
+    │ DB Shard│        │ DB Shard│        │ DB Shard│
+    │ Cluster │        │ Cluster │        │ Cluster │
+    │         │        │         │        │         │
+    │ Ledger  │        │ Ledger  │        │ Ledger  │
+    │ DB Shard│        │ DB Shard│        │ DB Shard│
+    │ Cluster │        │ Cluster │        │ Cluster │
+    │         │        │         │        │         │
+    │ Redis   │        │ Redis   │        │ Redis   │
+    │ Cluster │        │ Cluster │        │ Cluster │
+    └────┬────┘        └────┬────┘        └────┬────┘
+         │                  │                  │
+         └──────────────────┼──────────────────┘
+                            │
+              ┌─────────────▼─────────────┐
+              │  Cross-Region Reconciler  │
+              │  (async, eventual)         │
+              └───────────────────────────┘</pre>
+  </div>
+
+  <h4 class="sub-head-sm">Design: Region-local, NOT cross-region replication</h4>
+  <p class="body-text">Each region is an <strong>independent, self-contained stack</strong>. A payment created in US-EAST stays in US-EAST for its entire lifecycle. We do NOT replicate payment data across regions because:</p>
+  <ul class="styled-list">
+    <li><strong>Cross-region replication of transactional data adds dangerous latency</strong> to writes (~100-200ms round-trip US&harr;EU), unacceptable for payment state machine transitions.</li>
+    <li><strong>Conflict resolution</strong> for payment state machines is extremely risky &mdash; two regions concurrently updating could lead to double-charges or phantom refunds.</li>
+    <li><strong>Data residency laws</strong> (EU GDPR, India RBI) may require payment data to stay in-region.</li>
+  </ul>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; How do we route a payment to the correct region?</div>
+    <div class="qa-a">The order service tags each payment with a <strong>region</strong> based on the buyer's location. DNS/load balancer routes to the correct regional stack. Payment ID format: <code>pay_{region}_{uuid}</code> (e.g., pay_us_east_a1b2c3d4). Any service that sees a payment_id knows which region to query.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What about cross-region queries?</div>
+    <div class="qa-a">A merchant with buyers in EU needs a unified dashboard. Each region publishes payment events to a <strong>global event stream</strong> (cross-region Kafka/Kinesis). A global Elasticsearch cluster ingests events from all regions. The dashboard service queries global ES &mdash; eventually consistent (seconds of delay), fine for dashboards.</div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q">&#10067; What about regional failover?</div>
+    <div class="qa-a">If US-EAST goes down: (1) <strong>New payments</strong> from US buyers are routed to US-WEST (backup region). DNS failover takes ~30-60s. (2) <strong>In-flight payments</strong> in US-EAST are stuck until the region recovers. The reconciliation worker resolves them against the PSP. (3) We do NOT try to "move" an in-flight payment to another region &mdash; the state machine is too delicate. The PSP's idempotency key protects against double-charges when the region comes back.</div>
+  </div>
+
+  <h3 class="sub-head">Ledger Tiered Storage</h3>
+  <p class="body-text">At ~250M ledger rows/day peak, the ledger grows to <strong>~30B+ rows/year</strong>. We can't keep all of this in hot PostgreSQL storage forever.</p>
+
+  <div class="arch-diagram">
+    <div class="arch-title">&#128451;&#65039; Ledger Storage Tiers</div>
+    <pre class="arch-pre">┌──────────────────────────────────────────────────────────┐
+│                     Ledger Storage Tiers                  │
+├──────────┬───────────────────┬────────────────────────────┤
+│  HOT     │  0-90 days        │  Sharded PostgreSQL        │
+│          │                   │  Full query capability      │
+│          │                   │  ~7.5B rows per quarter     │
+├──────────┼───────────────────┼────────────────────────────┤
+│  WARM    │  90 days - 2 yrs  │  ClickHouse / TimescaleDB  │
+│          │                   │  Compressed, columnar       │
+│          │                   │  Aggregate queries only     │
+├──────────┼───────────────────┼────────────────────────────┤
+│  COLD    │  2+ years         │  S3 + Parquet files         │
+│          │                   │  Audit/compliance access    │
+│          │                   │  ~90% storage cost reduction│
+└──────────┴───────────────────┴────────────────────────────┘</pre>
+  </div>
+
+  <ul class="styled-list">
+    <li>A <strong>nightly compaction job</strong> rolls up individual ledger entries into daily/monthly summary rows before moving them to warm storage.</li>
+    <li>Cold storage retains raw entries for regulatory compliance (<strong>7-year retention</strong> for financial records in most jurisdictions).</li>
+    <li>The balance query uses the materialized <strong>account_balances</strong> table (hot tier only) &mdash; no need to scan warm/cold storage for current balances.</li>
+  </ul>
+
+  <h3 class="sub-head">Other Considerations</h3>
+
+  <h4 class="sub-head-sm">Multi-PSP Failover</h4>
+  <ul class="styled-list">
+    <li><strong>Success rate</strong> &mdash; If PSP A's success rate drops below a threshold, route to PSP B.</li>
+    <li><strong>Cost</strong> &mdash; Different PSPs have different fee structures per region/card type.</li>
+    <li><strong>Card network coverage</strong> &mdash; Some PSPs have better coverage in certain regions.</li>
+  </ul>
+
+  <h4 class="sub-head-sm">Currency Handling</h4>
+  <ul class="styled-list">
+    <li>All amounts stored in <strong>smallest currency unit</strong> (cents for USD, yen for JPY).</li>
+    <li>Currency conversion happens at the PSP layer; we store both original and settled amounts.</li>
+    <li>Be careful: JPY and KRW have no fractional units (1 JPY = 1 unit, not 100).</li>
+  </ul>
+
+  <h4 class="sub-head-sm">Monitoring &amp; Alerting</h4>
+  <ul class="styled-list">
+    <li><strong>Payment success rate</strong> (by PSP, by payment method, by region) &mdash; alert if drops below 95%.</li>
+    <li><strong>PSP latency</strong> p50/p95/p99.</li>
+    <li><strong>Webhook processing lag</strong> &mdash; alert if &gt; 1 minute behind.</li>
+    <li><strong>Reconciliation exception count</strong> &mdash; alert if &gt; 0.</li>
+    <li><strong>Ledger balance check</strong> &mdash; daily sum(debit) vs sum(credit) assertion.</li>
+  </ul>
+</section>
+
+<!-- SUMMARY -->
+<section id="summary">
+  <div class="sec-head">
+    <span class="sec-num">&#9679;</span>
+    <span class="sec-title">Summary</span>
+    <span class="sec-tag">Core design pillars</span>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="sc-num">01</div>
+      <div class="sc-title">Idempotency</div>
+      <div class="sc-desc">At both our layer (idempotency_key table + Redis Cluster) and the PSP layer (passing our payment_id as PSP's idempotency key). Guarantees exactly-once payment even across retries, crashes, and regional failovers.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">02</div>
+      <div class="sc-title">State Machine</div>
+      <div class="sc-desc">With optimistic locking to enforce valid transitions and handle concurrent updates from sync API + async webhooks.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">03</div>
+      <div class="sc-title">Sharding from Day One</div>
+      <div class="sc-desc">Payment DB by payment_id (uniform distribution), Ledger DB by account_id (balance queries are single-shard), using Vitess for transparent routing.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">04</div>
+      <div class="sc-title">Outbox Pattern</div>
+      <div class="sc-desc">Cross-shard consistency via eventual consistency between payment and ledger shards, with reconciliation as the safety net. Classic staff-level trade-off.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">05</div>
+      <div class="sc-title">Multi-Region Active-Active</div>
+      <div class="sc-desc">Each region is an independent stack; no cross-region replication of transactional data. Global dashboards via CDC to Elasticsearch.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">06</div>
+      <div class="sc-title">Multi-PSP Failover</div>
+      <div class="sc-desc">At least 2 PSPs with intelligent routing for availability, cost, and success rate optimization.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">07</div>
+      <div class="sc-title">Double-Entry Ledger</div>
+      <div class="sc-desc">With tiered storage (hot/warm/cold) for auditability at 30B+ rows/year.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">08</div>
+      <div class="sc-title">Reconciliation</div>
+      <div class="sc-desc">The ultimate safety net &mdash; catches everything the online system misses.</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-num">09</div>
+      <div class="sc-title">Never Blindly Retry</div>
+      <div class="sc-desc">Never blindly retry a charge on timeout &mdash; the cardinal rule of payments.</div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /page -->
+
+<script>
+function scrollToSection(id){
+  document.getElementById(id).scrollIntoView({behavior:'smooth'});
+}
+window.addEventListener('scroll', function(){
+  var sections = document.querySelectorAll('section');
+  var navItems = document.querySelectorAll('.nav-item');
+  var current = '';
+  sections.forEach(function(s){
+    if(window.scrollY >= s.offsetTop - 80) current = s.id;
+  });
+  navItems.forEach(function(n){
+    n.classList.toggle('active', n.getAttribute('data-section') === current);
+  });
+});
+</script>
+</body>
+</html>
