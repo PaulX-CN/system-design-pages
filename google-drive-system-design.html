@@ -589,6 +589,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
   <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
   <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollToSection('collaboration')">Collaboration</div>
   <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
   <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
   <div class="nav-item" onclick="scrollToSection('pitfalls')">Pitfalls</div>
@@ -1259,6 +1260,123 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       </div>
     </div>
 
+    <!-- Collaboration Service APIs -->
+    <div class="api-group" id="api-collab">
+      <div class="api-group-hd" onclick="toggleApi('api-collab')">
+        <div class="l-accent" style="background:var(--teal)"></div>
+        <div class="l-name" style="color:var(--teal)">Collaboration Service APIs</div>
+        <div class="l-scale">WebSocket protocol + OT operations + presence</div>
+        <div class="api-chevron">></div>
+      </div>
+      <div class="api-group-bd">
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/collab/ticket</span>
+            <span class="api-desc">Request collaboration session ticket</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Request</div>
+              <div class="code-block"><span class="kw">POST</span> /api/v1/collab/ticket
+<span class="cm">Authorization: Bearer {access_token}</span>
+
+{
+  <span class="str">"doc_id"</span>: <span class="str">"file_9b4e..."</span>
+}</div>
+            </div>
+            <div>
+              <div class="code-label">Response 200</div>
+              <div class="code-block">{
+  <span class="str">"ticket"</span>: <span class="str">"tkt_a1b2c3d4..."</span>,
+  <span class="str">"ws_url"</span>: <span class="str">"wss://collab.example.com/docs/file_9b4e..."</span>,
+  <span class="str">"expires_in"</span>: <span class="num">30</span>  <span class="cm">// seconds</span>
+}
+<span class="cm">// Ticket is single-use, scoped to doc_id</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="api-endpoint">
+          <div class="api-sig">
+            <span class="api-method get" style="background:rgba(0,212,170,0.15);color:var(--teal);border:1px solid rgba(0,212,170,0.3);">WS</span>
+            <span class="api-path">wss://collab.example.com/docs/{docId}?ticket={token}</span>
+            <span class="api-desc">WebSocket connection + message protocol</span>
+          </div>
+          <div class="api-rr">
+            <div>
+              <div class="code-label">Client -> Server messages</div>
+              <div class="code-block"><span class="cm">// 1. Send edit operation</span>
+{
+  <span class="str">"type"</span>: <span class="str">"op"</span>,
+  <span class="str">"ops"</span>: [
+    { <span class="str">"type"</span>: <span class="str">"insert"</span>,
+      <span class="str">"pos"</span>: <span class="num">42</span>,
+      <span class="str">"text"</span>: <span class="str">"Hello"</span> },
+    { <span class="str">"type"</span>: <span class="str">"delete"</span>,
+      <span class="str">"pos"</span>: <span class="num">10</span>,
+      <span class="str">"len"</span>: <span class="num">3</span> }
+  ],
+  <span class="str">"server_rev"</span>: <span class="num">15</span>  <span class="cm">// last known rev</span>
+}
+
+<span class="cm">// 2. Cursor update (throttled 100ms)</span>
+{
+  <span class="str">"type"</span>: <span class="str">"cursor"</span>,
+  <span class="str">"pos"</span>: <span class="num">47</span>,
+  <span class="str">"sel_end"</span>: <span class="num">52</span>  <span class="cm">// if selecting</span>
+}
+
+<span class="cm">// 3. Heartbeat (every 30s)</span>
+{ <span class="str">"type"</span>: <span class="str">"ping"</span> }</div>
+            </div>
+            <div>
+              <div class="code-label">Server -> Client messages</div>
+              <div class="code-block"><span class="cm">// 1. Session joined (initial)</span>
+{
+  <span class="str">"type"</span>: <span class="str">"session_init"</span>,
+  <span class="str">"doc_snapshot"</span>: <span class="str">"..."</span>,
+  <span class="str">"server_rev"</span>: <span class="num">15</span>,
+  <span class="str">"users"</span>: [
+    { <span class="str">"id"</span>: <span class="str">"user_A"</span>, <span class="str">"name"</span>: <span class="str">"Alice"</span>,
+      <span class="str">"color"</span>: <span class="str">"#3b82f6"</span>,
+      <span class="str">"cursor"</span>: <span class="num">120</span> }
+  ]
+}
+
+<span class="cm">// 2. ACK for your op</span>
+{ <span class="str">"type"</span>: <span class="str">"ack"</span>, <span class="str">"server_rev"</span>: <span class="num">18</span> }
+
+<span class="cm">// 3. Remote op (from another user)</span>
+{
+  <span class="str">"type"</span>: <span class="str">"remote_op"</span>,
+  <span class="str">"ops"</span>: [{ <span class="str">"type"</span>: <span class="str">"insert"</span>,
+    <span class="str">"pos"</span>: <span class="num">47</span>, <span class="str">"text"</span>: <span class="str">"Hello"</span> }],
+  <span class="str">"server_rev"</span>: <span class="num">18</span>,
+  <span class="str">"author"</span>: <span class="str">"user_A"</span>
+}
+
+<span class="cm">// 4. Presence events</span>
+{ <span class="str">"type"</span>: <span class="str">"user_joined"</span>,
+  <span class="str">"user"</span>: { <span class="str">"id"</span>: <span class="str">"user_C"</span>, ... } }
+{ <span class="str">"type"</span>: <span class="str">"user_left"</span>,
+  <span class="str">"user_id"</span>: <span class="str">"user_B"</span> }
+
+<span class="cm">// 5. Remote cursor</span>
+{ <span class="str">"type"</span>: <span class="str">"cursor"</span>,
+  <span class="str">"user_id"</span>: <span class="str">"user_A"</span>,
+  <span class="str">"pos"</span>: <span class="num">50</span> }
+
+<span class="cm">// 6. Pong</span>
+{ <span class="str">"type"</span>: <span class="str">"pong"</span> }</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Search Service APIs -->
     <div class="api-group" id="api5">
       <div class="api-group-hd" onclick="toggleApi('api5')">
@@ -1555,8 +1673,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <div class="flow-block" id="f5">
         <div class="flow-hd" onclick="toggleFlow('f5')">
           <div class="flow-num">F-05</div>
-          <div class="flow-title">Real-time Collaboration</div>
-          <div class="flow-meta">WebSocket + OT/CRDT + cursor sync</div>
+          <div class="flow-title">Real-time Collaboration (5 users editing one doc)</div>
+          <div class="flow-meta">WebSocket + OT transform pipeline + server authority + convergence</div>
           <div class="flow-chevron">></div>
         </div>
         <div class="flow-bd">
@@ -1564,26 +1682,56 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="flow-step">
               <div class="fs-num">01</div>
               <div class="fs-svc">Client</div>
-              <div class="fs-action">Open file in editor. Establish WebSocket to Collaboration Service. Authenticate via ticket token (short-lived, scoped to file). Receive current document state + active cursors.</div>
-              <div class="fs-note">WebSocket for low-latency bidirectional updates</div>
+              <div class="fs-action">User opens document. Client requests a one-time collaboration ticket from Auth Service (scoped to doc_id, expires in 30s). Establishes WebSocket to Collaboration Service at ws://collab.example.com/docs/{doc_id}?ticket={token}. Server validates ticket, returns the current document snapshot + server revision number + list of active user cursors.</div>
+              <div class="fs-note">Ticket prevents replay attacks; WebSocket for sub-50ms round-trip</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">02</div>
               <div class="fs-svc">Collab Service</div>
-              <div class="fs-action">Register user in session. Broadcast presence (user joined) to other editors. Maintain in-memory document state. Each edit = operation (insert/delete at position).</div>
-              <div class="fs-note">In-memory state with periodic checkpoint to DB</div>
+              <div class="fs-action">Register user in the in-memory session for this document. Session tracks: (a) canonical document state, (b) current server revision number, (c) ordered ops log since last checkpoint, (d) connected clients list. Broadcast presence event { type: "user_joined", user_id, display_name, color } to all other 4 clients via their WebSocket connections.</div>
+              <div class="fs-note">Each active document is pinned to one collab server via consistent hashing on doc_id</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">03</div>
-              <div class="fs-svc">OT Engine</div>
-              <div class="fs-action">Client sends local operation. Server transforms against concurrent ops (Operational Transform). Applies transformed op to server state. Broadcasts transformed op to all other clients.</div>
-              <div class="fs-note">OT guarantees convergence across all clients</div>
+              <div class="fs-svc">Client (typing)</div>
+              <div class="fs-action">User types "Hello" at position 42. Client creates operation: { type: "insert", pos: 42, text: "Hello", client_rev: 7, server_rev: 15 }. Client applies op to local document immediately (optimistic). Sends op to server. Client buffers: if another keystroke happens before server ACKs, it's queued locally (not sent yet). At most 1 unacknowledged op in flight at a time.</div>
+              <div class="fs-note">Optimistic apply = no typing lag. 1-op-in-flight rule simplifies OT</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">04</div>
+              <div class="fs-svc">OT Engine (server)</div>
+              <div class="fs-action">Server receives op from Client A at server_rev=15, but server is now at rev 17 (two ops from other clients arrived first). Server must transform A's op against those 2 intervening ops: (1) Fetch ops [16, 17] from the ops log. (2) For each: transform(A_op, server_op) -> A_op'. Example: if op 16 was insert at pos 30, and A's insert was at pos 42, A's position shifts to 47 (30 < 42, so +5 for the 5 chars inserted). (3) After transforming against all intervening ops, apply A_op' to server state. Assign new revision 18. Append to ops log.</div>
+              <div class="fs-note">Transform = adjust positions so the intent is preserved despite concurrent edits</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Broadcast</div>
+              <div class="fs-action">Server sends the transformed op to all OTHER connected clients (B, C, D, E): { type: "insert", pos: 47, text: "Hello", server_rev: 18, author: "user_A" }. Server sends ACK to Client A: { ack: true, server_rev: 18 }. Client A now knows its op is committed. If Client A has buffered ops, it sends the next one (with server_rev: 18).</div>
+              <div class="fs-note">ACK before next send = serialization point ensuring causal ordering</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">06</div>
+              <div class="fs-svc">Remote Clients</div>
+              <div class="fs-action">Client B receives op at server_rev 18. But Client B has 1 pending local op that hasn't been ACKed yet. Client B transforms the incoming server op against its pending local op (client-side OT). Applies the transformed op to its local document. Result: Client B's document now reflects both its own pending edit AND Client A's edit, with positions correctly adjusted. All 5 clients converge to the same document state once all ops are ACKed.</div>
+              <div class="fs-note">Client-side OT handles the "both editing at the same time" case</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">07</div>
+              <div class="fs-svc">Cursor Sync</div>
+              <div class="fs-action">Every 100ms (throttled), each client sends cursor position: { type: "cursor", pos: 47, selection_end: 52 }. Server broadcasts to other clients without transformation (cursors are ephemeral, best-effort). Displayed as colored cursor lines with user name labels. No persistence needed — cursors are purely in-memory.</div>
+              <div class="fs-note">Fire-and-forget; slight cursor jitter is acceptable UX</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">08</div>
               <div class="fs-svc">Persistence</div>
-              <div class="fs-action">Checkpoint: periodically snapshot full document to blob storage (every 30s or 100 ops). Create new file_version entry. Update file metadata with latest version. Ops log for replay between checkpoints.</div>
-              <div class="fs-note">Checkpoint interval balances durability vs write load</div>
+              <div class="fs-action">Every 30 seconds OR every 100 ops (whichever comes first): Checkpoint routine runs. (1) Serialize current document state to blob storage (S3). (2) Write checkpoint record to DB: { doc_id, revision: 118, blob_url, timestamp }. (3) Truncate ops log: delete ops before revision 118 (they're now baked into the checkpoint). (4) Also write ops to a durable WAL (write-ahead log in Kafka) BEFORE applying them, so on server crash, ops between checkpoints can be replayed.</div>
+              <div class="fs-note">WAL + checkpoint = zero data loss even on crash between checkpoints</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">09</div>
+              <div class="fs-svc">Session End</div>
+              <div class="fs-action">When all users disconnect (or after idle timeout of 5 min): Final checkpoint written. Session object evicted from memory. File metadata updated with latest version number and size. Kafka event FILE_MODIFIED published for sync service / search reindex / notifications. Subsequent opens load from the latest checkpoint.</div>
+              <div class="fs-note">Graceful handoff from real-time to at-rest storage</div>
             </div>
           </div>
         </div>
@@ -1831,10 +1979,243 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
   </section>
 
-  <!-- 07 SCALABILITY -->
-  <section id="scalability">
+  <!-- 07 COLLABORATION DEEP DIVE -->
+  <section id="collaboration">
     <div class="sec-head">
       <span class="sec-num">07</span>
+      <span class="sec-title">Real-time Collaboration Deep Dive</span>
+      <span class="sec-tag">OT protocol + server authority + convergence guarantees</span>
+    </div>
+
+    <div class="key-principles" style="margin-bottom:32px;">
+      <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Core Problem</div><div class="kp-body">5 users have the same document open. All typing simultaneously. Each keystroke must appear on all 5 screens in <100ms, and all 5 copies must converge to the exact same text — even if two users type at the same character position at the same instant.</div></div>
+      <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Solution: Operational Transform (OT)</div><div class="kp-body">Every edit is an "operation" (insert or delete at a position). When concurrent ops conflict, a mathematical transform function adjusts positions so every user's intent is preserved. The server is the single source of truth that assigns a total ordering.</div></div>
+    </div>
+
+    <!-- OT Walkthrough -->
+    <div style="margin-bottom:32px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">OT Walkthrough</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">Concrete example with 2 concurrent edits</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:3px;">
+        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;">
+          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:8px;">Initial State (server rev 10)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue2);background:var(--bg);padding:10px 14px;border:1px solid var(--border);border-radius:3px;letter-spacing:0.5px;">
+            "The quick fox"
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">Both Alice and Bob see this text. Both start typing at the same time.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;">
+          <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--blue);">
+            <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px;">Alice's Edit (client-side)</div>
+            <div style="font-size:12px;color:var(--text);line-height:1.7;">
+              Inserts "brown " at position 10<br>
+              <span style="color:var(--muted);">Op: </span><span style="color:var(--gold2);">insert(10, "brown ")</span><br>
+              <span style="color:var(--muted);">Her screen: </span><span style="color:var(--blue2);">"The quick <strong style="color:var(--green);">brown </strong>fox"</span><br>
+              <span style="color:var(--muted);">Sent to server with server_rev: 10</span>
+            </div>
+          </div>
+          <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--orange);">
+            <div style="font-size:12px;font-weight:600;color:var(--orange);margin-bottom:8px;">Bob's Edit (client-side)</div>
+            <div style="font-size:12px;color:var(--text);line-height:1.7;">
+              Inserts " jumps" at position 13 (end)<br>
+              <span style="color:var(--muted);">Op: </span><span style="color:var(--gold2);">insert(13, " jumps")</span><br>
+              <span style="color:var(--muted);">His screen: </span><span style="color:var(--blue2);">"The quick fox<strong style="color:var(--green);"> jumps</strong>"</span><br>
+              <span style="color:var(--muted);">Sent to server with server_rev: 10</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--teal);">
+          <div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:8px;">Server Processing (OT Engine)</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.8;">
+            <strong>Step 1:</strong> Alice's op arrives first. Server is at rev 10. No transform needed. Apply insert(10, "brown "). Server state: "The quick brown fox". Assign rev 11. Broadcast to Bob.<br>
+            <strong>Step 2:</strong> Bob's op arrives. His op says server_rev: 10, but server is now at rev 11. Bob missed op [11] (Alice's insert). <strong>Transform required.</strong><br>
+            <strong>Step 3:</strong> Transform Bob's insert(13, " jumps") against Alice's insert(10, "brown "). Since Alice inserted 6 chars at pos 10, and Bob's pos 13 >= 10, Bob's position shifts: 13 + 6 = 19. Transformed op: <span style="color:var(--gold2);">insert(19, " jumps")</span><br>
+            <strong>Step 4:</strong> Apply transformed op. Server state: "The quick brown fox jumps". Assign rev 12. Broadcast transformed op to Alice.
+          </div>
+        </div>
+
+        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;">
+          <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px;">Final Converged State (rev 12) — All Clients</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);background:var(--bg);padding:10px 14px;border:1px solid var(--border);border-radius:3px;letter-spacing:0.5px;">
+            "The quick brown fox jumps"
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">Both users' intents preserved. Alice added "brown", Bob added "jumps". OT adjusted Bob's position so both edits land correctly.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client State Machine -->
+    <div style="margin-bottom:32px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">Client OT State Machine</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">Each client cycles through these states</span>
+      </div>
+      <div class="state-machine">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state success"><div class="state-name">SYNCHRONIZED</div><div class="state-desc">no pending ops</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state active"><div class="state-name">AWAITING_ACK</div><div class="state-desc">1 op sent, waiting</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">AWAITING_ACK + BUFFER</div><div class="state-desc">1 sent + more queued</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);padding:12px 0;border-top:1px dashed var(--border);line-height:1.8;margin-top:12px;">
+          <strong style="color:var(--text)">Transitions:</strong><br>
+          SYNCHRONIZED -> AWAITING_ACK: user types, op sent to server<br>
+          AWAITING_ACK -> SYNCHRONIZED: server ACK received, no buffered ops<br>
+          AWAITING_ACK -> AWAITING_ACK+BUFFER: user types again before ACK<br>
+          AWAITING_ACK+BUFFER -> AWAITING_ACK: ACK received, send buffered op (composed into single op), enter AWAITING_ACK<br>
+          <strong style="color:var(--text)">On receiving remote op:</strong> In any state, transform pending/buffered ops against incoming. Apply transformed remote op to local doc.
+        </div>
+      </div>
+    </div>
+
+    <!-- Server-side Write Path -->
+    <div style="margin-bottom:32px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">Server-side Write Path</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">What happens on the server for each incoming operation</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:3px;">
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">1</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Receive & Validate</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">WebSocket message arrives. Validate: is user still authorized? Is server_rev a valid reference point (not too old)? If op references a rev older than the oldest op in the log, reject — client must re-sync from checkpoint.</div></div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">2</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Acquire Document Lock</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Acquire in-memory mutex for this document (not a distributed lock — document is pinned to one server). This serializes all ops for the same doc. Lock held for microseconds (transform + apply is pure CPU, no I/O).</div></div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">3</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Transform Against Concurrent Ops</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Fetch all ops from the ops log between client's server_rev and current server rev. Apply OT transform function iteratively: for each server op, transform the client op to account for it. This adjusts character positions to reflect edits the client hasn't seen yet.</div></div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">4</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Write to WAL (Kafka)</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Before applying to in-memory state, append the transformed op to a durable write-ahead log (Kafka topic partitioned by doc_id). This ensures that if the server crashes, ops between checkpoints can be replayed. Kafka acks = op is durable.</div></div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">5</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Apply to In-Memory State</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Apply transformed op to the canonical in-memory document. Increment server revision. Append op to the in-memory ops log (ring buffer). Release document lock.</div></div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">6</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Broadcast & ACK</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Send ACK with new server_rev to the originating client. Send the transformed op (with author + server_rev) to all other connected clients. Non-blocking fan-out via async WebSocket writes.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Convergence Guarantees -->
+    <div style="margin-bottom:32px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">Why All Clients Converge</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">Three properties that guarantee consistency</span>
+      </div>
+      <div class="principles" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));">
+        <div class="principle" style="border-left-color:var(--teal);">
+          <div class="principle-title" style="color:var(--teal);">1. Server Total Ordering</div>
+          <div class="principle-desc">The server assigns a sequential revision to every operation. All clients see ops in the same server-determined order. Even if ops arrive out of order from different clients, the server serializes them. This is the single source of truth.</div>
+        </div>
+        <div class="principle" style="border-left-color:var(--teal);">
+          <div class="principle-title" style="color:var(--teal);">2. Transform Correctness (TP1)</div>
+          <div class="principle-desc">The OT transform function satisfies the "Transformation Property 1": if ops A and B are concurrent, then apply(apply(state, A), T(B, A)) = apply(apply(state, B), T(A, B)). Both orderings produce the same final state. This is a mathematical invariant of the transform functions.</div>
+        </div>
+        <div class="principle" style="border-left-color:var(--teal);">
+          <div class="principle-title" style="color:var(--teal);">3. Causality Preserved</div>
+          <div class="principle-desc">The 1-op-in-flight rule ensures causal ordering: a client won't send op B until op A is ACKed. Combined with server_rev tracking, each op is transformed against exactly the right set of concurrent ops — no more, no less.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scaling Collaboration -->
+    <div style="margin-bottom:32px;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">Scaling to Millions of Concurrent Docs</span>
+      </div>
+      <table class="scale-table">
+        <thead>
+          <tr>
+            <th>Challenge</th>
+            <th>Strategy</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Doc-to-server affinity</td>
+            <td>Consistent hash(doc_id) -> server</td>
+            <td>All WebSocket connections for one doc land on the same server. In-memory state lives on one machine. On server failure: rehash to new server, load from last checkpoint + replay WAL.</td>
+          </tr>
+          <tr>
+            <td>Hot documents (100+ editors)</td>
+            <td>Read-replica fan-out</td>
+            <td>Primary server handles OT + state. Read-only replicas handle cursor broadcasts and presence updates. Ops still serialized through primary. Reduces WebSocket fan-out pressure.</td>
+          </tr>
+          <tr>
+            <td>Memory per document</td>
+            <td>~1-5MB per active doc</td>
+            <td>Document text + ops log (last 1000 ops) + user sessions. A single 64GB server handles ~15K concurrent docs. LRU eviction for idle docs after 5min (checkpoint first).</td>
+          </tr>
+          <tr>
+            <td>Cross-region latency</td>
+            <td>Regional collab servers</td>
+            <td>Users connect to nearest region. Ops forwarded to the primary region (where doc state lives) for OT. ~100-200ms added latency for cross-region users. Acceptable for text editing; not ideal for real-time cursor display.</td>
+          </tr>
+          <tr>
+            <td>Server failure recovery</td>
+            <td>Checkpoint + WAL replay</td>
+            <td>On crash: new server loads last checkpoint from blob storage, replays WAL (Kafka) from checkpoint revision. Clients reconnect automatically (WebSocket reconnect with exponential backoff). <2s recovery time.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- OT Transform Rules -->
+    <div>
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:var(--teal);">OT Transform Rules</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;">How positions are adjusted for each op combination</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:3px;">
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Insert vs Insert</div>
+          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
+            insert(posA, textA) vs insert(posB, textB)<br>
+            If posA < posB: B.pos += len(textA)<br>
+            If posA > posB: A.pos += len(textB)<br>
+            If posA == posB: tie-break by user_id (lower ID goes first)
+          </div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Insert vs Delete</div>
+          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
+            insert(posA, text) vs delete(posB, lenB)<br>
+            If posA <= posB: B.pos += len(text)<br>
+            If posA > posB + lenB: A.pos -= lenB<br>
+            If posA in [posB, posB+lenB]: split the delete around the insert
+          </div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Delete vs Delete</div>
+          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
+            delete(posA, lenA) vs delete(posB, lenB)<br>
+            Non-overlapping: adjust positions normally<br>
+            Overlapping: reduce length to avoid double-delete<br>
+            Fully contained: one delete becomes no-op
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- 08 SCALABILITY -->
+  <section id="scalability">
+    <div class="sec-head">
+      <span class="sec-num">08</span>
       <span class="sec-title">Scalability</span>
       <span class="sec-tag">2B files + 2PB storage + 15M DAU</span>
     </div>
@@ -1888,10 +2269,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
   </section>
 
-  <!-- 08 TRADEOFFS -->
+  <!-- 09 TRADEOFFS -->
   <section id="tradeoffs">
     <div class="sec-head">
-      <span class="sec-num">08</span>
+      <span class="sec-num">09</span>
       <span class="sec-title">Architectural Tradeoffs</span>
       <span class="sec-tag">Staff-level decision framing</span>
     </div>
@@ -1918,6 +2299,14 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="mc-verdict"><strong>Hierarchical tree with parent_id.</strong> Users expect folders. Move = update parent_id (O(1)). Rename = update name (O(1)). Permission inheritance traverses tree bottom-up. Alternative (materialized path "/a/b/c"): move requires updating ALL descendant paths — O(N) writes for large folders.</div>
       </div>
       <div class="matrix-card">
+        <div class="mc-title">OT (Operational Transform) vs CRDT (Conflict-free Replicated Data Type)</div>
+        <div class="mc-row"><span class="mc-label">Server dependency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Offline support</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Memory efficiency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Implementation maturity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-verdict"><strong>OT for Google Docs-style editing.</strong> OT requires a central server (single point of serialization) but is proven at Google's scale, uses less memory (no tombstones), and has simpler intent preservation for text. CRDT shines for peer-to-peer/offline-first apps (Figma uses CRDTs) — no server needed for convergence, but document state grows with edit history (tombstone overhead). For a server-centric system like Google Drive where you always have connectivity, OT is the pragmatic choice. Alternative: hybrid — OT for online editing, CRDT for offline conflict resolution.</div>
+      </div>
+      <div class="matrix-card">
         <div class="mc-title">Server-side vs Client-side Encryption</div>
         <div class="mc-row"><span class="mc-label">Security guarantee</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
         <div class="mc-row"><span class="mc-label">Feature compatibility</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
@@ -1927,10 +2316,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
   </section>
 
-  <!-- 09 PITFALLS -->
+  <!-- 10 PITFALLS -->
   <section id="pitfalls">
     <div class="sec-head">
-      <span class="sec-num">09</span>
+      <span class="sec-num">10</span>
       <span class="sec-title">Pitfall Questions</span>
       <span class="sec-tag">Expect these at Staff level interviews</span>
     </div>
@@ -1988,6 +2377,29 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <li><strong>Pre-computed counts:</strong> Don't SELECT COUNT(*) for folder item count (full scan). Maintain children_count column on folders, incremented/decremented on add/remove. Eventually consistent — reconciliation job fixes drift.</li>
             <li><strong>Client-side virtual scrolling:</strong> Even with fast backend, rendering 500K items in DOM is impossible. Client uses virtual list: only renders visible ~50 items. Fetches next page on scroll. Illusion of infinite list.</li>
             <li><strong>Background pre-fetch:</strong> When user navigates to a folder, pre-fetch first 2 pages. On scroll near bottom, prefetch next page. Eliminates perceived loading time for smooth scrolling experience.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"5 users are editing a Google Doc simultaneously. The collaboration server crashes mid-session. What happens to their unsaved edits? How do you recover without losing any keystrokes?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>WAL guarantees zero data loss.</strong> Every op is written to Kafka (partitioned by doc_id) BEFORE applying to in-memory state. Even if the server process is kill -9'd, all acknowledged ops exist in the WAL. Unacknowledged ops (in-flight at crash time) are the client's responsibility — the client will resend on reconnect.</li>
+            <li><strong>Recovery: checkpoint + WAL replay.</strong> The document is reassigned to a new server (consistent hashing with virtual nodes). New server loads the last checkpoint (full document snapshot from blob storage, e.g., at revision 500). Then replays all ops from Kafka from revision 501 onward. Document state is reconstructed in <2 seconds.</li>
+            <li><strong>Client reconnection.</strong> WebSocket disconnect triggers automatic reconnect with exponential backoff (100ms, 200ms, 400ms...). On reconnect, client re-authenticates with a new ticket, receives the current document snapshot + revision. Client diffs its local state against the server snapshot. Any pending/buffered ops that weren't ACKed are transformed against missed server ops and re-submitted.</li>
+            <li><strong>Edge case: split-brain.</strong> If the old server isn't actually dead (network partition), two servers could accept ops for the same doc. Prevention: fencing token on the Kafka WAL. Each server generation gets a monotonic token. Kafka rejects writes from the old generation. Additionally: all clients disconnect on WebSocket error and re-resolve which server to connect to via the load balancer.</li>
+            <li><strong>User experience:</strong> Users see a brief "Reconnecting..." banner (1-3 seconds). No keystrokes lost. Cursors of other users may temporarily disappear during recovery. "Last saved" indicator updates once final checkpoint is written post-recovery. For the user, it's a minor flicker, not a data loss event.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="pitfall-card">
+        <div class="pf-hd"><div class="pf-q">"What if 200 users open the same Google Doc at once for a company all-hands? Does OT scale to that many concurrent editors?"</div></div>
+        <div class="pf-bd">
+          <ul class="pf-steps">
+            <li><strong>OT itself scales — the bottleneck is broadcast fan-out.</strong> Transform is O(concurrent_ops_since_last_rev) per incoming op, which is typically 0-5 ops. Even with 200 users, at ~2 ops/sec/user = 400 ops/sec, each transform looks back at most a few ops. The CPU cost is negligible.</li>
+            <li><strong>WebSocket fan-out is the real challenge.</strong> Each op must be broadcast to 199 other connections. At 400 ops/sec * 199 = ~80K WebSocket messages/sec from one server. Solution: batching (aggregate ops into 50ms windows, send one batch instead of 20 individual messages) + read-replica fan-out (primary handles OT, replicas handle broadcasting to subsets of clients).</li>
+            <li><strong>Cursor spam reduction.</strong> 200 users * cursor updates every 100ms = 2000 cursor msgs/sec, each broadcast to 199 others = 400K msgs/sec. Mitigation: (a) Only broadcast cursor for users currently visible in the viewport of each recipient. (b) Throttle to 500ms for non-nearby cursors. (c) Show only ~8 cursors max (closest to your viewport position), others collapsed into "and 192 others..."</li>
+            <li><strong>Document partitioning for extreme scale.</strong> If a doc has structured sections (like Google Slides or Sheets), partition OT by section/slide/sheet. Each partition has its own op log and can be handled by different servers. Text docs don't partition as cleanly, but paragraph-level partitioning is possible for 500+ user scenarios.</li>
           </ul>
         </div>
       </div>
@@ -2073,11 +2485,14 @@ const panels = {
     ]
   },
   collab: {
-    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing + OT/CRDT + cursor sync',
+    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing + OT + WebSocket + server authority',
     sections: [
-      { title: 'Operational Transform', text: 'Each edit is an operation: insert(pos, text) or delete(pos, length). When two users edit concurrently, operations must be transformed against each other to maintain consistency. Server is the authority: assigns sequential revision numbers. Clients transform local pending ops against incoming server ops.' },
-      { title: 'Architecture', items: ['WebSocket connection per active editor per document', 'In-memory document state on collab server (Redis-backed for HA)', 'Operations applied in server-determined order', 'Broadcast transformed operations to all connected clients', 'Checkpoint: persist full document state every 30s or 100 ops', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
-      { title: 'Presence & Cursors', items: ['Each user cursor position broadcast via WebSocket', 'Cursor updates are fire-and-forget (no persistence needed)', 'User presence: "Alice is viewing", "Bob is editing at line 42"', 'Heartbeat every 30s to detect stale sessions', 'Idle timeout: 5min without activity -> remove from active editors'] }
+      { title: 'What Clients Send', text: 'Every keystroke or edit produces an operation: insert(position, text) or delete(position, length). The client applies ops locally immediately (optimistic update), then sends to server with the last known server_rev. Rule: only 1 unacknowledged op in flight at a time. Additional keystrokes are buffered and composed into a single op, sent after ACK.' },
+      { title: 'Server-side OT Pipeline', items: ['1. Receive op from client with its server_rev reference', '2. Acquire per-document in-memory mutex (microseconds, no I/O)', '3. Fetch all ops between client\'s server_rev and current rev from ops log', '4. Transform client op against each intervening op (adjust positions)', '5. Write transformed op to WAL (Kafka) for crash durability', '6. Apply to in-memory canonical document state, increment revision', '7. ACK originating client, broadcast transformed op to all others'] },
+      { title: 'How Documents Converge', items: ['Server assigns total ordering via sequential revision numbers', 'OT transform function satisfies TP1: both orderings yield same result', '1-op-in-flight rule ensures causal consistency per client', 'All clients apply the same set of ops in the same server-determined order', 'After processing all ops, every client reaches identical document state'] },
+      { title: 'Persistence & Recovery', items: ['Checkpoint: snapshot full document to blob storage every 30s or 100 ops', 'WAL (Kafka): every op written durably before applying to memory', 'On server crash: load last checkpoint + replay WAL from checkpoint revision', 'Recovery time: <2s. Clients auto-reconnect with exponential backoff', 'Session end: final checkpoint + evict from memory + publish FILE_MODIFIED'] },
+      { title: 'Architecture & Scaling', items: ['Consistent hash(doc_id) -> server: one doc pinned to one server', 'WebSocket connection per active editor per document', 'In-memory state: ~1-5MB per doc (text + ops log + sessions)', 'Single 64GB server handles ~15K concurrent docs', 'Cross-region: ops forwarded to primary region for OT, ~100-200ms latency', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
+      { title: 'Presence & Cursors', items: ['Cursor position broadcast via WebSocket every 100ms (throttled)', 'Cursor updates are fire-and-forget (no persistence, no OT)', 'User presence: "Alice is viewing", "Bob is editing at line 42"', 'Heartbeat every 30s to detect stale sessions', 'Idle timeout: 5min without activity -> remove from active editors'] }
     ]
   },
   objectstore: {
