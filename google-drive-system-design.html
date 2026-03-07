@@ -614,11 +614,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     <div class="hero-title">Google Drive<br><span>System Design</span></div>
     <div class="hero-sub">APIs + Contracts + State Machine + Data Models + Scalability + Trade-offs + Pitfalls</div>
     <div class="hero-pills">
-      <span class="pill hi">Content-Addressable Storage</span>
       <span class="pill hi">Chunked Resumable Uploads</span>
       <span class="pill hi">Hierarchical ACL</span>
       <span class="pill hi">Delta Sync</span>
-      <span class="pill">SHA-256 Dedup</span>
+      <span class="pill hi">Per-file Chunk Versioning</span>
       <span class="pill">Optimistic Concurrency (ETags)</span>
       <span class="pill">Real-time Collaboration</span>
       <span class="pill">Append-only Audit Trail</span>
@@ -644,8 +643,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="principles">
       <div class="principle">
-        <div class="principle-title">Content-addressable storage (SHA-256 dedup)</div>
-        <div class="principle-desc">Each chunk hashed with SHA-256. Identical chunks share one physical copy. ref_count tracks how many files reference a chunk. Storage savings of 30-50% typical in enterprise.</div>
+        <div class="principle-title">Per-file chunk versioning</div>
+        <div class="principle-desc">Files split into 4-8MB chunks scoped to each file. On edit, only the modified chunk gets a new version — unchanged chunks are untouched. Simplifies GC: delete a file, delete its chunks. SHA-256 used for integrity verification, not dedup.</div>
       </div>
       <div class="principle">
         <div class="principle-title">Chunked resumable uploads</div>
@@ -691,7 +690,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="comp" onclick="openPanel('webclient')">
               <div class="comp-top"><span class="comp-icon">&#x1F310;</span><span class="comp-name">Mobile / Web Client</span></div>
               <div class="comp-role">Chunked uploader + local sync engine</div>
-              <div class="comp-detail">Client-side file chunking (4-8MB). SHA-256 per chunk for dedup check before upload. SQLite for local metadata cache. Exponential backoff on retry. Bandwidth throttling.</div>
+              <div class="comp-detail">Client-side file chunking (4-8MB). SHA-256 per chunk for integrity verification. SQLite for local metadata cache. Exponential backoff on retry. Bandwidth throttling.</div>
             </div>
             <div class="comp" onclick="openPanel('gateway')">
               <div class="comp-top"><span class="comp-icon">&#x1F6AA;</span><span class="comp-name">API Gateway</span></div>
@@ -723,8 +722,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             </div>
             <div class="comp" onclick="openPanel('blob')">
               <div class="comp-top"><span class="comp-icon">&#x1F4E6;</span><span class="comp-name">Blob Storage Service</span></div>
-              <div class="comp-role">Chunked upload/download + dedup</div>
-              <div class="comp-detail">Handles resumable uploads (initiate, upload chunk, finalize). SHA-256 dedup: check chunk hash before storing. Pre-signed URL generation for direct S3 upload/download.</div>
+              <div class="comp-role">Chunked upload/download + versioning</div>
+              <div class="comp-detail">Handles resumable uploads (initiate, upload chunk, finalize). Chunks scoped per file with version tracking. SHA-256 for integrity verification. Pre-signed URL generation for direct S3 upload/download.</div>
             </div>
             <div class="comp" onclick="openPanel('sharing')">
               <div class="comp-top"><span class="comp-icon">&#x1F465;</span><span class="comp-name">Sharing &amp; Permission Service</span></div>
@@ -810,7 +809,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="comp" onclick="openPanel('quota')">
               <div class="comp-top"><span class="comp-icon">&#x1F4CA;</span><span class="comp-name">Quota Enforcement</span></div>
               <div class="comp-role">Storage limits + billing integration</div>
-              <div class="comp-detail">Pre-check before upload initiation. Atomic counter in Redis. Eventual consistency with actual storage (reconciliation job). Dedup-aware: shared chunks counted once per user.</div>
+              <div class="comp-detail">Pre-check before upload initiation. Atomic counter in Redis. Eventual consistency with actual storage (reconciliation job). Quota decremented on file delete, incremented on upload.</div>
             </div>
             <div class="comp" onclick="openPanel('audit')">
               <div class="comp-top"><span class="comp-icon">&#x1F4DC;</span><span class="comp-name">Audit Logger</span></div>
@@ -1044,7 +1043,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <span class="str">"upload_id"</span>: <span class="str">"upl_x7y8z9..."</span>,
   <span class="str">"chunks_received"</span>: <span class="num">1</span>,
   <span class="str">"bytes_received"</span>: <span class="num">8388608</span>,
-  <span class="str">"dedup_hit"</span>: <span class="kw">false</span>
+  <span class="str">"checksum_verified"</span>: <span class="kw">true</span>
 }
 <span class="cm">// 201 — final chunk, upload complete</span>
 <span class="cm">// triggers: virus scan, thumbnail gen</span></div>
@@ -1508,7 +1507,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="flow-hd" onclick="toggleFlow('f1')">
           <div class="flow-num">F-01</div>
           <div class="flow-title">Resumable File Upload</div>
-          <div class="flow-meta">Chunked + dedup + virus scan</div>
+          <div class="flow-meta">Chunked + integrity check + virus scan</div>
           <div class="flow-chevron">></div>
         </div>
         <div class="flow-bd">
@@ -1528,8 +1527,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="flow-step">
               <div class="fs-num">03</div>
               <div class="fs-svc">Blob Service</div>
-              <div class="fs-action">For each chunk: check if SHA-256 hash exists in chunks table. If exists: increment ref_count (dedup hit, skip upload). If not: upload to S3, insert chunk record.</div>
-              <div class="fs-note">30-50% storage savings from dedup</div>
+              <div class="fs-action">For each chunk: upload to S3 with key = {file_id}/{chunk_index}/{version}. Verify SHA-256 of uploaded bytes matches client-declared hash. Insert chunk record into file_chunks table scoped to this file.</div>
+              <div class="fs-note">Per-file chunks — simple ownership, simple GC</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">04</div>
@@ -1890,39 +1889,29 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="db-schema">
               <div class="db-sec-label">Core Tables</div>
               <div class="schema-block">
-                <div class="schema-table">chunks <span>-- content-addressable store</span></div>
-                <div class="schema-col"><span class="col-name pk">content_hash</span><span class="col-type">CHAR(64) PK</span><span class="col-note">SHA-256</span></div>
-                <div class="schema-col"><span class="col-name">storage_location</span><span class="col-type">VARCHAR</span><span class="col-note">s3://bucket/key</span></div>
+                <div class="schema-table">file_chunks <span>-- per-file chunk storage</span></div>
+                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
+                <div class="schema-col"><span class="col-name">chunk_index</span><span class="col-type">INT</span><span class="col-note">ordering</span></div>
+                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span><span class="col-note">chunk version</span></div>
                 <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span></div>
-                <div class="schema-col"><span class="col-name">ref_count</span><span class="col-type">INT DEFAULT 1</span><span class="col-note">dedup counter</span></div>
+                <div class="schema-col"><span class="col-name">checksum_sha256</span><span class="col-type">CHAR(64)</span><span class="col-note">integrity</span></div>
+                <div class="schema-col"><span class="col-name">storage_key</span><span class="col-type">VARCHAR</span><span class="col-note">s3://{file_id}/{chunk_index}/{ver}</span></div>
                 <div class="schema-col"><span class="col-name">storage_class</span><span class="col-type">ENUM(hot, warm, cold)</span></div>
                 <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
-                <div class="schema-col"><span class="col-name">last_accessed</span><span class="col-type">TIMESTAMP</span></div>
                 <div class="schema-indexes">
-                  <strong>PK:</strong> content_hash (SHA-256) — content-addressable lookup in O(1)<br>
-                  <strong>GC index:</strong> (ref_count=0, last_accessed) for orphan cleanup<br>
-                  <strong>Tiering:</strong> (storage_class, last_accessed) for lifecycle migration
-                </div>
-              </div>
-              <div class="schema-block">
-                <div class="schema-table">file_chunks <span>-- file-to-chunk mapping</span></div>
-                <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
-                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span></div>
-                <div class="schema-col"><span class="col-name">chunk_index</span><span class="col-type">INT</span><span class="col-note">ordering</span></div>
-                <div class="schema-col"><span class="col-name fk">content_hash</span><span class="col-type">CHAR(64) FK</span></div>
-                <div class="schema-indexes">
-                  <strong>PK:</strong> (file_id, version_num, chunk_index)<br>
-                  <strong>Download:</strong> ORDER BY chunk_index to reassemble file
+                  <strong>PK:</strong> (file_id, chunk_index, version_num)<br>
+                  <strong>Download:</strong> WHERE file_id=? AND version_num=? ORDER BY chunk_index<br>
+                  <strong>Tiering:</strong> (storage_class, created_at) for lifecycle migration
                 </div>
               </div>
             </div>
             <div class="db-schema" style="border-right:none">
               <div class="db-sec-label">Design Decisions</div>
               <ul class="db-notes-list">
-                <li><strong>Content-addressable:</strong> PK = SHA-256 hash of chunk data. Same content = same key. Dedup is automatic: INSERT ON CONFLICT (content_hash) DO UPDATE SET ref_count = ref_count + 1.</li>
-                <li><strong>ref_count for GC:</strong> When a file version is deleted, decrement ref_count for each chunk. When ref_count reaches 0: chunk is orphaned. GC job deletes S3 object + DB row after 7-day grace period.</li>
-                <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on last_accessed. Retrieval from cold adds 3-5h latency.</li>
-                <li><strong>Chunk size choice:</strong> 4-8MB balances: upload resume granularity (smaller=better), dedup efficiency (larger=fewer chunks to track), S3 multipart limits. Variable chunk sizes possible with content-defined chunking (CDC) for better dedup.</li>
+                <li><strong>Per-file scoping:</strong> Chunks belong to a specific file. No cross-file sharing. Delete a file = delete its chunks from S3. Simple ownership model, no ref_count needed.</li>
+                <li><strong>Version-level chunking:</strong> On edit, only the modified chunk gets a new version. Unchanged chunks keep their existing version. Query for file version N: SELECT the latest chunk version <= N for each chunk_index.</li>
+                <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on created_at. Retrieval from cold adds 3-5h latency.</li>
+                <li><strong>Chunk size choice:</strong> 4-8MB balances: upload resume granularity (smaller = better), per-file versioning efficiency (larger = fewer chunks to track), and S3 multipart limits.</li>
               </ul>
             </div>
           </div>
@@ -2236,10 +2225,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
           <td>Folder listing = single shard. Cross-shard for shared files (scatter-gather).</td>
         </tr>
         <tr>
-          <td>chunks (blob metadata)</td>
+          <td>file_chunks</td>
           <td>1T+ rows, ~20TB</td>
-          <td>Shard by content_hash prefix (first 2 bytes = 65K buckets)</td>
-          <td>Uniform distribution by hash. No hot spots. Dedup lookup = single shard.</td>
+          <td>Shard by file_id (co-located with file metadata by owner_id)</td>
+          <td>All chunks for a file on same shard. Download = single shard query. GC on file delete = single shard.</td>
         </tr>
         <tr>
           <td>Object Store (S3/GCS)</td>
@@ -2262,7 +2251,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       </tbody>
     </table>
     <div class="key-principles">
-      <div class="kp"><div class="kp-title">Content-addressable dedup</div><div class="kp-body">SHA-256 keyed chunks. Same content stored once regardless of how many users have the file. Enterprise accounts with identical shared docs see 30-50% storage savings. ref_count enables safe GC.</div></div>
+      <div class="kp"><div class="kp-title">Per-file chunk versioning</div><div class="kp-body">Chunks scoped to each file. On edit, only modified chunks get new versions — unchanged chunks untouched. Delete a file = delete its chunks. Simple ownership, no cross-file dependencies, straightforward GC.</div></div>
       <div class="kp"><div class="kp-title">CDN for read path</div><div class="kp-body">Popular shared files cached at edge. Pre-signed URLs bypass application servers entirely for downloads. p99 first-byte &lt;500ms. CloudFront/Akamai with 200+ edge locations globally.</div></div>
       <div class="kp"><div class="kp-title">Metadata sharding by owner_id</div><div class="kp-body">All of a user's files on same shard. Folder listing, search, quota calc = single-shard queries. Shared files require cross-shard reads but are 10-15% of total reads.</div></div>
       <div class="kp"><div class="kp-title">Hot user handling</div><div class="kp-body">Users with 100K+ files: virtual sharding splits their data across N sub-shards. Folder listing uses scatter-gather within virtual shard group. Prevents single-shard bottleneck.</div></div>
@@ -2283,13 +2272,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="mc-row"><span class="mc-label">System complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
         <div class="mc-row"><span class="mc-label">Throughput</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
         <div class="mc-verdict"><strong>Eventual consistency wins.</strong> Strong consistency requires distributed locks across all devices. At 15M DAU, latency cost is prohibitive. Eventual with conflict resolution (fork + manual merge) is the industry standard (Dropbox, Google Drive).</div>
-      </div>
-      <div class="matrix-card">
-        <div class="mc-title">Inline Dedup vs Async Dedup</div>
-        <div class="mc-row"><span class="mc-label">Storage savings</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
-        <div class="mc-row"><span class="mc-label">Upload latency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
-        <div class="mc-row"><span class="mc-label">Implementation effort</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
-        <div class="mc-verdict"><strong>Inline dedup for uploads.</strong> Check SHA-256 before storing chunk. If match: skip upload entirely (save bandwidth + storage). 1-2ms hash lookup cost per chunk is negligible vs 100ms+ upload time saved. Async dedup only for cross-user detection of near-duplicates.</div>
       </div>
       <div class="matrix-card">
         <div class="mc-title">Flat Namespace vs Hierarchical Tree</div>
@@ -2358,17 +2340,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         </div>
       </div>
       <div class="pitfall-card">
-        <div class="pf-hd"><div class="pf-q">"With content-addressable dedup, how do you handle quota accounting? If 100 users all upload the same 1GB file, who gets charged?"</div></div>
-        <div class="pf-bd">
-          <ul class="pf-steps">
-            <li><strong>Logical vs physical storage are different.</strong> Physical: one copy of the 1GB file exists (ref_count=100). Logical: each user's quota is charged the full 1GB. This is the Google Drive / Dropbox model.</li>
-            <li><strong>Why charge everyone:</strong> If User A deletes their copy, their quota should decrease. If dedup-aware: deleting would not free quota (other 99 users still reference it). Confusing UX: "I deleted a 1GB file but my storage didn't change."</li>
-            <li><strong>Implementation:</strong> Quota counter (Redis INCRBY) tracks logical usage per user. File size added on upload, subtracted on delete. Completely independent of physical dedup. Reconciliation job periodically verifies Redis counter matches SUM(files.size) from DB.</li>
-            <li><strong>Enterprise exception:</strong> Some enterprise plans offer "dedup-aware quota" where shared files within an org only count once against the org's pool. This is a billing feature, not a storage feature. Implemented as: org_quota = SUM(DISTINCT chunk sizes) for all org users.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="pitfall-card">
         <div class="pf-hd"><div class="pf-q">"A user has a folder with 500,000 files. How do you make listing performant?"</div></div>
         <div class="pf-bd">
           <ul class="pf-steps">
@@ -2425,7 +2396,7 @@ const panels = {
   webclient: {
     icon: '\u{1F310}', title: 'Mobile / Web Client', subtitle: 'Chunked uploader + local sync engine + offline access',
     sections: [
-      { title: 'Chunked Upload Engine', items: ['Split files into 4-8MB chunks client-side before upload', 'Compute SHA-256 per chunk for dedup check + integrity verification', 'Resumable: track which chunks uploaded in local SQLite. On failure: resume from last successful chunk', 'Bandwidth throttling: limit upload speed to avoid saturating user connection', 'Parallel upload: 3-4 chunks concurrently for throughput on fast connections'] },
+      { title: 'Chunked Upload Engine', items: ['Split files into 4-8MB chunks client-side before upload', 'Compute SHA-256 per chunk for integrity verification on server', 'Resumable: track which chunks uploaded in local SQLite. On failure: resume from last successful chunk', 'Bandwidth throttling: limit upload speed to avoid saturating user connection', 'Parallel upload: 3-4 chunks concurrently for throughput on fast connections'] },
       { title: 'Local Sync Engine', items: ['SQLite database mirrors server file metadata locally', 'File system watcher (inotify/FSEvents) detects local changes', 'Change queue: debounce rapid edits (1s delay before syncing)', 'Offline mode: queue all changes locally, sync when connection restored', 'Conflict detection: compare local version vs server version on reconnect'] },
       { title: 'Smart Sync / On-Demand', items: ['Not all files downloaded by default (saves disk space)', 'Placeholder files shown in file browser with cloud icon', 'File accessed -> triggers download on demand', 'Pinned files: always available offline (user selects)', 'LRU eviction: auto-remove least-recently-used local copies when disk is low'] }
     ]
@@ -2441,7 +2412,7 @@ const panels = {
   cdn: {
     icon: '\u{26A1}', title: 'CDN (CloudFront/Akamai)', subtitle: 'Download acceleration + edge caching',
     sections: [
-      { title: 'Caching Strategy', items: ['Shared files with 100+ views cached at edge automatically', 'Pre-signed URLs: include token + expiry in URL, CDN validates', 'Cache invalidation on file update: API call to CDN purge endpoint', 'Cache key: content_hash ensures new version = new cache key (no stale content)', 'Geographic routing: user -> nearest edge PoP -> origin if cache miss'] },
+      { title: 'Caching Strategy', items: ['Shared files with 100+ views cached at edge automatically', 'Pre-signed URLs: include token + expiry in URL, CDN validates', 'Cache invalidation on file update: API call to CDN purge endpoint', 'Cache key: file_id + version ensures new version = new cache key (no stale content)', 'Geographic routing: user -> nearest edge PoP -> origin if cache miss'] },
       { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key (content_hash), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs.' }
     ]
   },
@@ -2450,14 +2421,14 @@ const panels = {
     sections: [
       { title: 'Core Responsibilities', text: 'Manages the file/folder hierarchy. Every file and folder is a row in the files table. parent_id creates the tree structure. Owner is the user who created the file. Versions tracked via version column + file_versions table for history.' },
       { title: 'Optimistic Concurrency', items: ['Every metadata update requires If-Match: ETag header', 'ETag = hash of (id + version + modified_at)', 'PUT /files/{id} with stale ETag -> 412 Precondition Failed', 'Client must refetch, show diff to user, retry with new ETag', 'No pessimistic locks: read-heavy workload (100:1 read:write ratio)'] },
-      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy: deep copy file metadata + increment chunk ref_counts (no data copy)'] }
+      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy: deep copy file metadata + copy chunk records with new file_id'] }
     ]
   },
   blob: {
-    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Chunked upload/download + SHA-256 dedup',
+    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Chunked upload/download + per-file versioning',
     sections: [
       { title: 'Resumable Upload Protocol', items: ['POST /uploads/resumable: initiate session, get upload_id (24h TTL)', 'PUT /uploads/{id} with Content-Range header for each chunk', 'Server tracks received chunks. Client can query progress.', 'Final chunk: server verifies full-file SHA-256 checksum', 'On failure: client resumes from last acknowledged chunk offset'] },
-      { title: 'Content-Addressable Dedup', items: ['Each chunk keyed by SHA-256 hash of its content', 'Before storing: check if hash exists in chunks table', 'Hash exists: skip upload, increment ref_count (saves bandwidth + storage)', 'Hash collision: astronomically unlikely (1 in 2^128). Not worth handling.', 'Enterprise: 30-50% dedup ratio on shared documents and email attachments'] },
+      { title: 'Per-file Chunk Storage', items: ['Chunks keyed by {file_id}/{chunk_index}/{version} in S3', 'Each chunk belongs to exactly one file — simple ownership', 'SHA-256 used for integrity verification, not dedup', 'On edit: only modified chunks get a new version, unchanged chunks untouched', 'Delete file: delete all chunks for that file_id from S3 + DB'] },
       { title: 'Download Path', items: ['Generate pre-signed S3 URL (1h TTL)', 'Redirect client to CDN/S3 directly (302 redirect)', 'Range request support for partial downloads and video streaming', 'Chunks reassembled in order by chunk_index from file_chunks table', 'Large files: parallel chunk download on client for speed'] }
     ]
   },
@@ -2498,8 +2469,8 @@ const panels = {
   objectstore: {
     icon: '\u{1F5C4}', title: 'Object Store (S3/GCS)', subtitle: 'Blob storage + 11 nines durability + lifecycle',
     sections: [
-      { title: 'Storage Architecture', text: 'File chunks stored as objects keyed by SHA-256 content hash. Bucket structure: s3://drive-chunks-{region}/{hash[0:2]}/{hash[2:4]}/{hash}. Two levels of prefix partitioning prevent S3 request throttling on hot prefixes. Cross-region replication for disaster recovery.' },
-      { title: 'Lifecycle Policies', items: ['Hot tier (S3 Standard): accessed within last 30 days. Lowest latency, highest cost.', 'Warm tier (S3 IA): 30-90 days since last access. 40% cheaper, same durability.', 'Cold tier (Glacier): >90 days. 80% cheaper. 3-5 hour retrieval time.', 'Auto-transition based on chunks.last_accessed timestamp', 'User-triggered restore from cold: async, notify when ready'] }
+      { title: 'Storage Architecture', text: 'File chunks stored as objects keyed by {file_id}/{chunk_index}/{version}. Bucket structure: s3://drive-chunks-{region}/{owner_id_prefix}/{file_id}/. Prefix partitioning by owner_id prefix prevents S3 request throttling on hot prefixes. Cross-region replication for disaster recovery.' },
+      { title: 'Lifecycle Policies', items: ['Hot tier (S3 Standard): created within last 30 days. Lowest latency, highest cost.', 'Warm tier (S3 IA): 30-90 days since creation. 40% cheaper, same durability.', 'Cold tier (Glacier): >90 days. 80% cheaper. 3-5 hour retrieval time.', 'Auto-transition based on chunk created_at timestamp', 'User-triggered restore from cold: async, notify when ready'] }
     ]
   },
   metadb: {
@@ -2545,9 +2516,9 @@ const panels = {
     ]
   },
   quota: {
-    icon: '\u{1F4CA}', title: 'Quota Enforcement', subtitle: 'Storage limits + billing + dedup handling',
+    icon: '\u{1F4CA}', title: 'Quota Enforcement', subtitle: 'Storage limits + billing integration',
     sections: [
-      { title: 'Enforcement Points', items: ['Pre-check on upload initiation: reject if would exceed quota', 'Atomic Redis INCRBY: prevents race condition on concurrent uploads', 'Post-upload adjustment: if dedup detected, actual storage used less than declared', 'Quota tracked as logical usage (not physical) for user simplicity'] },
+      { title: 'Enforcement Points', items: ['Pre-check on upload initiation: reject if would exceed quota', 'Atomic Redis INCRBY: prevents race condition on concurrent uploads', 'Quota incremented on upload, decremented on file delete', 'Quota = SUM(file sizes) for user — straightforward accounting'] },
       { title: 'Reconciliation', items: ['Hourly job: compare Redis counter vs SUM(files.size) from DB', 'Drift detected: adjust Redis counter to match DB (source of truth)', 'Common drift causes: failed uploads not properly decrementing, race conditions', 'Alert if drift exceeds 1GB for any user (potential bug)'] }
     ]
   },
