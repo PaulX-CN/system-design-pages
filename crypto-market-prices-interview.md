@@ -710,11 +710,70 @@ class CandleAggregator:
 
 2. **Candle closure**: On the period boundary (e.g., every 5 minutes for a 5m chart), the service sends one final message with `is_closed: true`, then persists the closed candle to TimescaleDB.
 
-3. **Multiple intervals simultaneously**: The service runs one `CandleAggregator` instance per `(asset, interval)` pair. For ~400 assets × 6 intervals (1m, 5m, 15m, 1h, 4h, 1d) = ~2,400 aggregator instances — trivial for a single service.
-
-4. **Resolution switching**: When a user switches from 5m to 1h chart, the client unsubscribes from `candles:bitcoin:5m` and subscribes to `candles:bitcoin:1h`. The gateway adjusts its Pub/Sub subscriptions accordingly. Historical candles for the new resolution are fetched via REST.
+3. **Resolution switching**: When a user switches from 5m to 1h chart, the client unsubscribes from `candles:bitcoin:5m` and subscribes to `candles:bitcoin:1h`. The gateway adjusts its Pub/Sub subscriptions accordingly. Historical candles for the new resolution are fetched via REST.
 
 **✍️ Note**: This is exactly how Binance's `@kline_5m` stream works. Each message is a complete candle snapshot (not a diff), with `"x": false` for forming candles and `"x": true` for closed candles. Coinbase's candles channel works similarly but infers closure from a changed `start` timestamp rather than an explicit flag.
+
+**❓ With 1,000 assets × many intervals, does the server aggregate all combinations independently?**
+
+**No.** Two key optimizations avoid a combinatorial explosion:
+
+### Optimization 1: Hierarchical Roll-Up
+
+Only the **1-minute base interval** is aggregated directly from raw trade ticks. All higher intervals are **derived by rolling up** lower-resolution candles:
+
+```
+Raw trade ticks
+    │
+    ▼
+1m candles ← aggregated from ticks (1 aggregator per asset)
+    │
+    ├── 5m  = roll up 5 × 1m   (max highs, min lows, first open, last close)
+    ├── 15m = roll up 3 × 5m
+    ├── 30m = roll up 2 × 15m
+    ├── 1h  = roll up 2 × 30m
+    ├── 4h  = roll up 4 × 1h
+    └── 1d  = roll up 24 × 1h
+```
+
+Rolling up a 5m candle from five 1m candles is trivial:
+```python
+def rollup(candles_1m):
+    return {
+        "open":   candles_1m[0]["open"],         # first open
+        "high":   max(c["high"] for c in candles_1m),  # max of highs
+        "low":    min(c["low"]  for c in candles_1m),  # min of lows
+        "close":  candles_1m[-1]["close"],        # last close
+        "volume": sum(c["volume"] for c in candles_1m)
+    }
+```
+
+So for 1,000 assets, you run **1,000 tick-level aggregators** (1m base), not 1,000 × N. The higher intervals are cheap derivations.
+
+### Optimization 2: Lazy Pub/Sub Emission
+
+The server maintains running OHLCV state for all `(asset, interval)` combinations — but it only **publishes to Pub/Sub** for channels that have active WebSocket subscribers. If nobody is viewing the 15m chart for asset #847, don't emit on `candles:asset847:15m`.
+
+```python
+def emit(self):
+    """Only publish if there are active subscribers on this channel."""
+    channel = f"candles:{self.asset_id}:{self.interval}s"
+    if self.has_subscribers(channel):  # check subscriber count
+        self.publish(self.current_candle)
+```
+
+The in-memory candle state is still maintained (so the server can start streaming instantly when someone subscribes), but the Pub/Sub traffic is proportional to **active viewers**, not total combinations.
+
+### Scale math
+
+| Metric | Count | Cost |
+|---|---|---|
+| Tick-level aggregators (1m base) | ~1,000 (one per asset) | Each processes ~1 tick/sec |
+| Higher-interval candle state | ~1,000 assets × ~12 intervals = ~12,000 | ~100 bytes each = ~1.2 MB total RAM |
+| Active Pub/Sub channels | Proportional to users viewing charts | BTC/ETH dominate; long-tail assets have 0 subscribers |
+| Standard intervals (industry) | Binance: 16, Coinbase: 6 | Not 100 — exchanges offer ~6-16 standard intervals |
+
+**✍️ Note**: The total in-memory state for all candle aggregators is ~1.2 MB. The actual Pub/Sub load depends on how many users are actively viewing charts. During peak hours, perhaps ~50 assets have active chart viewers across all intervals — that's ~300 active channels, not 12,000. The long tail of assets has zero viewers most of the time.
 
 **❓ How big is the fan-out per asset?**
 
@@ -729,11 +788,11 @@ Even for BTC (the worst case), 100K pushes per tick at 1 tick/sec is well within
 
 **❓ Why Redis Pub/Sub and not NATS or Kafka?**
 
-With candle channels, total Pub/Sub channels are: ~400 ticker channels + ~400 assets × ~6 intervals = ~2,800 channels. Each channel receives ~1 message/sec. Total: ~2,800 msgs/sec.
+With lazy emission, the actual Pub/Sub load is much smaller than the theoretical maximum. Total defined channels: ~1,000 ticker channels + ~1,000 assets × ~12 intervals = ~13,000 channels. But with lazy emission, only channels with active subscribers emit — typically ~50-100 assets with chart viewers × ~2 intervals each ≈ **~200-500 active channels** at any time, plus ~200-400 active ticker channels. Realistic load: **~500-1,000 msgs/sec**.
 
 For this scale, Redis Pub/Sub is the simplest choice:
 - We already have Redis for the cache layer. No new infrastructure.
-- Redis Pub/Sub handles ~1M messages/sec. Our load is ~2,800 msgs/sec — 0.3% of capacity.
+- Redis Pub/Sub handles ~1M messages/sec. Our load is ~500-1,000 msgs/sec — 0.1% of capacity.
 - Fire-and-forget semantics are perfect for ephemeral price ticks and forming candles.
 - Gateway only subscribes to channels for assets AND intervals its clients are viewing — most channels have 0 gateway subscribers.
 
@@ -961,7 +1020,7 @@ Key metrics:
 | REST API (or GraphQL) | ~50K QPS at origin (after CDN) | 10-20 stateless instances |
 | WebSocket Gateway | 200K-500K concurrent connections | 5-10 instances |
 | Redis Cluster | ~5K-50K ops/sec (after CDN) | 6 nodes (3 primaries) |
-| Redis Pub/Sub | ~2,800 msgs/sec (tickers + candles) | Same Redis cluster |
+| Redis Pub/Sub | ~500-1,000 msgs/sec (lazy emit, active channels only) | Same Redis cluster |
 | Price Aggregation | ~80K ticks/min ingested | 3 replicas |
 | TimescaleDB | ~576K rows/day, ~2 GB/year | Single primary + 2 replicas |
 
@@ -1070,7 +1129,7 @@ The core of this design:
 
 5. **Server-side candle aggregation** — The server computes OHLCV candles and streams the forming candle to clients every ~1 second with an `is_closed` flag. Clients never aggregate raw ticks — they just render the candle object. This is the industry standard (Binance `@kline_5m`, Coinbase candles channel).
 
-6. **Simple Pub/Sub for WebSocket fan-out** — Redis Pub/Sub distributes ticker + candle updates to the gateway fleet. At ~2,800 msgs/sec total, this is trivial for Redis. No need for NATS or Kafka.
+6. **Simple Pub/Sub for WebSocket fan-out** — Redis Pub/Sub distributes ticker + candle updates to the gateway fleet. With lazy emission (only channels with active subscribers), actual load is ~500-1,000 msgs/sec — trivial for Redis. No need for NATS or Kafka.
 
 7. **Centralized ingestion, replicated reads** — Exchange feeds are consumed in one region. Aggregated prices are replicated globally via Redis cross-region replication. Avoid duplicate exchange connections and price divergence.
 
