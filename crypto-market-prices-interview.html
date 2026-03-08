@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crypto Market Prices — Staff Engineer Interview</title>
+<title>Crypto Market Prices — System Design (Coinbase Explore)</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -364,7 +364,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   margin-bottom:16px;
 }
 .body-text strong{color:var(--text);}
-.body-text code{color:var(--teal);font-size:12px;}
+.body-text code{color:var(--teal);font-size:12px;background:rgba(0,212,170,0.08);padding:1px 5px;border-radius:2px;}
 
 /* API endpoint styling */
 .api-endpoint{margin-bottom:20px;}
@@ -426,8 +426,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
 <nav>
   <div class="nav-logo">CRYPTO PRICES</div>
-  <div class="nav-item active" data-section="concepts" onclick="scrollToSection('concepts')">Concepts</div>
-  <div class="nav-item" data-section="context" onclick="scrollToSection('context')">Context</div>
+  <div class="nav-item active" data-section="context" onclick="scrollToSection('context')">Context</div>
   <div class="nav-item" data-section="requirements" onclick="scrollToSection('requirements')">Requirements</div>
   <div class="nav-item" data-section="api" onclick="scrollToSection('api')">API Design</div>
   <div class="nav-item" data-section="hld" onclick="scrollToSection('hld')">High Level Design</div>
@@ -444,42 +443,43 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 <div class="hero">
   <div class="hero-tag">Interview Mode &middot; Staff Engineer</div>
   <h1 class="hero-title">Crypto Market Prices<br><span>System Design</span></h1>
-  <p class="hero-sub">Coinbase Explore &middot; CDN-First Architecture &middot; Pre-Computation Pipeline &middot; WebSocket Detail Page</p>
+  <p class="hero-sub">Coinbase Explore &middot; CDN-First &middot; Pre-Computation &middot; WebSocket Detail Page</p>
   <div class="hero-pills">
     <span class="pill hi">CDN + Short-TTL Caching</span>
-    <span class="pill hi">Pre-Computed Snapshots</span>
+    <span class="pill hi">Pre-Computation Pipeline</span>
     <span class="pill hi">VWAP Aggregation</span>
     <span class="pill hi">Server-Side Candle Aggregation</span>
-    <span class="pill hi">WebSocket (Detail Only)</span>
     <span class="pill hi">TimescaleDB</span>
+    <span class="pill hi">WebSocket (Detail Only)</span>
     <span class="pill hi">Multi-Region</span>
   </div>
 </div>
 
-<!-- 01 IMPORTANT CONCEPTS -->
-<section id="concepts">
+<!-- 01 CONTEXT + IMPORTANT CONCEPTS -->
+<section id="context">
   <div class="sec-head">
     <span class="sec-num">01</span>
-    <span class="sec-title">Important Concepts</span>
-    <span class="sec-tag">Key ideas to mention early</span>
+    <span class="sec-title">Context &amp; Important Concepts</span>
+    <span class="sec-tag">Pre-read &amp; scale reference</span>
   </div>
 
+  <h3 class="sub-head-sm">Important Concepts</h3>
   <div class="concept-grid">
     <div class="concept-card">
       <div class="cc-title">CDN + Short-TTL Caching</div>
-      <div class="cc-desc">High-traffic read-heavy pages served from CDN edge with 30-60s TTL</div>
+      <div class="cc-desc">High-traffic read-heavy pages served from edge with 30-60s TTL</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">Pre-Computation Pipeline</div>
-      <div class="cc-desc">Sorted lists, sparklines, trending lists all pre-built in Redis</div>
+      <div class="cc-desc">Sorted lists, sparklines, trending &mdash; all pre-built in Redis</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">Write-Behind Caching</div>
-      <div class="cc-desc">Redis as the primary read store for price data</div>
+      <div class="cc-desc">Redis as primary read store, TimescaleDB for persistence</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">WebSocket (Detail Page Only)</div>
-      <div class="cc-desc">Live ticks only on single-asset detail page, not the list page</div>
+      <div class="cc-desc">Live ticks only for single-asset detail view, not the list page</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">VWAP Aggregation</div>
@@ -491,25 +491,16 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="concept-card">
       <div class="cc-title">TimescaleDB Continuous Aggregates</div>
-      <div class="cc-desc">Automatic rollup of 1m candles into 5m, 1h, 1d OHLCV candles</div>
+      <div class="cc-desc">Automatic OHLCV candle roll-ups for time-series data</div>
     </div>
     <div class="concept-card">
-      <div class="cc-title">GraphQL with Persisted Queries</div>
+      <div class="cc-title">GraphQL + Persisted Queries</div>
       <div class="cc-desc">Alternative to REST used by Coinbase in production</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">Market Health Aggregation</div>
-      <div class="cc-desc">Market cap, BTC dominance, buy/sell ratio</div>
+      <div class="cc-desc">Market cap, BTC dominance, buy/sell ratio &mdash; aggregate stats</div>
     </div>
-  </div>
-</section>
-
-<!-- 02 CONTEXT -->
-<section id="context">
-  <div class="sec-head">
-    <span class="sec-num">02</span>
-    <span class="sec-title">Context</span>
-    <span class="sec-tag">Problem scope &amp; scale reference</span>
   </div>
 
   <p class="body-text">We are designing the backend for a page like <strong>Coinbase Explore</strong> &mdash; a high-traffic page that displays cryptocurrency market prices for thousands of assets. The page is the #1 entry point for casual users and receives billions of page views per month.</p>
@@ -519,59 +510,20 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     <div class="note-body">The <strong>list page</strong> (explore page) does NOT update prices in real time via WebSocket. Prices refresh on page load or via client-side polling (~every 60 seconds). Only the <strong>detail page</strong> (e.g., <code>/price/bitcoin</code>) shows a live-ticking price chart via WebSocket. This dramatically simplifies the architecture &mdash; the list page is essentially a <strong>CDN-cacheable, pre-computed snapshot</strong>.</div>
   </div>
 
-  <h3 class="sub-head">Core Features</h3>
+  <h3 class="sub-head-sm">Core Features</h3>
   <ol class="step-list">
-    <li><strong>Asset listing table</strong> &mdash; Shows ~400 tradeable assets (Coinbase lists ~383 as of 2026) with name, symbol, price, percent changes across multiple time periods (1h, 24h, 7d, 1m, 1y), 24h volume, market cap, and a sparkline chart. Prices refresh on page load or via client-side polling (~every 60 seconds).</li>
-    <li><strong>Market health overview</strong> &mdash; Aggregate market stats: total market cap, 24h trading volume, BTC dominance %, buy/sell ratio, with trend charts for each metric.</li>
-    <li><strong>Categories &amp; filters</strong> &mdash; Filter by "All Assets", "Top Gainers", "Top Losers", "Trending", "New Listings", "DeFi", "Layer 1", etc. Separate filter and sort controls.</li>
+    <li><strong>Asset listing table</strong> &mdash; ~400 tradeable assets (Coinbase lists ~383) with name, symbol, price, percent changes (1h, 24h, 7d, 1m, 1y), volume, market cap, sparkline. Refreshes on page load or polling (~60s).</li>
+    <li><strong>Market health overview</strong> &mdash; Total market cap, 24h volume, BTC dominance %, buy/sell ratio, with trend charts for each metric.</li>
+    <li><strong>Categories &amp; filters</strong> &mdash; All Assets, Top Gainers, Top Losers, Trending, New Listings, DeFi, Layer 1, etc.</li>
     <li><strong>Featured assets</strong> &mdash; Dedicated BTC and ETH header sections with market cap and volume.</li>
     <li><strong>Search</strong> &mdash; Instant search across all assets by name or symbol.</li>
-    <li><strong>Pagination</strong> &mdash; Default view shows top ~10 assets per page (Coinbase uses <code>limit: 10</code>) with pagination controls. Sorted by rank (market cap) by default.</li>
-    <li><strong>Price sparkline</strong> &mdash; Mini chart for each asset (loaded lazily &mdash; can be skipped on initial load for performance).</li>
-    <li><strong>Detail page</strong> &mdash; Single asset view with live-ticking price, OHLCV charts (1d/7d/30d/1y), stats, and description. This is the only page that uses WebSocket.</li>
+    <li><strong>Pagination</strong> &mdash; Default top ~10 per page (Coinbase uses <code>limit: 10</code>) with pagination controls. Sorted by rank (market cap) by default.</li>
+    <li><strong>Price sparkline</strong> &mdash; Mini chart for each asset (loaded lazily).</li>
+    <li><strong>Detail page</strong> &mdash; Single asset view with live-ticking price, OHLCV charts, stats, description. The only page using WebSocket.</li>
   </ol>
 
   <p class="body-text">This is a <strong>read-heavy</strong> system. The write side is a continuous ingestion pipeline from exchanges and market data providers. The read side is serving millions of concurrent users viewing mostly the same pre-computed data.</p>
-</section>
 
-<!-- 03 REQUIREMENTS -->
-<section id="requirements">
-  <div class="sec-head">
-    <span class="sec-num">03</span>
-    <span class="sec-title">Requirements</span>
-    <span class="sec-tag">Functional, Non-functional &amp; Edge Cases</span>
-  </div>
-
-  <h3 class="sub-head">Functional Requirements</h3>
-  <div class="principles">
-    <div class="principle">
-      <div class="principle-title">List Assets</div>
-      <div class="principle-desc">Return a paginated list of crypto assets with current price, percent changes across multiple periods (1h, 24h, 7d, 1m, 1y), volume, and market cap. Support independent filter and sort controls. Prices are a snapshot, not live-updating.</div>
-    </div>
-    <div class="principle">
-      <div class="principle-title">Market Health Overview</div>
-      <div class="principle-desc">Aggregate market-level data: total market cap with trend chart, total trading volume, BTC dominance %, buy/sell ratio.</div>
-    </div>
-    <div class="principle">
-      <div class="principle-title">Search</div>
-      <div class="principle-desc">Search assets by name or ticker symbol with sub-100ms latency.</div>
-    </div>
-    <div class="principle">
-      <div class="principle-title">Asset Detail with Live Price</div>
-      <div class="principle-desc">Get detailed data for a single asset: live price (WebSocket), 24h/7d/30d/1y charts (OHLCV candles), description, stats.</div>
-    </div>
-    <div class="principle">
-      <div class="principle-title">Trending / Top Movers</div>
-      <div class="principle-desc">Pre-computed lists: top gainers, top losers, trending (by user interest/volume spike), new listings.</div>
-    </div>
-  </div>
-
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Interview Tip</div>
-    <div class="note-body">We are NOT designing the trading engine, order book, or wallet system. We assume upstream systems (matching engine, exchange integrations) produce a stream of price ticks that we consume.</div>
-  </div>
-
-  <h3 class="sub-head">Scale</h3>
   <div class="metrics-grid">
     <div class="metric">
       <div class="metric-val">10M+</div>
@@ -582,85 +534,131 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <div class="metric-label">Listed assets tracked</div>
     </div>
     <div class="metric">
-      <div class="metric-val">~100K</div>
-      <div class="metric-label">Read QPS (list page HTTP)</div>
+      <div class="metric-val">100K QPS</div>
+      <div class="metric-label">List page API (normal)</div>
     </div>
     <div class="metric">
-      <div class="metric-val">500K</div>
-      <div class="metric-label">Peak QPS (volatility events)</div>
+      <div class="metric-val">500K QPS</div>
+      <div class="metric-label">Peak (market volatility)</div>
     </div>
     <div class="metric">
       <div class="metric-val">200-500K</div>
       <div class="metric-label">Concurrent WebSocket connections</div>
     </div>
+    <div class="metric">
+      <div class="metric-val">99.99%</div>
+      <div class="metric-label">Uptime target</div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 REQUIREMENTS -->
+<section id="requirements">
+  <div class="sec-head">
+    <span class="sec-num">02</span>
+    <span class="sec-title">Requirements</span>
+    <span class="sec-tag">Functional &amp; Non-Functional</span>
   </div>
 
-  <h3 class="sub-head">Data Freshness</h3>
+  <h3 class="sub-head">Functional Requirements</h3>
+  <ol class="step-list">
+    <li><strong>List assets</strong> &mdash; Return a paginated list of crypto assets with current price, percent changes across multiple periods (1h, 24h, 7d, 1m, 1y), volume, and market cap. Support independent filter and sort controls. Prices are a snapshot, not live-updating.</li>
+    <li><strong>Market health overview</strong> &mdash; Aggregate market-level data: total market cap with trend chart, total trading volume, BTC dominance %, buy/sell ratio.</li>
+    <li><strong>Search</strong> &mdash; Search assets by name or ticker symbol with sub-100ms latency.</li>
+    <li><strong>Asset detail with live price</strong> &mdash; Get detailed data for a single asset: live price (WebSocket), 24h/7d/30d/1y charts (OHLCV candles), description, stats.</li>
+    <li><strong>Trending / Top movers</strong> &mdash; Pre-computed lists: top gainers, top losers, trending (by user interest/volume spike), new listings.</li>
+  </ol>
+
+  <div class="note-card">
+    <div class="note-label">Scope Note</div>
+    <div class="note-body">We are <strong>NOT</strong> designing the trading engine, order book, or wallet system. We assume upstream systems (matching engine, exchange integrations) produce a stream of price ticks that we consume.</div>
+  </div>
+
+  <h3 class="sub-head">Non-Functional Requirements</h3>
+
+  <h3 class="sub-head-sm">Scale</h3>
   <ul class="styled-list">
-    <li><strong>List page prices</strong> &mdash; Can be <strong>30-60 seconds stale</strong> (CDN/polling).</li>
-    <li><strong>Detail page prices</strong> &mdash; Must be <strong>&lt; 3 seconds stale</strong> (WebSocket).</li>
+    <li><strong>10M+ DAU</strong> viewing the explore page.</li>
+    <li><strong>~400 listed assets</strong> tracked. Each asset gets a price tick every 1-5 seconds from exchanges.</li>
+    <li>Read QPS for list page HTTP API: <strong>~100K QPS</strong> (page loads, search, pagination). Peak: <strong>500K QPS</strong> during market volatility.</li>
+    <li>Detail page WebSocket connections: <strong>~200K-500K concurrent</strong> (only a fraction of users drill into a specific asset).</li>
+    <li>Data freshness: list page prices can be <strong>30-60 seconds stale</strong> (CDN/polling). Detail page prices must be <strong>&lt; 3 seconds stale</strong> (WebSocket).</li>
   </ul>
 
-  <h3 class="sub-head">Availability</h3>
+  <h3 class="sub-head-sm">Availability</h3>
   <ul class="styled-list">
     <li><strong>99.99% uptime</strong> &mdash; Users check prices during market crashes, which is when load is highest. Downtime during volatility is catastrophic for trust.</li>
     <li>Multi-region deployment. No single region failure should take down the price page.</li>
     <li>Graceful degradation: if the detail page WebSocket fails, fall back to polling every 5 seconds. If price ingestion lag exceeds 30 seconds, show a stale-data warning banner.</li>
   </ul>
 
-  <h3 class="sub-head">Latency</h3>
+  <h3 class="sub-head-sm">Latency</h3>
   <ul class="styled-list">
-    <li><strong>List page API (asset list):</strong> &lt; 100ms p99 (CDN-served for most users).</li>
-    <li><strong>Search API:</strong> &lt; 50ms p99.</li>
-    <li><strong>Detail page WebSocket price delivery:</strong> &lt; 3 seconds p99 from exchange tick to client screen.</li>
-    <li><strong>Chart data API:</strong> &lt; 200ms p99 (pre-computed, cached).</li>
+    <li>List page API (asset list): <strong>&lt; 100ms p99</strong> (CDN-served for most users).</li>
+    <li>Search API: <strong>&lt; 50ms p99</strong>.</li>
+    <li>Detail page WebSocket price delivery: <strong>&lt; 3 seconds p99</strong> from exchange tick to client screen.</li>
+    <li>Chart data API: <strong>&lt; 200ms p99</strong> (pre-computed, cached).</li>
   </ul>
 
-  <h3 class="sub-head">Consistency</h3>
+  <h3 class="sub-head-sm">Consistency</h3>
   <ul class="styled-list">
-    <li><strong>Eventual consistency is acceptable</strong> &mdash; Price data is inherently approximate (different exchanges show different prices). We target "good enough" freshness, not strict consistency.</li>
+    <li><strong>Eventual consistency is acceptable</strong> &mdash; Price data is inherently approximate (different exchanges show different prices). We target &ldquo;good enough&rdquo; freshness, not strict consistency.</li>
     <li>Asset metadata (name, symbol, category tags) is rarely updated and can be strongly consistent with short cache TTL.</li>
   </ul>
 
   <h3 class="sub-head">Edge Cases</h3>
-  <div class="principles">
-    <div class="principle">
-      <div class="principle-title">Market Volatility Spikes (Thundering Herd)</div>
-      <div class="principle-desc">When Bitcoin drops 10% in an hour, traffic spikes 5-10x on the list page. The CDN absorbs most of this. Detail page WebSocket connections surge for BTC. We must handle this gracefully without cascading failures.</div>
+
+  <div class="comp-grid">
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#9889;</span>
+        <span class="comp-name">Market Volatility Spikes (Thundering Herd)</span>
+      </div>
+      <div class="comp-detail">When Bitcoin drops 10% in an hour, traffic spikes 5-10x on the list page. The CDN absorbs most of this. Detail page WebSocket connections surge for BTC. Must handle gracefully without cascading failures.</div>
     </div>
-    <div class="principle">
-      <div class="principle-title">Exchange Feed Outage</div>
-      <div class="principle-desc">If a price feed from a major exchange goes down, we should fall back to the last known price and display a "delayed" indicator. We should NOT show zero or null prices.</div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#128268;</span>
+        <span class="comp-name">Exchange Feed Outage</span>
+      </div>
+      <div class="comp-detail">If a price feed from a major exchange goes down, fall back to the last known price and display a &ldquo;delayed&rdquo; indicator. Never show zero or null prices.</div>
     </div>
-    <div class="principle">
-      <div class="principle-title">Stale Data Display</div>
-      <div class="principle-desc">If our ingestion pipeline falls behind, the client should show a "Prices may be delayed" warning. We track data freshness via a timestamp in the API response &mdash; the client checks <code>updated_at</code> and shows a warning if it's too old.</div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#9200;</span>
+        <span class="comp-name">Stale Data Display</span>
+      </div>
+      <div class="comp-detail">If our ingestion pipeline falls behind, the client shows a &ldquo;Prices may be delayed&rdquo; warning. We track data freshness via <code>updated_at</code> in the API response &mdash; the client checks and warns if too old.</div>
     </div>
-    <div class="principle">
-      <div class="principle-title">New Asset Listing</div>
-      <div class="principle-desc">When a new asset is listed, we need to add it to the asset catalog, backfill sparkline data, and make it searchable &mdash; all without downtime.</div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#10133;</span>
+        <span class="comp-name">New Asset Listing</span>
+      </div>
+      <div class="comp-detail">When a new asset is listed, add it to the asset catalog, backfill sparkline data, and make it searchable &mdash; all without downtime.</div>
     </div>
   </div>
 </section>
 
-<!-- 04 API DESIGN -->
+<!-- 03 API DESIGN -->
 <section id="api">
   <div class="sec-head">
-    <span class="sec-num">04</span>
+    <span class="sec-num">03</span>
     <span class="sec-title">API Design</span>
-    <span class="sec-tag">REST, GraphQL comparison &amp; WebSocket</span>
+    <span class="sec-tag">REST + GraphQL comparison + WebSocket</span>
   </div>
 
   <h3 class="sub-head">REST API Approach (Our Design)</h3>
 
-  <h4 class="sub-head-sm">List Assets</h4>
+  <!-- List Assets -->
   <div class="api-endpoint">
     <div class="api-sig">
       <span class="api-method get">GET</span>
       <span class="api-path">/v1/assets?page=1&amp;page_size=10&amp;sort=rank&amp;order=asc&amp;filter=listed</span>
     </div>
-    <div class="code-label">List Assets &mdash; Response</div>
-    <pre class="code-block">{
+  </div>
+
+  <div class="code-block">{
   "assets": [
     {
       "id": "bitcoin",
@@ -699,10 +697,9 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   "page": 1,
   "page_size": 10,
   "updated_at": "2026-03-07T12:00:32Z"
-}</pre>
-  </div>
+}</div>
 
-  <h4 class="sub-head-sm">Filter and Sort Parameters</h4>
+  <h3 class="sub-head-sm">Filter &amp; Sort Parameters</h3>
   <table class="scale-table">
     <tr><th>Parameter</th><th>Values</th><th>Description</th></tr>
     <tr><td>filter</td><td>listed (default), gainers, losers, trending, new, defi, layer1</td><td>Controls <em>which</em> assets appear</td></tr>
@@ -711,31 +708,21 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   </table>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Interview Note</div>
-    <div class="note-body">Coinbase's actual API separates filter from sort &mdash; <code>filter: "LISTED"</code> selects which assets, while <code>sort: "RANK"</code> + <code>order: "ASC"</code> controls ordering. This is more flexible than conflating them.</div>
+    <div class="note-label">Design Note</div>
+    <div class="note-body">Coinbase's actual API separates filter from sort &mdash; <code>filter: "LISTED"</code> selects which assets, while <code>sort: "RANK"</code> + <code>order: "ASC"</code> controls ordering. Each filter+sort combination maps to a <strong>separate pre-computed page in Redis</strong>. When the user clicks &ldquo;Gainers&rdquo;, the client fetches <code>GET /v1/assets?filter=gainers&amp;sort=percent_change&amp;order=desc&amp;page=1</code>. This hits CDN &rarr; Redis key <code>asset_list:gainers:pct_desc:page:1</code> &mdash; a pre-built JSON blob. No on-demand sorting at request time.</div>
   </div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Pre-Computed Pages</div>
-    <div class="note-body">Each filter+sort combination maps to a <strong>separate pre-computed page in Redis</strong>. When the user clicks "Gainers", the client fetches <code>GET /v1/assets?filter=gainers&amp;sort=percent_change&amp;order=desc&amp;page=1</code>. This hits CDN &rarr; Redis key <code>asset_list:gainers:pct_desc:page:1</code> &mdash; a pre-built JSON blob. No on-demand sorting at request time. Total pre-computed pages: ~7 filters &times; ~5 sort options &times; ~40 pages each &asymp; ~1,400 Redis keys, ~15MB total. Negligible for Redis.</div>
+    <div class="note-label">Pre-Computed Pages</div>
+    <div class="note-body">Total number of pre-computed pages: ~7 filters &times; ~5 sort options &times; ~40 pages each &asymp; <strong>~1,400 Redis keys, ~15MB total</strong>. Negligible for Redis. Prices are <strong>decimal strings</strong> (e.g., <code>"67287.395"</code>), matching Coinbase's production API. Percent changes span <strong>5 time periods</strong> (hour, day, week, month, year). The response includes <strong>market-level aggregate data</strong> alongside the asset list &mdash; a single request loads the entire explore page.</div>
   </div>
 
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Price Format</div>
-    <div class="note-body">Prices are <strong>decimal strings</strong> (e.g., <code>"67287.395"</code>), matching Coinbase's production API. This avoids floating-point precision issues. Percent changes span <strong>5 time periods</strong> (hour, day, week, month, year) in a single response. The <code>sparkline_day</code> field can be empty if <code>skipSparklines=true</code> &mdash; sparklines are loaded lazily to reduce initial payload size.</div>
-  </div>
-
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Single Response = Entire Page</div>
-    <div class="note-body">The response includes <strong>market-level aggregate data</strong> (market health stats, BTC/ETH headers, top gainers) alongside the asset list. A single request loads the entire explore page &mdash; no extra API calls needed. CDN-cacheable with a 30-60 second TTL.</div>
-  </div>
-
+  <!-- GraphQL Comparison -->
   <h3 class="sub-head">GraphQL vs REST &mdash; Real-World Comparison</h3>
 
   <p class="body-text">Coinbase's production API uses <strong>GraphQL with persisted queries</strong>:</p>
 
-  <div class="code-label">Coinbase GraphQL &mdash; Persisted Query</div>
-  <pre class="code-block">POST /graphql/query
+  <div class="code-block">POST /graphql/query
 {
   "operationName": "ExploreQuery",
   "variables": {
@@ -750,12 +737,12 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   },
   "extensions": {
     "persistedQuery": {
-      "sha256Hash": "a1b2c3d4..."
+      "sha256Hash": "a1b2c3d4..."  // pre-registered query hash
     }
   }
-}</pre>
+}</div>
 
-  <p class="body-text"><strong>Persisted queries</strong>: Instead of sending the full GraphQL query string, the client sends only a <code>sha256Hash</code>. The server maps hash &rarr; pre-registered query. Benefits: bandwidth savings, security (only whitelisted queries), and CDN-cacheability.</p>
+  <p class="body-text"><strong>Persisted queries</strong>: Instead of sending the full GraphQL query string, the client sends only a <code>sha256Hash</code>. The server maps hash &rarr; pre-registered query. Benefits: <strong>bandwidth savings</strong> (no query string), <strong>security</strong> (only whitelisted queries), <strong>CDN-cacheable</strong> (hash-based URL is stable).</p>
 
   <table class="scale-table">
     <tr><th>Aspect</th><th>REST (Our Design)</th><th>GraphQL (Coinbase Actual)</th></tr>
@@ -767,38 +754,39 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   </table>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Interview Note</div>
-    <div class="note-body">Either approach works. REST is simpler to explain and implement. If the interviewer asks about GraphQL, mention persisted queries as a key optimization &mdash; without them, GraphQL POST requests are hard to CDN-cache. Coinbase's approach is a good example of "best of both worlds": GraphQL flexibility with REST-like cacheability via persisted query hashes.</div>
+    <div class="note-label">Interview Tip</div>
+    <div class="note-body">Either approach works. REST is simpler to explain and implement. If the interviewer asks about GraphQL, mention <strong>persisted queries</strong> as a key optimization &mdash; without them, GraphQL POST requests are hard to CDN-cache. Coinbase's approach is a &ldquo;best of both worlds&rdquo; pattern: GraphQL flexibility with REST-like cacheability via persisted query hashes.</div>
   </div>
 
+  <!-- Search -->
   <h3 class="sub-head">Search Assets</h3>
   <div class="api-endpoint">
     <div class="api-sig">
       <span class="api-method get">GET</span>
       <span class="api-path">/v1/assets/search?q=eth&amp;limit=10</span>
     </div>
-    <div class="code-label">Search &mdash; Response</div>
-    <pre class="code-block">{
+  </div>
+  <div class="code-block">{
   "results": [
     { "id": "ethereum", "symbol": "ETH", "name": "Ethereum", "price_usd": 345621, "rank": 2 },
     { "id": "ethereum-classic", "symbol": "ETC", "name": "Ethereum Classic", "price_usd": 2543, "rank": 45 }
   ]
-}</pre>
-  </div>
+}</div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Search Note</div>
-    <div class="note-body">Search matches on both <code>name</code> and <code>symbol</code> with prefix matching. With only ~400 listed assets, we can use an in-memory trie or prefix index &mdash; no need for Elasticsearch.</div>
+    <div class="note-label">Search Note</div>
+    <div class="note-body">Search matches on both <code>name</code> and <code>symbol</code> with prefix matching. With only ~400 listed assets, we can use an <strong>in-memory trie</strong> or prefix index &mdash; no need for Elasticsearch.</div>
   </div>
 
+  <!-- Asset Detail -->
   <h3 class="sub-head">Get Asset Detail</h3>
   <div class="api-endpoint">
     <div class="api-sig">
       <span class="api-method get">GET</span>
       <span class="api-path">/v1/assets/{asset_id}?chart_period=7d</span>
     </div>
-    <div class="code-label">Asset Detail &mdash; Response</div>
-    <pre class="code-block">{
+  </div>
+  <div class="code-block">{
   "id": "bitcoin",
   "symbol": "BTC",
   "name": "Bitcoin",
@@ -819,64 +807,64 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     ]
   },
   "updated_at": "2026-03-07T12:00:32Z"
-}</pre>
-  </div>
+}</div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Detail Page Note</div>
+    <div class="note-label">Detail Page Note</div>
     <div class="note-body">The detail page loads this REST API for the initial snapshot + chart data, then opens a WebSocket for live price ticks. The REST response is CDN-cacheable with a shorter TTL (~10 seconds) since detail page users expect fresher data.</div>
   </div>
 
+  <!-- Trending -->
   <h3 class="sub-head">Get Trending / Top Movers</h3>
   <div class="api-endpoint">
     <div class="api-sig">
       <span class="api-method get">GET</span>
       <span class="api-path">/v1/assets/trending?list=top_gainers&amp;limit=10</span>
     </div>
-    <div class="code-label">Trending &mdash; Response</div>
-    <pre class="code-block">{
+  </div>
+  <div class="code-block">{
   "list": "top_gainers",
   "period": "24h",
   "assets": [
     { "id": "solana", "symbol": "SOL", "price_usd": "185.32", "percent_change": { "day": 18.45 } }
   ],
   "updated_at": "2026-03-07T12:00:00Z"
-}</pre>
-  </div>
+}</div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Trending Note</div>
+    <div class="note-label">Trending Note</div>
     <div class="note-body">Trending lists are pre-computed every 60 seconds and cached at CDN with 60-second TTL. Lists available: <code>top_gainers</code>, <code>top_losers</code>, <code>trending</code>, <code>highest_volume</code>, <code>new_listings</code>. In Coinbase's actual API, top gainers are embedded in the main explore query response rather than as a separate endpoint &mdash; this reduces round trips.</div>
   </div>
 
-  <h3 class="sub-head">WebSocket API (Detail Page Live Price + Chart Data)</h3>
+  <!-- WebSocket -->
+  <h3 class="sub-head">WebSocket API (Detail Page Live Price + Chart)</h3>
 
   <p class="body-text">The detail page WebSocket serves two types of real-time data: <strong>live price ticker</strong> (current price updated every 1-5 seconds) and <strong>live candle/kline data</strong> (pre-aggregated OHLCV candles for the chart the user is viewing).</p>
 
   <div class="api-endpoint">
     <div class="api-sig">
-      <span class="api-method ws">WS</span>
+      <span class="api-method ws">WSS</span>
       <span class="api-path">wss://stream.example.com/v1/prices</span>
     </div>
   </div>
 
-  <div class="code-label">Client &rarr; Server (Subscribe to Price Ticker)</div>
-  <pre class="code-block">{
+  <div class="code-label">Client &rarr; Server (subscribe to price ticker)</div>
+  <div class="code-block">{
   "action": "subscribe",
   "channel": "ticker",
   "asset_id": "bitcoin"
-}</pre>
+}</div>
 
-  <div class="code-label">Client &rarr; Server (Subscribe to Candle/Kline Stream)</div>
-  <pre class="code-block">{
+  <div class="code-label">Client &rarr; Server (subscribe to candle/kline stream)</div>
+  <div class="code-block">{
   "action": "subscribe",
   "channel": "candles",
   "asset_id": "bitcoin",
   "interval": "5m"
-}</pre>
+}</div>
 
-  <div class="code-label">Server &rarr; Client (Price Tick, every 1-5 seconds)</div>
-  <pre class="code-block">{
+  <div class="code-label">Server &rarr; Client (price tick, every 1-5 seconds)</div>
+  <div class="code-block">{
   "type": "price_update",
   "data": {
     "id": "bitcoin",
@@ -886,10 +874,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     "volume_24h_usd": "28450000000",
     "timestamp": 1709600123
   }
-}</pre>
+}</div>
 
-  <div class="code-label">Server &rarr; Client (Candle Update, every 1-2 seconds)</div>
-  <pre class="code-block">{
+  <div class="code-label">Server &rarr; Client (candle update, every 1-2 seconds)</div>
+  <div class="code-block">{
   "type": "candle_update",
   "data": {
     "asset_id": "bitcoin",
@@ -902,200 +890,217 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     "volume": "124.5",
     "is_closed": false
   }
-}</pre>
+}</div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; is_closed Flag</div>
+    <div class="note-label">is_closed Flag</div>
     <div class="note-body">The <code>is_closed</code> flag is critical. When <code>is_closed: false</code>, the client updates the rightmost (forming) bar on the chart. When <code>is_closed: true</code>, the client freezes that bar and starts a new one. This is the industry-standard pattern used by Binance (<code>"x": true/false</code>) and most trading platforms.</div>
   </div>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; How does real-time chart data flow work?</div>
-    <div class="qa-a">Common interview question: "If I'm on a 5-minute chart, does the client receive 1-second ticks and aggregate them into 5-minute candles? Or does the server send 5-minute candles directly?"<br><br><strong>Answer: The server sends pre-aggregated candles. The client does NOT aggregate raw ticks.</strong><br><br>Flow: (1) User opens <code>/price/bitcoin</code> and selects the 5-minute chart. (2) Client fetches historical 5m candles via REST. (3) Client subscribes to the WebSocket candle stream: <code>{ channel: "candles", asset_id: "bitcoin", interval: "5m" }</code>. (4) Server sends the current forming candle every ~1 second, with updated OHLCV values. (5) When the 5-minute period ends, server sends one final message with <code>is_closed: true</code>. (6) Next message starts a new candle with a new <code>start</code> timestamp.</div>
+    <div class="qa-q">How does real-time chart data flow work?</div>
+    <div class="qa-a"><strong>The server sends pre-aggregated candles. The client does NOT aggregate raw ticks.</strong><br><br>
+    Flow: (1) User opens <code>/price/bitcoin</code> and selects the 5-minute chart. (2) Client fetches historical 5m candles via REST. (3) Client subscribes to the WebSocket candle stream: <code>{ channel: "candles", asset_id: "bitcoin", interval: "5m" }</code>. (4) Server sends the <strong>current forming candle</strong> every ~1 second with updated OHLCV values. (5) When the 5-minute period ends, server sends one final message with <code>is_closed: true</code>. (6) Next message starts a new candle with a new <code>start</code> timestamp.</div>
   </div>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; Why server-side aggregation, not client-side?</div>
+    <div class="qa-q">Why server-side aggregation, not client-side?</div>
     <div class="qa-a">
       <table class="scale-table" style="margin-top:8px;">
-        <tr><th>Aspect</th><th>Server-side (Our Design)</th><th>Client-side</th></tr>
+        <tr><th>Aspect</th><th>Server-Side (Our Design)</th><th>Client-Side</th></tr>
         <tr><td>Client complexity</td><td>Simple &mdash; just render the candle object</td><td>Complex &mdash; must maintain OHLCV state, handle time boundaries, deal with missed ticks</td></tr>
-        <tr><td>Bandwidth</td><td>1 candle object per second (~200 bytes)</td><td>1 raw trade per trade (~100 bytes, but 10-100x more messages)</td></tr>
+        <tr><td>Bandwidth</td><td>1 candle object per second (~200 bytes)</td><td>1 raw trade per trade (~100 bytes, but 10-100x more messages for active assets)</td></tr>
         <tr><td>Consistency</td><td>All clients see identical candles</td><td>Different clients may compute slightly different values</td></tr>
-        <tr><td>Resolution switching</td><td>Client re-subscribes with new interval</td><td>Client must re-aggregate all raw ticks</td></tr>
+        <tr><td>Resolution switching</td><td>Client re-subscribes with new interval</td><td>Client must re-aggregate all raw ticks for new resolution</td></tr>
         <tr><td>Scalability</td><td>Server computes once, fans out to N clients</td><td>N clients all independently doing the same computation</td></tr>
       </table>
-      <br>Server-side is the clear winner. This is how Binance (<code>@kline_5m</code> stream), Coinbase (candles channel), and all major exchanges work.
+      Server-side is the clear winner. This is how <strong>Binance</strong> (<code>@kline_5m</code> stream), <strong>Coinbase</strong> (candles channel), and all major exchanges work.
     </div>
   </div>
 
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; WebSocket Scope</div>
-    <div class="note-body">Unlike the list page (which uses HTTP polling), the detail page uses WebSocket for a <strong>single asset's</strong> live price and chart data. The user is viewing <code>/price/bitcoin</code> &mdash; they only need BTC ticks and BTC candles. This keeps the fan-out problem small: each WebSocket client subscribes to exactly 1 asset.</div>
-  </div>
-
   <div class="qa-card">
-    <div class="qa-q">&#10067; Why WebSocket on detail page but not on list page?</div>
+    <div class="qa-q">Why WebSocket on detail page but not on list page?</div>
     <div class="qa-a">
       <table class="scale-table" style="margin-top:8px;">
-        <tr><th>Page</th><th>Data Needed</th><th>Update Freq</th><th>Users</th><th>Best Approach</th></tr>
+        <tr><th>Page</th><th>Data Needed</th><th>Update Frequency</th><th>Users</th><th>Best Approach</th></tr>
         <tr><td>List page</td><td>50 assets</td><td>Every 30-60s is fine</td><td>10M DAU (huge)</td><td>HTTP + CDN (cacheable, simple)</td></tr>
         <tr><td>Detail page</td><td>1 asset (price + chart)</td><td>Every 1-2s (live chart)</td><td>~200-500K concurrent</td><td>WebSocket (low fan-out, single asset)</td></tr>
       </table>
-      <br>The list page serves <strong>the same data to all users</strong> (top 50 by market cap) &mdash; perfect for CDN caching. Opening a WebSocket for every list page visitor would create millions of unnecessary persistent connections. The detail page needs live ticks for the chart animation, but only for one asset per user &mdash; a much simpler fan-out problem.
+      The list page serves <strong>the same data to all users</strong> &mdash; perfect for CDN caching. Opening a WebSocket for every list page visitor would create millions of unnecessary persistent connections.
     </div>
   </div>
 </section>
 
-<!-- 05 HIGH LEVEL DESIGN -->
+<!-- 04 HIGH LEVEL DESIGN -->
 <section id="hld">
   <div class="sec-head">
-    <span class="sec-num">05</span>
+    <span class="sec-num">04</span>
     <span class="sec-title">High Level Design</span>
     <span class="sec-tag">Architecture overview</span>
   </div>
 
   <div class="arch-diagram">
-    <div class="arch-title">&#128208; System Architecture</div>
-    <pre class="arch-pre">                          ┌────────────────────────────────────────────┐
-                          │              CDN / Edge Cache              │
-                          │     (list page API, trending, sparklines)  │
-                          │         TTL: 30-60 seconds                 │
-                          └────────────────────┬───────────────────────┘
-                                               │
-                                               │ cache miss
-                          ┌────────────────────▼───────────────────────┐
-                          │          API Gateway / Load Balancer        │
-                          └──────┬─────────────────────┬───────────────┘
-                                 │                     │
-                    ┌────────────▼──────┐    ┌─────────▼──────────────┐
-                    │   REST API Fleet  │    │  WebSocket Gateway      │
-                    │   (stateless)     │    │  Fleet                  │
-                    │                   │    │  (detail page only)     │
-                    │ • List assets     │    │                         │
-                    │ • Search          │    │ • Single-asset price    │
-                    │ • Asset detail    │    │   subscription          │
-                    │ • Trending lists  │    │ • Heartbeat             │
-                    └────────┬─────────┘    └────────┬────────────────┘
-                             │                       │ subscribe to
-                             │ read from             │ per-asset channel
-                    ┌────────▼─────────┐    ┌────────▼────────────────┐
-                    │   Redis Cluster   │    │  Pub/Sub Broker         │
-                    │   (price cache)   │    │  (Redis Pub/Sub)        │
-                    │                   │    └────────┬────────────────┘
-                    │ • Latest prices   │             │ publish
-                    │ • Pre-computed    │             │ price ticks
-                    │   list pages      │    ┌────────▼────────────────┐
-                    │ • Sparkline data  │    │  Price Aggregation      │
-                    │ • Trending lists  │    │  Service                │
-                    └────────┬─────────┘    │                         │
-                             │              │ • Normalizes feeds      │
-                             │ write-behind │ • Computes VWAP         │
-                             │              │ • Generates sparklines  │
-                    ┌────────▼─────────┐    │ • Computes trending     │
-                    │   TimescaleDB /  │    │ • Pre-builds list pages │
-                    │   PostgreSQL      │    └────────┬────────────────┘
-                    │                   │             │ consume
-                    │ • OHLCV candles   │             │
-                    │ • Historical data │    ┌────────▼────────────────┐
-                    │ • Asset metadata  │    │  Exchange Feed Adapters  │
-                    └──────────────────┘    │                         │
-                                            │ • Binance WebSocket     │
-                                            │ • Coinbase Pro WS       │
-                                            │ • Kraken WS             │
-                                            │ • CoinGecko API         │
-                                            └─────────────────────────┘</pre>
+    <div class="arch-title">System Architecture</div>
+    <pre class="arch-pre">                      ┌────────────────────────────────────────────┐
+                      │              CDN / Edge Cache              │
+                      │     (list page API, trending, sparklines)  │
+                      │         TTL: 30-60 seconds                 │
+                      └────────────────────┬───────────────────────┘
+                                           │
+                                           │ cache miss
+                      ┌────────────────────▼───────────────────────┐
+                      │          API Gateway / Load Balancer        │
+                      └──────┬─────────────────────┬───────────────┘
+                             │                     │
+                ┌────────────▼──────┐    ┌─────────▼──────────────┐
+                │   REST API Fleet  │    │  WebSocket Gateway      │
+                │   (stateless)     │    │  Fleet                  │
+                │                   │    │  (detail page only)     │
+                │ • List assets     │    │                         │
+                │ • Search          │    │ • Single-asset price    │
+                │ • Asset detail    │    │   subscription          │
+                │ • Trending lists  │    │ • Heartbeat             │
+                └────────┬─────────┘    └────────┬────────────────┘
+                         │                       │ subscribe to
+                         │ read from             │ per-asset channel
+                ┌────────▼─────────┐    ┌────────▼────────────────┐
+                │   Redis Cluster   │    │  Pub/Sub Broker         │
+                │   (price cache)   │    │  (Redis Pub/Sub)        │
+                │                   │    └────────┬────────────────┘
+                │ • Latest prices   │             │ publish
+                │ • Pre-computed    │             │ price ticks
+                │   list pages      │    ┌────────▼────────────────┐
+                │ • Sparkline data  │    │  Price Aggregation      │
+                │ • Trending lists  │    │  Service                │
+                └────────┬─────────┘    │                         │
+                         │              │ • Normalizes feeds      │
+                         │ write-behind │ • Computes VWAP         │
+                         │              │ • Generates sparklines  │
+                ┌────────▼─────────┐    │ • Computes trending     │
+                │   TimescaleDB /  │    │ • Pre-builds list pages │
+                │   PostgreSQL      │    └────────┬────────────────┘
+                │                   │             │ consume
+                │ • OHLCV candles   │             │
+                │ • Historical data │    ┌────────▼────────────────┐
+                │ • Asset metadata  │    │  Exchange Feed Adapters  │
+                └──────────────────┘    │                         │
+                                        │ • Binance WebSocket     │
+                                        │ • Coinbase Pro WS       │
+                                        │ • Kraken WS             │
+                                        │ • CoinGecko API         │
+                                        └─────────────────────────┘</pre>
   </div>
 
-  <h3 class="sub-head">Components</h3>
-
+  <h3 class="sub-head">Component Descriptions</h3>
   <div class="comp-grid">
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#128225;</span><span class="comp-name">Exchange Feed Adapters</span></div>
-      <div class="comp-role">Data ingestion layer</div>
-      <div class="comp-detail">Stateful connectors that maintain WebSocket connections to major crypto exchanges (Binance, Coinbase Pro, Kraken, etc.) and REST polling to aggregators (CoinGecko, CoinMarketCap). Each adapter normalizes the exchange-specific format into a unified price tick event.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#127760;</span>
+        <span class="comp-name">Exchange Feed Adapters</span>
+      </div>
+      <div class="comp-role">DATA INGESTION</div>
+      <div class="comp-detail">Stateful connectors that maintain WebSocket connections to major crypto exchanges (Binance, Coinbase Pro, Kraken) and REST polling to aggregators (CoinGecko, CoinMarketCap). Each adapter normalizes the exchange-specific format into a unified price tick event.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#9881;&#65039;</span><span class="comp-name">Price Aggregation Service</span></div>
-      <div class="comp-role">The brain of the system</div>
-      <div class="comp-detail">Consumes raw ticks from all exchange adapters, computes the Volume-Weighted Average Price (VWAP) across exchanges, and produces the canonical price for each asset. Also pre-computes all derived data: sorted list pages, 24h change %, sparkline arrays, trending lists. Writes everything to Redis. Publishes per-asset price ticks to Pub/Sub for WebSocket consumers.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#9881;</span>
+        <span class="comp-name">Price Aggregation Service</span>
+      </div>
+      <div class="comp-role">CORE COMPUTATION</div>
+      <div class="comp-detail">The brain of the system. Consumes raw ticks from all exchange adapters, computes VWAP across exchanges, produces the canonical price for each asset. Pre-computes sorted list pages, percent changes, sparklines, trending lists. Writes to Redis, publishes to Pub/Sub.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#9889;</span><span class="comp-name">Redis Cluster (Price Cache)</span></div>
-      <div class="comp-role">Primary read store</div>
-      <div class="comp-detail">Stores pre-computed responses for every API endpoint so the REST API is a simple key lookup. Pre-built JSON blobs for every filter+sort+page combination.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#128200;</span>
+        <span class="comp-name">Redis Cluster</span>
+      </div>
+      <div class="comp-role">PRIMARY READ STORE</div>
+      <div class="comp-detail">Stores pre-computed responses for every API endpoint so the REST API is a simple key lookup. Pre-built JSON responses, latest prices, sparkline data, trending lists. Cache hit rate &gt; 99%.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#128232;</span><span class="comp-name">Pub/Sub Broker (Redis Pub/Sub)</span></div>
-      <div class="comp-role">Real-time distribution</div>
-      <div class="comp-detail">Distributes per-asset price ticks from the aggregation service to WebSocket gateway instances. Each gateway subscribes only to channels for assets its connected clients are viewing. With ~400 assets and ~200-500K total WebSocket connections, the fan-out per channel is manageable.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#128226;</span>
+        <span class="comp-name">Pub/Sub Broker (Redis Pub/Sub)</span>
+      </div>
+      <div class="comp-role">REAL-TIME DISTRIBUTION</div>
+      <div class="comp-detail">Distributes per-asset price ticks from the aggregation service to WebSocket gateway instances. Each gateway subscribes only to channels for assets its connected clients are viewing. ~400 assets, manageable fan-out.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#127760;</span><span class="comp-name">REST API Fleet</span></div>
-      <div class="comp-role">Stateless HTTP servers</div>
-      <div class="comp-detail">All reads go to Redis (cache hit rate &gt; 99%). Cache misses fall through to TimescaleDB for chart data. The CDN absorbs 70%+ of list page traffic before it reaches the API fleet.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#128421;</span>
+        <span class="comp-name">REST API Fleet</span>
+      </div>
+      <div class="comp-role">STATELESS HTTP</div>
+      <div class="comp-detail">All reads go to Redis (cache hit rate &gt; 99%). Cache misses fall through to TimescaleDB for chart data. CDN absorbs 70%+ of list page traffic before reaching the API fleet.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#128268;</span><span class="comp-name">WebSocket Gateway Fleet</span></div>
-      <div class="comp-role">Detail page connections</div>
-      <div class="comp-detail">Maintains WebSocket connections for detail page users only. Each user subscribes to one asset at a time. The gateway subscribes to the corresponding Pub/Sub channel and forwards ticks. Much smaller scale than if we had WebSocket on the list page.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#128268;</span>
+        <span class="comp-name">WebSocket Gateway Fleet</span>
+      </div>
+      <div class="comp-role">LIVE CONNECTIONS</div>
+      <div class="comp-detail">Maintains WebSocket connections for detail page users only. Each user subscribes to one asset at a time. Gateway subscribes to the corresponding Pub/Sub channel and forwards ticks. Much smaller scale than if WS was on the list page.</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#128451;&#65039;</span><span class="comp-name">TimescaleDB / PostgreSQL</span></div>
-      <div class="comp-role">Time-series historical data</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#128451;</span>
+        <span class="comp-name">TimescaleDB / PostgreSQL</span>
+      </div>
+      <div class="comp-role">HISTORICAL DATA</div>
       <div class="comp-detail">Time-series database for historical OHLCV candle data. Used for chart rendering (7d, 30d, 1y charts). Not on the hot read path for the list page. Also stores asset metadata (name, description, categories).</div>
     </div>
     <div class="comp">
-      <div class="comp-top"><span class="comp-icon">&#127758;</span><span class="comp-name">CDN / Edge Cache</span></div>
-      <div class="comp-role">First line of defense</div>
-      <div class="comp-detail">Caches the list page API response at the edge with a 30-60 second TTL. This absorbs the thundering herd during market events. The CDN is the reason the list page doesn't need WebSocket &mdash; a 30-60 second refresh cycle is acceptable, and the CDN handles the scale.</div>
+      <div class="comp-top">
+        <span class="comp-icon">&#9889;</span>
+        <span class="comp-name">CDN / Edge Cache</span>
+      </div>
+      <div class="comp-role">FIRST LINE OF DEFENSE</div>
+      <div class="comp-detail">Caches list page API responses at the edge with 30-60 second TTL. Absorbs the thundering herd during market events. This is the reason the list page doesn't need WebSocket &mdash; 30-60 second refresh is acceptable, and CDN handles scale.</div>
     </div>
   </div>
 </section>
 
-<!-- 06 DETAILED TECHNICAL DESIGN -->
+<!-- 05 DETAILED TECHNICAL DESIGN -->
 <section id="detailed">
   <div class="sec-head">
-    <span class="sec-num">06</span>
+    <span class="sec-num">05</span>
     <span class="sec-title">Detailed Technical Design</span>
-    <span class="sec-tag">Deep dives into each component</span>
+    <span class="sec-tag">Deep dive into each subsystem</span>
   </div>
 
-  <!-- 6.1 Price Ingestion Pipeline -->
-  <h3 class="sub-head">1. Price Ingestion Pipeline</h3>
+  <!-- 5.1 Price Ingestion -->
+  <h3 class="sub-head">5.1 Price Ingestion Pipeline</h3>
 
-  <div class="code-label">Pipeline Flow</div>
-  <pre class="code-block">Exchange WS Feed &rarr; Exchange Adapter &rarr; Price Aggregation Service &rarr; Redis + Pub/Sub</pre>
+  <div class="code-label">Ingestion Flow</div>
+  <div class="code-block">Exchange WS Feed &rarr; Exchange Adapter &rarr; Price Aggregation Service &rarr; Redis + Pub/Sub</div>
 
-  <h4 class="sub-head-sm">Exchange Feed Adapters</h4>
-  <p class="body-text">Each adapter maintains a persistent WebSocket connection to one exchange:</p>
+  <h3 class="sub-head-sm">Exchange Feed Adapters</h3>
   <ul class="styled-list">
     <li><strong>Reconnection with exponential backoff</strong> &mdash; Exchange feeds drop periodically. The adapter auto-reconnects and replays from the last sequence number.</li>
-    <li><strong>Deduplication</strong> &mdash; Some exchanges send duplicate ticks. We dedup by <code>(exchange, asset, sequence_number)</code>.</li>
+    <li><strong>Deduplication</strong> &mdash; Some exchanges send duplicate ticks. Dedup by <code>(exchange, asset, sequence_number)</code>.</li>
     <li><strong>Validation</strong> &mdash; Reject ticks with obviously wrong prices (&gt; 50% deviation from last known price). Guards against exchange feed bugs.</li>
     <li><strong>Health monitoring</strong> &mdash; If no tick received for 30 seconds, mark the feed as degraded and alert.</li>
   </ul>
 
-  <h4 class="sub-head-sm">Price Aggregation &mdash; VWAP Calculation</h4>
-  <p class="body-text">Different exchanges show slightly different prices for the same asset. We compute a <strong>Volume-Weighted Average Price</strong> across exchanges:</p>
+  <h3 class="sub-head-sm">VWAP Calculation</h3>
 
-  <div class="code-label">VWAP Formula</div>
-  <pre class="code-block">VWAP = &Sigma;(price_i &times; volume_i) / &Sigma;(volume_i)</pre>
+  <p class="body-text">Different exchanges show slightly different prices. We compute a <strong>Volume-Weighted Average Price</strong> across exchanges:</p>
+
+  <div class="code-block">VWAP = &Sigma;(price_i &times; volume_i) / &Sigma;(volume_i)</div>
 
   <p class="body-text">For each asset, we maintain a sliding window of recent ticks from all exchanges. When a new tick arrives, we recalculate the VWAP and publish if the price changed by more than a threshold (e.g., $0.01 for BTC, $0.0001 for low-cap coins).</p>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; VWAP Note</div>
-    <div class="note-body">VWAP is the industry standard for aggregated crypto prices. An alternative is the <strong>median price</strong> across exchanges, which is more robust against a single exchange showing an outlier price. CoinGecko uses a combination of both. For simplicity, we use VWAP with outlier filtering (drop ticks &gt; 2 standard deviations from the running mean).</div>
+    <div class="note-label">VWAP Note</div>
+    <div class="note-body">VWAP is the industry standard for aggregated crypto prices. An alternative is the <strong>median price</strong> across exchanges, which is more robust against a single exchange showing an outlier. CoinGecko uses a combination of both. For simplicity, we use VWAP with outlier filtering (drop ticks &gt; 2 standard deviations from the running mean).</div>
   </div>
 
-  <!-- 6.2 Pre-Computation Pipeline -->
-  <h3 class="sub-head">2. Pre-Computation Pipeline</h3>
+  <!-- 5.2 Pre-Computation Pipeline -->
+  <h3 class="sub-head">5.2 Pre-Computation Pipeline</h3>
 
   <p class="body-text">This is the key insight: <strong>the list page serves pre-computed data, not live data</strong>. The aggregation service runs periodic pipelines that write directly to Redis:</p>
 
-  <div class="code-label">Pre-Computation Schedule</div>
-  <pre class="code-block">Every 10-30 seconds:
+  <div class="code-block">Every 10-30 seconds:
   &rarr; Update price:{asset_id} in Redis for all assets that changed
   &rarr; Compute percent changes for 5 periods (1h, 24h, 7d, 1m, 1y) per asset
   &rarr; Compute market health stats (total market cap, volume, BTC dominance, buy/sell ratio)
@@ -1110,151 +1115,134 @@ Every 5 minutes:
   &rarr; Write sparkline:{asset_id}:day to Redis for all assets
 
 Every 60 seconds:
-  &rarr; Recompute trending scores and top gainers list</pre>
+  &rarr; Recompute trending scores and top gainers list</div>
 
   <p class="body-text">The REST API for <code>GET /v1/assets?filter=gainers&amp;sort=percent_change&amp;order=desc&amp;page=1</code> is literally:</p>
 
-  <div class="code-label">API Implementation &mdash; Single Redis GET</div>
-  <pre class="code-block">return redis.get("asset_list:gainers:pct_desc:page:1")</pre>
+  <div class="code-block">return redis.get("asset_list:gainers:pct_desc:page:1")</div>
 
-  <p class="body-text">No sorting, no filtering, no database query at request time. Every filter tab the user clicks maps to a different pre-computed key. This is why the API achieves &lt; 100ms p99 &mdash; it's a single Redis GET of a pre-built JSON blob.</p>
+  <p class="body-text">No sorting, no filtering, no database query at request time. Every filter tab the user clicks maps to a different pre-computed key. This is why the API achieves <strong>&lt; 100ms p99</strong> &mdash; it's a single Redis GET of a pre-built JSON blob.</p>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Single Response = Entire Page</div>
-    <div class="note-body">The pre-computed response includes <strong>market-level aggregate data</strong> (market health, BTC/ETH headers, top gainers) in every page response. This matches Coinbase's actual pattern where a single API call returns everything the explore page needs. While this means some data is duplicated across pages, it eliminates the need for separate API calls and simplifies client logic.</div>
+    <div class="note-label">Aggregate Data Note</div>
+    <div class="note-body">The pre-computed response includes <strong>market-level aggregate data</strong> (market health, BTC/ETH headers, top gainers) in every page response. This matches Coinbase's actual pattern where a single API call returns everything the explore page needs. While some data is duplicated across pages, it eliminates extra API calls and simplifies client logic.</div>
   </div>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; Why pre-compute entire response pages instead of individual prices?</div>
-    <div class="qa-a">If we stored individual prices and sorted/filtered at request time, each API call would: (1) Fetch ~400 individual price keys from Redis, (2) Compute percent changes across 5 time periods, (3) Filter by category and sort, (4) Slice to the requested page, (5) Assemble market health data, (6) Serialize to JSON.<br><br>At 500K QPS, that's 500K sort+filter operations per second &mdash; wasteful because the result is identical for all users within the same 30-second window. Pre-computing the sorted/filtered pages once every 10-30 seconds and storing the complete JSON response means each API request is O(1).<br><br>The tradeoff is more storage in Redis (~7 filters &times; ~5 sorts &times; ~40 pages &times; ~15KB = ~21MB total), which is negligible.</div>
+    <div class="qa-q">Why pre-compute entire response pages instead of individual prices?</div>
+    <div class="qa-a">If we stored individual prices and sorted/filtered at request time, each API call would: (1) Fetch ~400 individual price keys from Redis. (2) Compute percent changes across 5 time periods. (3) Filter by category and sort. (4) Slice to the requested page. (5) Assemble market health data. (6) Serialize to JSON.<br><br>At <strong>500K QPS</strong>, that's 500K sort+filter operations per second &mdash; wasteful because the result is identical for all users within the same 30-second window. Pre-computing means each API request is <strong>O(1)</strong>.<br><br>Tradeoff: more storage in Redis (~7 filters &times; ~5 sorts &times; ~40 pages &times; ~15KB = ~21MB total), which is negligible.</div>
   </div>
 
-  <!-- 6.3 List Page Data Flow -->
-  <h3 class="sub-head">3. List Page Data Flow</h3>
+  <!-- 5.3 List Page Data Flow -->
+  <h3 class="sub-head">5.3 List Page Data Flow + CDN</h3>
 
   <div class="arch-diagram">
-    <div class="arch-title">&#128196; List Page Flow</div>
-    <pre class="arch-pre">┌─────────────────────────────────────────────────────────────────┐
-│                         List Page Flow                          │
-│                                                                 │
-│  User opens explore page                                        │
-│       │                                                         │
-│       ▼                                                         │
-│  Browser &rarr; CDN edge                                             │
-│       │                                                         │
-│       ├── Cache HIT (within 30-60s TTL)                         │
-│       │   &rarr; Return cached JSON instantly (&lt; 20ms)               │
-│       │                                                         │
-│       └── Cache MISS                                            │
-│           &rarr; Forward to API Gateway                              │
-│           &rarr; REST API does Redis GET("asset_list:mcap:page:1")   │
-│           &rarr; Return response, CDN caches it                      │
-│                                                                 │
-│  After 60 seconds, client JS polls the same endpoint            │
-│  &rarr; CDN serves updated cache (refreshed by other requests)       │
-│                                                                 │
-│  User clicks "Gainers" filter tab                               │
-│  &rarr; Client fetches GET /v1/assets?filter=gainers&amp;page=1          │
-│  &rarr; CDN cache (or Redis GET of pre-computed gainers page)        │
-│  &rarr; Different filter = different CDN cache key = different Redis  │
-│    pre-computed blob. All equally fast.                          │
-└─────────────────────────────────────────────────────────────────┘</pre>
+    <div class="arch-title">List Page Flow</div>
+    <pre class="arch-pre">  User opens explore page
+       │
+       ▼
+  Browser &rarr; CDN edge
+       │
+       ├── Cache HIT (within 30-60s TTL)
+       │   &rarr; Return cached JSON instantly (&lt; 20ms)
+       │
+       └── Cache MISS
+           &rarr; Forward to API Gateway
+           &rarr; REST API does Redis GET("asset_list:mcap:page:1")
+           &rarr; Return response, CDN caches it
+
+  After 60 seconds, client JS polls the same endpoint
+  &rarr; CDN serves updated cache (refreshed by other requests)
+
+  User clicks "Gainers" filter tab
+  &rarr; Client fetches GET /v1/assets?filter=gainers&amp;page=1
+  &rarr; CDN cache (or Redis GET of pre-computed gainers page)
+  &rarr; Different filter = different CDN cache key = different Redis
+    pre-computed blob. All equally fast.</pre>
   </div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Architecture Insight</div>
-    <div class="note-body">The list page is architecturally similar to a news homepage or product catalog &mdash; it's a <strong>cacheable, pre-computed snapshot</strong> that refreshes periodically. The core scaling strategy is CDN + pre-computation, not real-time push. Users don't need second-by-second prices on a list of 50 assets &mdash; they need a directional snapshot ("BTC is around $68K, down 2% today").</div>
+    <div class="note-label">Architecture Pattern</div>
+    <div class="note-body">The list page is architecturally similar to a news homepage or product catalog &mdash; it's a <strong>cacheable, pre-computed snapshot</strong> that refreshes periodically. The core scaling strategy is CDN + pre-computation, not real-time push.</div>
   </div>
 
-  <h4 class="sub-head-sm">CDN Configuration</h4>
-  <div class="code-label">Cache-Control Headers &amp; CDN Rules</div>
-  <pre class="code-block">Cache-Control: public, max-age=30, stale-while-revalidate=60
+  <h3 class="sub-head-sm">CDN Configuration</h3>
+  <div class="code-block">Cache-Control: public, max-age=30, stale-while-revalidate=60
 
 CDN rules:
   /v1/assets?*                &rarr; Cache 30s, stale-while-revalidate 60s
   /v1/assets/trending?*       &rarr; Cache 60s, stale-while-revalidate 120s
   /v1/assets/search?*         &rarr; Cache 10s (search results change with prices)
-  /v1/assets/{id}             &rarr; Cache 10s  (detail page initial load)</pre>
+  /v1/assets/{id}             &rarr; Cache 10s  (detail page initial load)</div>
 
-  <p class="body-text"><strong>Stale-while-revalidate</strong> is critical: when the TTL expires, the CDN serves the stale response immediately while fetching a fresh one in the background. Users always get a fast response. This eliminates the thundering herd problem entirely &mdash; during a Bitcoin crash, millions of users hit the CDN, and the CDN makes exactly 1 request to origin per TTL window.</p>
+  <p class="body-text"><strong>Stale-while-revalidate</strong> is critical: when the TTL expires, the CDN serves the stale response immediately while fetching a fresh one in the background. Users always get a fast response. This eliminates the thundering herd problem entirely.</p>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; What about cache stampede at origin?</div>
-    <div class="qa-a">Even with CDN, the origin still receives cache-miss requests (one per TTL window per edge PoP). During extreme traffic, many edge PoPs expire simultaneously. Mitigations:<br><br><strong>1. Request coalescing</strong> &mdash; CDN collapses multiple origin requests for the same URL into one (all major CDNs support this).<br><br><strong>2. Cache warming</strong> &mdash; The aggregation service proactively pushes updated responses to the CDN via API (Cloudflare Purge + re-cache, or Fastly's surrogate key invalidation) every 30 seconds, before the TTL expires.<br><br><strong>3. Origin shield</strong> &mdash; CDN uses a mid-tier cache layer (shield PoP) between edge PoPs and origin. All edge cache misses go to the shield first, which collapses them further.</div>
+    <div class="qa-q">What about cache stampede at origin?</div>
+    <div class="qa-a">Even with CDN, the origin still receives cache-miss requests. Mitigations:<br><br>
+    <strong>1. Request coalescing</strong> &mdash; CDN collapses multiple origin requests for the same URL into one (all major CDNs support this).<br>
+    <strong>2. Cache warming</strong> &mdash; The aggregation service proactively pushes updated responses to the CDN via API every 30 seconds, before the TTL expires.<br>
+    <strong>3. Origin shield</strong> &mdash; CDN uses a mid-tier cache layer between edge PoPs and origin. All edge cache misses go to the shield first, which collapses them further.</div>
   </div>
 
-  <!-- 6.4 Detail Page WebSocket -->
-  <h3 class="sub-head">4. Detail Page &mdash; WebSocket Live Price &amp; Chart Data</h3>
+  <!-- 5.4 Detail Page WebSocket -->
+  <h3 class="sub-head">5.4 Detail Page &mdash; WebSocket Live Price &amp; Chart</h3>
 
-  <p class="body-text">Only the detail page (e.g., <code>/price/bitcoin</code>) uses WebSocket for live ticks and chart data. The scope is much smaller than "all explore page visitors":</p>
-
-  <ul class="styled-list">
-    <li><strong>~200K-500K concurrent WebSocket connections</strong> (5-10% of DAU drill into a detail page at any moment).</li>
-    <li>Each connection subscribes to <strong>exactly 1 asset</strong> (price ticker + candle stream for the selected chart interval).</li>
-    <li>Popular assets (BTC, ETH) have more subscribers; long-tail assets may have 0.</li>
-  </ul>
-
-  <h4 class="sub-head-sm">Architecture</h4>
+  <p class="body-text">Only the detail page (e.g., <code>/price/bitcoin</code>) uses WebSocket for live ticks and chart data. Scope: <strong>~200K-500K concurrent connections</strong>, each subscribing to <strong>exactly 1 asset</strong> (price ticker + candle stream for the selected chart interval).</p>
 
   <div class="arch-diagram">
-    <div class="arch-title">&#128268; WebSocket + Candle Architecture</div>
-    <pre class="arch-pre">                    ┌───────────────────────────────────────┐
-                    │       Price Aggregation Service        │
-                    │                                        │
-                    │  On each VWAP update:                  │
-                    │  1. Update running candle OHLCV state  │
-                    │     for every active interval (1m,5m,  │
-                    │     15m,1h,4h,1d)                      │
-                    │  2. PUBLISH prices:BTC { price_tick }  │
-                    │  3. PUBLISH candles:BTC:5m { candle }  │
-                    │     (with is_closed=false)              │
-                    │  4. On period boundary:                 │
-                    │     PUBLISH candles:BTC:5m { candle,   │
-                    │       is_closed=true }                  │
-                    │     &rarr; Reset candle state for new period │
-                    └─────────────┬─────────────────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │  Redis Pub/Sub              │
-                    │                             │
-                    │  prices:bitcoin    (ticker)  │
-                    │  prices:ethereum   (ticker)  │
-                    │  candles:bitcoin:1m          │
-                    │  candles:bitcoin:5m          │
-                    │  candles:bitcoin:1h          │
-                    │  candles:ethereum:5m         │
-                    │  ...~400 &times; ~6 intervals     │
-                    └──┬──────┬──────┬──────┬────┘
-                       │      │      │      │
-              ┌────────▼┐ ┌──▼────┐ ┌▼─────┐ ┌▼────────┐
-              │ WS GW 1 │ │WS GW 2│ │WS GW3│ │WS GW N  │
-              │(subscr  │ │       │ │      │ │         │
-              │ BTC     │ │       │ │      │ │         │
-              │ ticker  │ │       │ │      │ │         │
-              │ +5m     │ │       │ │      │ │         │
-              │ candles)│ │       │ │      │ │         │
-              └────┬────┘ └──┬────┘ └──┬───┘ └────┬────┘
-                   │         │         │          │
-              Clients     Clients   Clients    Clients
-              viewing     viewing   viewing    viewing
-              /price/btc  various   various    various
-              (5m chart)</pre>
+    <div class="arch-title">WebSocket Candle Architecture</div>
+    <pre class="arch-pre">                ┌───────────────────────────────────────┐
+                │       Price Aggregation Service        │
+                │                                        │
+                │  On each VWAP update:                  │
+                │  1. Update running candle OHLCV state  │
+                │     for every active interval (1m,5m,  │
+                │     15m,1h,4h,1d)                      │
+                │  2. PUBLISH prices:BTC { price_tick }  │
+                │  3. PUBLISH candles:BTC:5m { candle }  │
+                │     (with is_closed=false)              │
+                │  4. On period boundary:                 │
+                │     PUBLISH candles:BTC:5m { candle,   │
+                │       is_closed=true }                  │
+                │     &rarr; Reset candle state for new period │
+                └─────────────┬─────────────────────────┘
+                              │
+                ┌─────────────▼─────────────┐
+                │  Redis Pub/Sub              │
+                │                             │
+                │  prices:bitcoin    (ticker)  │
+                │  prices:ethereum   (ticker)  │
+                │  candles:bitcoin:1m          │
+                │  candles:bitcoin:5m          │
+                │  candles:bitcoin:1h          │
+                │  candles:ethereum:5m         │
+                │  ...~400 &times; ~6 intervals     │
+                └──┬──────┬──────┬──────┬────┘
+                   │      │      │      │
+          ┌────────▼┐ ┌──▼────┐ ┌▼─────┐ ┌▼────────┐
+          │ WS GW 1 │ │WS GW 2│ │WS GW3│ │WS GW N  │
+          │(subscr  │ │       │ │      │ │         │
+          │ BTC     │ │       │ │      │ │         │
+          │ ticker  │ │       │ │      │ │         │
+          │ +5m     │ │       │ │      │ │         │
+          │ candles)│ │       │ │      │ │         │
+          └────┬────┘ └──┬────┘ └──┬───┘ └────┬────┘
+               │         │         │          │
+          Clients     Clients   Clients    Clients
+          viewing     viewing   viewing    viewing
+          /price/btc  various   various    various
+          (5m chart)</pre>
   </div>
 
-  <p class="body-text"><strong>Each WebSocket gateway only subscribes to channels for assets AND intervals its clients are viewing.</strong> When a client connects and sends <code>subscribe: { channel: "candles", asset_id: "bitcoin", interval: "5m" }</code>, the gateway:</p>
-  <ol class="step-list">
-    <li>Checks if it's already subscribed to <code>candles:bitcoin:5m</code> on Pub/Sub.</li>
-    <li>If not, subscribes. If yes, just adds the client to the local subscriber list.</li>
-    <li>When a candle update arrives on <code>candles:bitcoin:5m</code>, the gateway forwards it to all local subscribers.</li>
-    <li>Client updates the rightmost bar on the chart (if <code>is_closed: false</code>) or starts a new bar (if <code>is_closed: true</code>).</li>
-  </ol>
+  <p class="body-text"><strong>Each WebSocket gateway only subscribes to channels for assets AND intervals its clients are viewing.</strong> When a client connects and sends a subscribe message, the gateway checks if it's already subscribed to that Pub/Sub channel. If not, subscribes. When a candle update arrives, forwards to all local subscribers. Client updates the rightmost bar on the chart (if <code>is_closed: false</code>) or starts a new bar (if <code>is_closed: true</code>).</p>
 
-  <h4 class="sub-head-sm">Server-Side Candle Aggregation (How the Forming Candle Works)</h4>
+  <h3 class="sub-head-sm">Server-Side Candle Aggregation (CandleAggregator)</h3>
 
   <p class="body-text">The Price Aggregation Service maintains <strong>running OHLCV state</strong> for every <code>(asset, interval)</code> combination:</p>
 
-  <div class="code-label">CandleAggregator &mdash; Python Pseudocode</div>
-  <pre class="code-block">class CandleAggregator:
+  <div class="code-label">Python Pseudocode &mdash; CandleAggregator</div>
+  <div class="code-block">class CandleAggregator:
     def __init__(self, asset_id, interval_seconds):
         self.asset_id = asset_id
         self.interval = interval_seconds  # e.g., 300 for 5m
@@ -1309,38 +1297,107 @@ CDN rules:
             (self.asset_id, f"{self.interval // 60}m", candle["start"],
              candle["open"], candle["high"], candle["low"],
              candle["close"], candle["volume"])
-        )</pre>
+        )</div>
 
-  <h4 class="sub-head-sm">Key Design Decisions</h4>
-  <ol class="step-list">
-    <li><strong>Emit cadence</strong>: The forming candle is pushed every ~1 second (via a timer calling <code>emit()</code>), regardless of trade frequency. This gives the client smooth chart updates without overwhelming it with per-trade messages.</li>
-    <li><strong>Candle closure</strong>: On the period boundary (e.g., every 5 minutes for a 5m chart), the service sends one final message with <code>is_closed: true</code>, then persists the closed candle to TimescaleDB.</li>
-    <li><strong>Multiple intervals simultaneously</strong>: The service runs one <code>CandleAggregator</code> instance per <code>(asset, interval)</code> pair. For ~400 assets &times; 6 intervals (1m, 5m, 15m, 1h, 4h, 1d) = ~2,400 aggregator instances &mdash; trivial for a single service.</li>
-    <li><strong>Resolution switching</strong>: When a user switches from 5m to 1h chart, the client unsubscribes from <code>candles:bitcoin:5m</code> and subscribes to <code>candles:bitcoin:1h</code>. The gateway adjusts its Pub/Sub subscriptions accordingly. Historical candles for the new resolution are fetched via REST.</li>
-  </ol>
+  <h3 class="sub-head-sm">Key Design Decisions</h3>
+  <ul class="styled-list">
+    <li><strong>Emit cadence</strong> &mdash; The forming candle is pushed every ~1 second (via a timer calling <code>emit()</code>), regardless of trade frequency. This gives the client smooth chart updates without overwhelming it with per-trade messages.</li>
+    <li><strong>Candle closure</strong> &mdash; On the period boundary, the service sends one final message with <code>is_closed: true</code>, then persists the closed candle to TimescaleDB.</li>
+    <li><strong>Resolution switching</strong> &mdash; When a user switches from 5m to 1h chart, the client unsubscribes from <code>candles:bitcoin:5m</code> and subscribes to <code>candles:bitcoin:1h</code>. Historical candles for the new resolution are fetched via REST.</li>
+  </ul>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Industry Pattern</div>
+    <div class="note-label">Industry Standard</div>
     <div class="note-body">This is exactly how Binance's <code>@kline_5m</code> stream works. Each message is a complete candle snapshot (not a diff), with <code>"x": false</code> for forming candles and <code>"x": true</code> for closed candles. Coinbase's candles channel works similarly but infers closure from a changed <code>start</code> timestamp rather than an explicit flag.</div>
   </div>
 
-  <h4 class="sub-head-sm">Fan-out Per Asset</h4>
+  <!-- 5.5 Hierarchical Roll-Up -->
+  <h3 class="sub-head">5.5 Hierarchical Roll-Up</h3>
+
+  <div class="qa-card">
+    <div class="qa-q">With 1,000 assets &times; many intervals, does the server aggregate all combinations independently?</div>
+    <div class="qa-a"><strong>No.</strong> Two key optimizations avoid a combinatorial explosion.</div>
+  </div>
+
+  <h3 class="sub-head-sm">Optimization 1: Hierarchical Roll-Up</h3>
+
+  <p class="body-text">Only the <strong>1-minute base interval</strong> is aggregated directly from raw trade ticks. All higher intervals are <strong>derived by rolling up</strong> lower-resolution candles:</p>
+
+  <div class="arch-diagram">
+    <div class="arch-title">Hierarchical Candle Roll-Up</div>
+    <pre class="arch-pre">Raw trade ticks
+    │
+    ▼
+1m candles &larr; aggregated from ticks (1 aggregator per asset)
+    │
+    ├── 5m  = roll up 5 &times; 1m   (max highs, min lows, first open, last close)
+    ├── 15m = roll up 3 &times; 5m
+    ├── 30m = roll up 2 &times; 15m
+    ├── 1h  = roll up 2 &times; 30m
+    ├── 4h  = roll up 4 &times; 1h
+    └── 1d  = roll up 24 &times; 1h</pre>
+  </div>
+
+  <p class="body-text">Rolling up a 5m candle from five 1m candles is trivial:</p>
+
+  <div class="code-label">Python &mdash; rollup() function</div>
+  <div class="code-block">def rollup(candles_1m):
+    return {
+        "open":   candles_1m[0]["open"],              # first open
+        "high":   max(c["high"] for c in candles_1m), # max of highs
+        "low":    min(c["low"]  for c in candles_1m), # min of lows
+        "close":  candles_1m[-1]["close"],             # last close
+        "volume": sum(c["volume"] for c in candles_1m)
+    }</div>
+
+  <p class="body-text">So for 1,000 assets, you run <strong>1,000 tick-level aggregators</strong> (1m base), not 1,000 &times; N. The higher intervals are cheap derivations.</p>
+
+  <h3 class="sub-head-sm">Optimization 2: Lazy Pub/Sub Emission</h3>
+
+  <p class="body-text">The server maintains running OHLCV state for all <code>(asset, interval)</code> combinations &mdash; but it only <strong>publishes to Pub/Sub</strong> for channels that have active WebSocket subscribers:</p>
+
+  <div class="code-label">Python &mdash; Lazy Pub/Sub Emission</div>
+  <div class="code-block">def emit(self):
+    """Only publish if there are active subscribers on this channel."""
+    channel = f"candles:{self.asset_id}:{self.interval}s"
+    if self.has_subscribers(channel):  # check subscriber count
+        self.publish(self.current_candle)</div>
+
+  <p class="body-text">The in-memory candle state is still maintained (so the server can start streaming instantly when someone subscribes), but the Pub/Sub traffic is proportional to <strong>active viewers</strong>, not total combinations.</p>
+
+  <h3 class="sub-head-sm">Scale Math</h3>
   <table class="scale-table">
-    <tr><th>Asset</th><th>Estimated Concurrent Viewers</th><th>Fan-out Per Tick</th></tr>
+    <tr><th>Metric</th><th>Count</th><th>Cost</th></tr>
+    <tr><td>Tick-level aggregators (1m base)</td><td>~1,000 (one per asset)</td><td>Each processes ~1 tick/sec</td></tr>
+    <tr><td>Higher-interval candle state</td><td>~1,000 assets &times; ~12 intervals = ~12,000</td><td>~100 bytes each = ~1.2 MB total RAM</td></tr>
+    <tr><td>Active Pub/Sub channels</td><td>Proportional to users viewing charts</td><td>BTC/ETH dominate; long-tail assets have 0 subscribers</td></tr>
+    <tr><td>Standard intervals (industry)</td><td>Binance: 16, Coinbase: 6</td><td>Not 100 &mdash; exchanges offer ~6-16 standard intervals</td></tr>
+  </table>
+
+  <div class="note-card">
+    <div class="note-label">Scale Note</div>
+    <div class="note-body">Total in-memory state for all candle aggregators is <strong>~1.2 MB</strong>. During peak hours, perhaps ~50 assets have active chart viewers across all intervals &mdash; that's ~300 active channels, not 12,000. The long tail of assets has zero viewers most of the time.</div>
+  </div>
+
+  <h3 class="sub-head-sm">Fan-Out per Asset</h3>
+  <table class="scale-table">
+    <tr><th>Asset</th><th>Estimated Concurrent Viewers</th><th>Fan-Out per Tick</th></tr>
     <tr><td>Bitcoin (BTC)</td><td>~50K-100K</td><td>50K-100K WebSocket pushes</td></tr>
     <tr><td>Ethereum (ETH)</td><td>~20K-50K</td><td>20K-50K</td></tr>
     <tr><td>Top 10 assets</td><td>~5K-20K each</td><td>Moderate</td></tr>
     <tr><td>Long-tail (rank 100+)</td><td>~10-500 each</td><td>Trivial</td></tr>
   </table>
 
-  <p class="body-text">Even for BTC (the worst case), 100K pushes per tick at 1 tick/sec is well within the capacity of a distributed WebSocket gateway fleet. With 10 gateway instances, each handles ~10K BTC subscribers &mdash; easy.</p>
+  <p class="body-text">Even for BTC (the worst case), 100K pushes per tick at 1 tick/sec is well within the capacity of a distributed WebSocket gateway fleet. With 10 gateway instances, each handles ~10K BTC subscribers.</p>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; Why Redis Pub/Sub and not NATS or Kafka?</div>
-    <div class="qa-a">With candle channels, total Pub/Sub channels are: ~400 ticker channels + ~400 assets &times; ~6 intervals = ~2,800 channels. Each channel receives ~1 message/sec. Total: ~2,800 msgs/sec.<br><br>For this scale, Redis Pub/Sub is the simplest choice: we already have Redis for the cache layer (no new infrastructure), Redis Pub/Sub handles ~1M messages/sec (our load is 0.3% of capacity), fire-and-forget semantics are perfect for ephemeral price ticks, and the gateway only subscribes to channels for assets AND intervals its clients are viewing &mdash; most channels have 0 gateway subscribers.<br><br>NATS would also work and is a better choice if the gateway fleet grows beyond ~50 instances. But at our current scale, Redis Pub/Sub avoids adding a new dependency.</div>
+    <div class="qa-q">Why Redis Pub/Sub and not NATS or Kafka?</div>
+    <div class="qa-a">With lazy emission, the actual Pub/Sub load is much smaller than the theoretical maximum. Total defined channels: ~13,000. But with lazy emission, only ~200-500 active channels at any time. Realistic load: <strong>~500-1,000 msgs/sec</strong>.<br><br>
+    For this scale, Redis Pub/Sub is simplest: <strong>we already have Redis</strong> (no new infrastructure), it handles ~1M msgs/sec (our load is 0.1% of capacity), fire-and-forget semantics are perfect for ephemeral price ticks, and gateways only subscribe to channels for assets their clients are viewing.<br><br>
+    <strong>NATS</strong> would also work and is better if the gateway fleet grows beyond ~50 instances. But at our scale, Redis avoids adding a new dependency.</div>
   </div>
 
-  <h4 class="sub-head-sm">Connection Management</h4>
+  <h3 class="sub-head-sm">Connection Management</h3>
   <ul class="styled-list">
     <li><strong>5-10 gateway instances</strong> &times; 20K-50K connections each = 200K-500K total.</li>
     <li>Each connection consumes ~10-20KB of memory. 50K connections &asymp; 750MB RAM per instance.</li>
@@ -1350,58 +1407,63 @@ CDN rules:
     <li>If a gateway dies, ~50K clients reconnect across remaining instances within ~2 seconds. During the gap, client shows last known price.</li>
   </ul>
 
-  <!-- 6.5 Search -->
-  <h3 class="sub-head">5. Search</h3>
+  <!-- 5.6 Search -->
+  <h3 class="sub-head">5.6 Search</h3>
 
-  <p class="body-text">With only ~400 listed assets (~383 in Coinbase's actual data), search is simple. We do NOT need Elasticsearch.</p>
+  <p class="body-text">With only ~400 listed assets (~383 in Coinbase's actual data), search is simple. We do <strong>NOT</strong> need Elasticsearch.</p>
 
-  <h4 class="sub-head-sm">Approach: In-Memory Prefix Trie + Redis Sorted Set</h4>
+  <h3 class="sub-head-sm">Approach: In-Memory Prefix Trie + Redis Sorted Set</h3>
 
   <p class="body-text">The aggregation service maintains a <strong>Redis sorted set</strong> for search:</p>
 
-  <div class="code-label">Redis Sorted Set for Search</div>
-  <pre class="code-block">ZADD search_index 1 '{"id":"bitcoin","symbol":"BTC","name":"Bitcoin","price":6834521}'
-ZADD search_index 2 '{"id":"ethereum","symbol":"ETH","name":"Ethereum","price":345621}'
-...</pre>
+  <div class="code-block">ZADD search_index 1 '{"id":"bitcoin","symbol":"BTC","name":"Bitcoin","price":6834521}'
+ZADD search_index 2 '{"id":"ethereum","symbol":"ETH","name":"Ethereum","price":345621}'</div>
 
-  <p class="body-text">The score is the asset's market cap rank. The API service also maintains an in-memory <strong>trie</strong> for prefix matching:</p>
+  <p class="body-text">The API service also maintains an in-memory <strong>trie</strong> for prefix matching:</p>
 
-  <div class="code-label">In-Memory Trie Structure</div>
-  <pre class="code-block">Trie:
+  <div class="arch-diagram">
+    <div class="arch-title">Prefix Trie Structure</div>
+    <pre class="arch-pre">Trie:
   b &rarr; bi &rarr; bit &rarr; bitc &rarr; bitcoin (rank 1)
   b &rarr; bn &rarr; bnb (rank 4)
   e &rarr; et &rarr; eth &rarr; ethereum (rank 2)
   e &rarr; et &rarr; eth &rarr; ethereum-classic (rank 45)</pre>
+  </div>
 
-  <p class="body-text">On search request <code>q=eth</code>: (1) Traverse the trie to find all assets matching "eth" (by name or symbol). (2) Return results sorted by rank (top assets first). (3) Total latency: &lt; 1ms (in-memory trie traversal). The trie is rebuilt on startup from Redis and updated when assets are added/removed (rare event).</p>
+  <p class="body-text">On search request <code>q=eth</code>: (1) Traverse the trie to find all assets matching &ldquo;eth&rdquo; (by name or symbol). (2) Return results sorted by rank. (3) Total latency: <strong>&lt; 1ms</strong> (in-memory trie traversal). The trie is rebuilt on startup from Redis and updated when assets are added/removed (rare event).</p>
 
-  <p class="body-text"><strong>Alternative: Elasticsearch</strong> &mdash; Overkill for ~400 items. If we needed full-text search across descriptions or fuzzy matching, ES would make sense. For prefix matching on name/symbol, a trie is simpler and faster.</p>
+  <div class="note-card">
+    <div class="note-label">Elasticsearch Alternative</div>
+    <div class="note-body"><strong>Elasticsearch</strong> is overkill for ~400 items. If we needed full-text search across descriptions or fuzzy matching, ES would make sense. For prefix matching on name/symbol, a trie is simpler and faster.</div>
+  </div>
 
-  <!-- 6.6 Sparkline and Chart Data -->
-  <h3 class="sub-head">6. Sparkline and Chart Data</h3>
+  <!-- 5.7 Sparkline & Charts -->
+  <h3 class="sub-head">5.7 Sparkline &amp; Chart Data + Storage</h3>
 
-  <h4 class="sub-head-sm">Sparkline (24h Mini Chart &mdash; List Page)</h4>
+  <h3 class="sub-head-sm">Sparkline (24h Mini Chart &mdash; List Page)</h3>
 
   <p class="body-text">The 24h sparkline is an array of 24 hourly prices. Pre-computed every 5 minutes by the aggregation service:</p>
 
-  <div class="code-label">Sparkline Computation &mdash; Pseudocode</div>
-  <pre class="code-block">def compute_sparkline(asset_id):
+  <div class="code-label">Python Pseudocode &mdash; Sparkline Computation</div>
+  <div class="code-block">def compute_sparkline(asset_id):
     candles = timescaledb.query(
-        "SELECT time_bucket('1 hour', time) AS hour, last(price, time) AS close "
-        "FROM price_ticks WHERE asset_id = %s AND time &gt; now() - interval '24 hours' "
+        "SELECT time_bucket('1 hour', time) AS hour, "
+        "last(price, time) AS close "
+        "FROM price_ticks WHERE asset_id = %s "
+        "AND time &gt; now() - interval '24 hours' "
         "GROUP BY hour ORDER BY hour",
         asset_id
     )
-    return [c.close for c in candles]  # 24 data points</pre>
+    return [c.close for c in candles]  # 24 data points</div>
 
   <p class="body-text">The sparkline is embedded in the list page response &mdash; no extra API call needed.</p>
 
-  <h4 class="sub-head-sm">OHLCV Candle Data (Detail Page Charts)</h4>
+  <h3 class="sub-head-sm">OHLCV Candle Data (Detail Page Charts)</h3>
 
   <p class="body-text">Stored in <strong>TimescaleDB</strong> &mdash; a PostgreSQL extension optimized for time-series data.</p>
 
-  <div class="code-label">TimescaleDB Schema &mdash; price_candles</div>
-  <pre class="code-block">CREATE TABLE price_candles (
+  <div class="code-label">SQL &mdash; TimescaleDB Schema</div>
+  <div class="code-block">CREATE TABLE price_candles (
     asset_id TEXT NOT NULL,
     interval TEXT NOT NULL,        -- '1m', '5m', '1h', '1d'
     bucket_time TIMESTAMPTZ NOT NULL,
@@ -1414,12 +1476,12 @@ ZADD search_index 2 '{"id":"ethereum","symbol":"ETH","name":"Ethereum","price":3
 );
 
 -- TimescaleDB hypertable with automatic partitioning
-SELECT create_hypertable('price_candles', 'bucket_time');</pre>
+SELECT create_hypertable('price_candles', 'bucket_time');</div>
 
   <p class="body-text"><strong>Continuous aggregates</strong> automatically roll up 1-minute candles into 5m, 1h, and 1d candles:</p>
 
-  <div class="code-label">Continuous Aggregate &mdash; 1h Candles</div>
-  <pre class="code-block">CREATE MATERIALIZED VIEW candles_1h
+  <div class="code-label">SQL &mdash; Continuous Aggregate (1-hour candles)</div>
+  <div class="code-block">CREATE MATERIALIZED VIEW candles_1h
 WITH (timescaledb.continuous) AS
 SELECT asset_id,
        time_bucket('1 hour', bucket_time) AS bucket_time,
@@ -1430,24 +1492,24 @@ SELECT asset_id,
        sum(volume) AS volume
 FROM price_candles
 WHERE interval = '1m'
-GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
+GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
 
   <div class="note-card">
-    <div class="note-label">&#9997;&#65039; Continuous Aggregates</div>
-    <div class="note-body">TimescaleDB's continuous aggregates are incrementally updated as new data arrives &mdash; no batch job needed.</div>
+    <div class="note-label">Continuous Aggregates</div>
+    <div class="note-body">TimescaleDB's continuous aggregates are <strong>incrementally updated</strong> as new data arrives &mdash; no batch job needed.</div>
   </div>
 
-  <h4 class="sub-head-sm">Storage Estimate</h4>
+  <h3 class="sub-head-sm">Storage Estimate</h3>
   <ul class="styled-list">
     <li>~400 listed assets &times; 1 candle/minute &times; 1,440 min/day = <strong>~576K rows/day</strong> (1-minute candles).</li>
     <li>Each row ~100 bytes &rarr; <strong>~58 MB/day</strong> &rarr; ~21 GB/year.</li>
-    <li>With TimescaleDB compression (typically 10-20x), raw storage is ~1-2 GB/year. Trivial.</li>
+    <li>With TimescaleDB compression (typically 10-20x), raw storage is <strong>~1-2 GB/year</strong>. Trivial.</li>
   </ul>
 
-  <!-- 6.7 Database Design -->
-  <h3 class="sub-head">7. Database Design</h3>
+  <!-- 5.8 Database Design -->
+  <h3 class="sub-head">5.8 Database Design</h3>
 
-  <h4 class="sub-head-sm">Redis Cluster (Primary Read Store)</h4>
+  <h3 class="sub-head-sm">Redis Cluster (Primary Read Store)</h3>
   <table class="scale-table">
     <tr><th>Key Pattern</th><th>Value</th><th>TTL</th><th>Update Frequency</th></tr>
     <tr><td>asset_list:{filter}:{sort}:{order}:page:{n}</td><td>Pre-built JSON response (includes market health, top gainers, btc/eth headers)</td><td>60s</td><td>Every 10-30s</td></tr>
@@ -1458,21 +1520,15 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <tr><td>search_index</td><td>Sorted set for search</td><td>1h</td><td>On asset catalog change</td></tr>
   </table>
 
-  <p class="body-text">Redis Cluster with <strong>6 nodes</strong> (3 primaries + 3 replicas). At peak 500K API QPS with 99%+ CDN hit rate, actual Redis QPS is ~5K-50K (only CDN cache misses reach origin). Comfortable for a small Redis cluster.</p>
+  <p class="body-text"><strong>Redis Cluster with 6 nodes</strong> (3 primaries + 3 replicas). At peak 500K API QPS with 99%+ CDN hit rate, actual Redis QPS is ~5K-50K. The CDN absorbs the vast majority of read traffic.</p>
 
-  <div class="note-card">
-    <div class="note-label">&#9997;&#65039; CDN Does the Heavy Lifting</div>
-    <div class="note-body">The CDN absorbs the vast majority of read traffic. Redis only serves CDN cache misses + detail page lookups + WebSocket fan-out. This is why we don't need 12-18 Redis nodes &mdash; the CDN does the heavy lifting.</div>
-  </div>
-
-  <h4 class="sub-head-sm">TimescaleDB (Historical Data Store)</h4>
-  <p class="body-text">Two key tables:</p>
+  <h3 class="sub-head-sm">TimescaleDB (Historical Data Store)</h3>
   <ul class="styled-list">
-    <li><strong><code>price_candles</code></strong> &mdash; OHLCV candle data. Partitioned by time (automatic hypertable). Indexed on <code>(asset_id, interval, bucket_time)</code>. Stores 1m, 5m, 1h, 1d candles.</li>
-    <li><strong><code>assets</code></strong> &mdash; Asset metadata catalog. Stores <code>asset_id</code> (PK), <code>slug</code>, <code>symbol</code>, <code>name</code>, <code>description</code>, <code>categories</code> (JSONB), <code>color</code> (hex for UI), <code>image_url</code>, <code>circulating_supply</code>, <code>max_supply</code>, <code>is_tradable</code>, <code>is_dex</code>, <code>is_wallet</code>, <code>listed_at</code>, <code>updated_at</code>. ~400 rows. Cached in Redis.</li>
+    <li><strong>price_candles</strong> &mdash; OHLCV candle data. Partitioned by time (automatic hypertable). Indexed on <code>(asset_id, interval, bucket_time)</code>. Stores 1m, 5m, 1h, 1d candles.</li>
+    <li><strong>assets</strong> &mdash; Asset metadata catalog. Stores asset_id (PK), slug, symbol, name, description, categories (JSONB), color (hex), image_url, circulating_supply, max_supply, is_tradable, is_dex, is_wallet, listed_at, updated_at. ~400 rows. Cached in Redis.</li>
   </ul>
 
-  <h4 class="sub-head-sm">Why TimescaleDB?</h4>
+  <h3 class="sub-head-sm">Why TimescaleDB?</h3>
   <table class="scale-table">
     <tr><th>Option</th><th>Pros</th><th>Cons</th></tr>
     <tr><td>TimescaleDB</td><td>PostgreSQL-compatible, continuous aggregates, automatic partitioning, compression</td><td>Not as fast as InfluxDB for pure time-series writes</td></tr>
@@ -1481,20 +1537,54 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <tr><td>Raw PostgreSQL</td><td>Simple</td><td>No auto partitioning, no continuous aggregates</td></tr>
   </table>
 
-  <p class="body-text"><strong>We choose TimescaleDB</strong> because our write volume is modest (~2M rows/day) and the continuous aggregates feature eliminates the need for a separate ETL pipeline.</p>
+  <p class="body-text">We choose <strong>TimescaleDB</strong> because our write volume is modest (~2M rows/day) and the continuous aggregates feature eliminates the need for a separate ETL pipeline.</p>
 </section>
 
-<!-- 07 FAILURE HANDLING -->
+<!-- 06 FAILURE HANDLING -->
 <section id="failure">
   <div class="sec-head">
-    <span class="sec-num">07</span>
+    <span class="sec-num">06</span>
     <span class="sec-title">Failure Handling</span>
-    <span class="sec-tag">Graceful degradation everywhere</span>
+    <span class="sec-tag">Resilience &amp; degradation</span>
   </div>
 
-  <h3 class="sub-head">Exchange Feed Failure</h3>
+  <div class="comp-grid">
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#128268;</span>
+        <span class="comp-name">Exchange Feed Failure</span>
+      </div>
+      <div class="comp-role">DATA INGESTION</div>
+      <div class="comp-detail">Every 10 seconds, check last_tick_time for each exchange adapter. If now() - last_tick_time &gt; 30s: mark as DEGRADED, alert on-call, continue using other feeds for VWAP. If ALL feeds degraded: freeze prices at last known value, set updated_at to last known time, client detects stale data and shows warning banner.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#127760;</span>
+        <span class="comp-name">CDN / API Failure</span>
+      </div>
+      <div class="comp-role">READ PATH</div>
+      <div class="comp-detail">CDN has built-in redundancy (Cloudflare/Fastly global PoP network). If origin API goes down, CDN serves stale content via stale-if-error directive. Users see slightly old prices but the page stays up. If Redis goes down, API falls back to TimescaleDB. Latency degrades from &lt; 10ms to ~50-100ms.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#128268;</span>
+        <span class="comp-name">WebSocket Gateway Failure</span>
+      </div>
+      <div class="comp-role">DETAIL PAGE</div>
+      <div class="comp-detail">L4 health check detects failure within 5 seconds. ~50K clients auto-reconnect across remaining healthy gateways. During the ~2 second gap, client shows last known price. No data loss &mdash; the next tick fills the gap.</div>
+    </div>
+    <div class="comp">
+      <div class="comp-top">
+        <span class="comp-icon">&#9881;</span>
+        <span class="comp-name">Price Aggregation Service Failure</span>
+      </div>
+      <div class="comp-role">CORE COMPUTATION</div>
+      <div class="comp-detail">Run 3+ replicas. Each consumes from the same exchange adapter output queues. Use leader election (via Redis lock) to prevent duplicate computation. If all replicas fail, Redis continues serving last-computed data (stale but available). Client sees stale updated_at and shows warning.</div>
+    </div>
+  </div>
+
   <div class="code-label">Exchange Feed Health Check</div>
-  <pre class="code-block">Exchange feed health check:
+  <div class="code-block">Exchange feed health check:
   Every 10 seconds, check last_tick_time for each exchange adapter.
 
   If now() - last_tick_time &gt; 30 seconds:
@@ -1504,37 +1594,15 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     &rarr; If ALL feeds degraded:
       &rarr; Freeze prices at last known value
       &rarr; Set updated_at to last known time
-      &rarr; Client detects stale updated_at and shows warning banner</pre>
-
-  <h3 class="sub-head">CDN / API Failure</h3>
-  <ul class="styled-list">
-    <li>CDN has built-in redundancy (Cloudflare/Fastly global PoP network).</li>
-    <li>If origin API goes down, CDN serves stale content via <code>stale-if-error</code> directive. Users see slightly old prices but the page stays up.</li>
-    <li>If Redis goes down, API falls back to TimescaleDB. Latency degrades from &lt; 10ms to ~50-100ms.</li>
-  </ul>
-
-  <h3 class="sub-head">WebSocket Gateway Failure (Detail Page)</h3>
-  <ul class="styled-list">
-    <li>L4 health check detects failure within 5 seconds.</li>
-    <li>~50K clients auto-reconnect across remaining healthy gateways.</li>
-    <li>During the ~2 second gap, client shows last known price.</li>
-    <li>No data loss &mdash; the next tick fills the gap.</li>
-  </ul>
-
-  <h3 class="sub-head">Price Aggregation Service Failure</h3>
-  <ul class="styled-list">
-    <li>Run 3+ replicas. Each consumes from the same exchange adapter output queues.</li>
-    <li>Use leader election (via Redis lock) to prevent duplicate computation of pre-built list pages.</li>
-    <li>If all replicas fail, Redis continues serving the last-computed data (stale but available). Client sees stale <code>updated_at</code> and shows warning.</li>
-  </ul>
+      &rarr; Client detects stale updated_at and shows warning banner</div>
 </section>
 
-<!-- 08 REAL-WORLD API COMPARISON -->
+<!-- 07 REAL-WORLD API COMPARISON -->
 <section id="comparison">
   <div class="sec-head">
-    <span class="sec-num">08</span>
+    <span class="sec-num">07</span>
     <span class="sec-title">Real-World API Comparison</span>
-    <span class="sec-tag">Coinbase Production Analysis</span>
+    <span class="sec-tag">Coinbase production analysis</span>
   </div>
 
   <p class="body-text">Analysis of Coinbase's actual <code>ExploreQuery</code> GraphQL request reveals several design insights:</p>
@@ -1556,24 +1624,26 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <tr><td>Protocol</td><td>REST with URL-based caching</td><td>GraphQL with persisted queries (sha256Hash)</td><td>GraphQL offers client flexibility; persisted queries restore cacheability</td></tr>
     <tr><td>Query granularity</td><td>Separate endpoints (list, trending, search)</td><td>Single ExploreQuery returns everything</td><td>Fewer round trips, but larger response</td></tr>
     <tr><td>Price format</td><td>Decimal strings</td><td>Decimal strings (e.g., "67287.395")</td><td>Aligned after update</td></tr>
-    <tr><td>Percent changes</td><td>5 periods: hour, day, week, month, year</td><td>5 periods: hour, day, week, month, year</td><td>Updated to match</td></tr>
-    <tr><td>Market health data</td><td>Included in response</td><td>marketHealthV2: market cap, volume, BTC dominance, buy/sell ratio + chart data</td><td>Updated to include</td></tr>
-    <tr><td>Featured assets</td><td>btc_header / eth_header</td><td>btcHeader / ethHeader with dedicated market cap + volume</td><td>Updated to include</td></tr>
-    <tr><td>Asset metadata</td><td>Includes color, imageUrl, platform flags</td><td>Includes color, imageUrl, supportedContextsForLocation (isTradable, isDex, isWallet)</td><td>Updated to include</td></tr>
-    <tr><td>Asset count</td><td>~400 (383 listed)</td><td>383 (totalAssetCount)</td><td>Corrected</td></tr>
-    <tr><td>Page size</td><td>10</td><td>10</td><td>Corrected</td></tr>
+    <tr><td>Percent changes</td><td>24h only (originally)</td><td>5 periods: hour, day, week, month, year</td><td>Updated to match</td></tr>
+    <tr><td>Market health data</td><td>Not originally covered</td><td>marketHealthV2: market cap, volume, BTC dominance, buy/sell ratio with charts</td><td>Updated to include</td></tr>
+    <tr><td>Featured assets</td><td>Not covered</td><td>btcHeader / ethHeader with dedicated market cap + volume</td><td>Updated to include</td></tr>
+    <tr><td>Asset metadata</td><td>Basic (name, symbol, price)</td><td>Includes color, imageUrl, supportedContextsForLocation</td><td>Updated to include</td></tr>
+    <tr><td>Asset count</td><td>~1,500 assumed</td><td>383 (totalAssetCount)</td><td>Corrected</td></tr>
+    <tr><td>Page size</td><td>50</td><td>10</td><td>Corrected</td></tr>
   </table>
 
-  <h3 class="sub-head">Interview Takeaway</h3>
-  <p class="body-text">Both REST and GraphQL work well here. The key architectural insight is the same: <strong>pre-compute and cache everything</strong>. Whether you expose it as a REST endpoint or a GraphQL persisted query, the backend is doing the same work &mdash; building a complete JSON response in Redis and serving it with minimal computation. In an interview, explain the REST approach (simpler to describe) but mention GraphQL with persisted queries as an alternative if the interviewer probes deeper.</p>
+  <div class="note-card">
+    <div class="note-label">Interview Takeaway</div>
+    <div class="note-body">Both REST and GraphQL work well here. The key architectural insight is the same: <strong>pre-compute and cache everything</strong>. Whether you expose it as a REST endpoint or a GraphQL persisted query, the backend is doing the same work &mdash; building a complete JSON response in Redis and serving it with minimal computation. In an interview, explain the REST approach (simpler to describe) but mention GraphQL with persisted queries as an alternative if the interviewer probes deeper.</div>
+  </div>
 </section>
 
-<!-- 09 OTHER CONSIDERATIONS -->
+<!-- 08 OTHER CONSIDERATIONS -->
 <section id="other">
   <div class="sec-head">
-    <span class="sec-num">09</span>
+    <span class="sec-num">08</span>
     <span class="sec-title">Other Considerations</span>
-    <span class="sec-tag">Rate limiting, multi-currency, monitoring, scalability, multi-region</span>
+    <span class="sec-tag">Rate limiting, multi-currency, monitoring, scalability</span>
   </div>
 
   <h3 class="sub-head">Rate Limiting</h3>
@@ -1589,12 +1659,14 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
   <ol class="step-list">
     <li>Fetch exchange rates from a forex API (updated every 60 seconds).</li>
     <li>Store rates in Redis.</li>
-    <li>Server-side conversion when building the pre-computed list pages &mdash; generate separate pages per currency (<code>asset_list:mcap:usd:page:1</code>, <code>asset_list:mcap:eur:page:1</code>).</li>
+    <li>Server-side conversion when building pre-computed list pages &mdash; generate separate pages per currency (<code>asset_list:mcap:usd:page:1</code>, <code>asset_list:mcap:eur:page:1</code>).</li>
   </ol>
-  <p class="body-text"><strong>Alternative</strong>: Client-side conversion (simpler, fewer cached pages, but potential rounding inconsistencies across clients). For a global product, server-side is better for consistency.</p>
+  <div class="note-card">
+    <div class="note-label">Alternative</div>
+    <div class="note-body"><strong>Client-side conversion</strong> (simpler, fewer cached pages, but potential rounding inconsistencies across clients). For a global product, <strong>server-side</strong> is better for consistency.</div>
+  </div>
 
   <h3 class="sub-head">Monitoring &amp; Alerting</h3>
-  <p class="body-text">Key metrics:</p>
   <ul class="styled-list">
     <li><strong>Price freshness</strong> &mdash; Time since last tick per asset. Alert if &gt; 30 seconds.</li>
     <li><strong>CDN hit rate</strong> &mdash; Should be &gt; 95%. Drop indicates cache misconfiguration.</li>
@@ -1605,16 +1677,14 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <li><strong>Pre-computation pipeline lag</strong> &mdash; Alert if list pages haven't been refreshed in &gt; 60 seconds.</li>
   </ul>
 
-  <h3 class="sub-head">Scalability</h3>
-
-  <h4 class="sub-head-sm">Scale Overview</h4>
+  <h3 class="sub-head">Scalability Overview</h3>
   <table class="scale-table">
     <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
     <tr><td>CDN</td><td>Absorbs 95%+ of list page traffic</td><td>Global edge network</td></tr>
     <tr><td>REST API (or GraphQL)</td><td>~50K QPS at origin (after CDN)</td><td>10-20 stateless instances</td></tr>
     <tr><td>WebSocket Gateway</td><td>200K-500K concurrent connections</td><td>5-10 instances</td></tr>
     <tr><td>Redis Cluster</td><td>~5K-50K ops/sec (after CDN)</td><td>6 nodes (3 primaries)</td></tr>
-    <tr><td>Redis Pub/Sub</td><td>~2,800 msgs/sec (tickers + candles)</td><td>Same Redis cluster</td></tr>
+    <tr><td>Redis Pub/Sub</td><td>~500-1,000 msgs/sec (lazy emit)</td><td>Same Redis cluster</td></tr>
     <tr><td>Price Aggregation</td><td>~80K ticks/min ingested</td><td>3 replicas</td></tr>
     <tr><td>TimescaleDB</td><td>~576K rows/day, ~2 GB/year</td><td>Single primary + 2 replicas</td></tr>
   </table>
@@ -1622,7 +1692,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
   <h3 class="sub-head">Multi-Region Architecture</h3>
 
   <div class="arch-diagram">
-    <div class="arch-title">&#127760; Multi-Region Deployment</div>
+    <div class="arch-title">Multi-Region Deployment</div>
     <pre class="arch-pre">┌──────────────────────────────────────────────────────────────┐
 │                    Global DNS (GeoDNS)                        │
 │              Route users to nearest region                    │
@@ -1652,31 +1722,34 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
               (Redis &rarr; Redis via replication)</pre>
   </div>
 
-  <p class="body-text"><strong>Design: Centralized ingestion, replicated read layer.</strong> Price data is global and identical for all users. Therefore:</p>
+  <p class="body-text"><strong>Design: Centralized ingestion, replicated read layer.</strong> Price data is global and identical for all users:</p>
 
   <ol class="step-list">
-    <li><strong>Ingestion is centralized</strong> in one primary region (US-EAST). Exchange feed adapters and the Price Aggregation Service run here. This avoids duplicate exchange connections and price divergence across regions.</li>
-    <li><strong>Read layer is replicated</strong> to all regions. The Price Aggregation Service writes to US-EAST Redis, which replicates to EU-WEST and AP-EAST Redis clusters. Each region's CDN and REST API read from their local Redis.</li>
-    <li><strong>Cross-region replication latency</strong>: ~50-100ms (US &rarr; EU), ~150-200ms (US &rarr; APAC). APAC users see prices ~200ms behind US users &mdash; imperceptible for a list page that refreshes every 30-60 seconds.</li>
+    <li><strong>Ingestion is centralized</strong> in one primary region (US-EAST). Exchange feed adapters and Price Aggregation Service run here. Avoids duplicate exchange connections and price divergence.</li>
+    <li><strong>Read layer is replicated</strong> to all regions. Price Aggregation writes to US-EAST Redis, which replicates to EU-WEST and AP-EAST. Each region's CDN and REST API read from local Redis.</li>
+    <li><strong>Cross-region replication latency</strong>: ~50-100ms (US &rarr; EU), ~150-200ms (US &rarr; APAC). APAC users see prices ~200ms behind &mdash; imperceptible for a list page that refreshes every 30-60 seconds.</li>
   </ol>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; What if the primary ingestion region goes down?</div>
-    <div class="qa-a">(1) A hot standby aggregation service runs in EU-WEST (passive mode). (2) If US-EAST fails, DNS failover promotes EU-WEST within ~30 seconds. (3) During the gap, all regions continue serving the last-known prices from their local Redis + CDN cache. The CDN <code>stale-if-error</code> directive ensures pages stay up even if all origins fail.</div>
+    <div class="qa-q">What if the primary ingestion region goes down?</div>
+    <div class="qa-a">A hot standby aggregation service runs in EU-WEST (passive mode). If US-EAST fails, DNS failover promotes EU-WEST within ~30 seconds. During the gap, all regions continue serving last-known prices from local Redis + CDN cache. The CDN <code>stale-if-error</code> directive ensures pages stay up even if all origins fail.</div>
   </div>
 
   <div class="qa-card">
-    <div class="qa-q">&#10067; Why not run ingestion in every region?</div>
-    <div class="qa-a">Each region would connect to the same exchanges &rarr; 3x connections, potential rate limiting. VWAP computation would produce slightly different prices per region (network jitter). Users switching regions would see price flickers. More operational complexity for no benefit &mdash; price data doesn't need regional affinity.</div>
+    <div class="qa-q">Why not run ingestion in every region?</div>
+    <div class="qa-a">
+    <strong>1.</strong> Each region would connect to the same exchanges &rarr; 3x connections, potential rate limiting.<br>
+    <strong>2.</strong> VWAP computation would produce slightly different prices per region (network jitter). Users switching regions would see price flickers.<br>
+    <strong>3.</strong> More operational complexity for no benefit &mdash; price data doesn't need regional affinity.</div>
   </div>
 </section>
 
-<!-- SUMMARY -->
+<!-- 09 SUMMARY -->
 <section id="summary">
   <div class="sec-head">
-    <span class="sec-num">&#9679;</span>
+    <span class="sec-num">09</span>
     <span class="sec-title">Summary</span>
-    <span class="sec-tag">Core design pillars</span>
+    <span class="sec-tag">10 key design points</span>
   </div>
 
   <div class="summary-grid">
@@ -1693,27 +1766,27 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <div class="summary-card">
       <div class="sc-num">03</div>
       <div class="sc-title">Single Response = Entire Page</div>
-      <div class="sc-desc">Matching Coinbase's actual pattern, a single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. This minimizes round trips.</div>
+      <div class="sc-desc">Matching Coinbase's actual pattern, a single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. Minimizes round trips.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">04</div>
       <div class="sc-title">WebSocket Only on the Detail Page</div>
-      <div class="sc-desc">Live price ticks are only needed when a user is viewing a single asset's chart. This keeps WebSocket connections at ~200-500K (manageable) instead of millions. Each client subscribes to exactly 1 asset.</div>
+      <div class="sc-desc">Live price ticks are only needed when a user views a single asset's chart. Keeps WebSocket connections at ~200-500K (manageable) instead of millions. Each client subscribes to exactly 1 asset.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">05</div>
       <div class="sc-title">Server-Side Candle Aggregation</div>
-      <div class="sc-desc">The server computes OHLCV candles and streams the forming candle to clients every ~1 second with an is_closed flag. Clients never aggregate raw ticks &mdash; they just render the candle object. Industry standard (Binance @kline_5m, Coinbase candles channel).</div>
+      <div class="sc-desc">The server computes OHLCV candles and streams the forming candle with an is_closed flag. Clients never aggregate raw ticks. Industry standard (Binance @kline_5m, Coinbase candles channel).</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">06</div>
       <div class="sc-title">Simple Pub/Sub for WebSocket Fan-Out</div>
-      <div class="sc-desc">Redis Pub/Sub distributes ticker + candle updates to the gateway fleet. At ~2,800 msgs/sec total, this is trivial for Redis. No need for NATS or Kafka.</div>
+      <div class="sc-desc">Redis Pub/Sub distributes ticker + candle updates to gateway fleet. With lazy emission (only active subscriber channels), actual load is ~500-1,000 msgs/sec. No need for NATS or Kafka.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">07</div>
       <div class="sc-title">Centralized Ingestion, Replicated Reads</div>
-      <div class="sc-desc">Exchange feeds are consumed in one region. Aggregated prices are replicated globally via Redis cross-region replication. Avoid duplicate exchange connections and price divergence.</div>
+      <div class="sc-desc">Exchange feeds consumed in one region. Aggregated prices replicated globally via Redis cross-region replication. Avoids duplicate connections and price divergence.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">08</div>
@@ -1723,17 +1796,17 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</pre>
     <div class="summary-card">
       <div class="sc-num">09</div>
       <div class="sc-title">REST or GraphQL &mdash; Same Backend</div>
-      <div class="sc-desc">Whether exposed as REST endpoints or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility but requires persisted query infrastructure.</div>
+      <div class="sc-desc">Whether exposed as REST or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility but requires persisted query infrastructure.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">10</div>
       <div class="sc-title">Simplicity as a Feature</div>
-      <div class="sc-desc">~400 listed assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
+      <div class="sc-desc">~400 assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). List page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
     </div>
   </div>
 </section>
 
-</div><!-- /page -->
+</div>
 
 <script>
 function scrollToSection(id){
