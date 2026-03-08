@@ -2,36 +2,37 @@
 
 # Important Concepts
 
-- WebSocket push vs polling for real-time price updates
+- CDN + short-TTL caching for high-traffic read-heavy pages
+- Pre-computation pipeline (sorted lists, sparklines, trending)
 - Write-behind caching (Redis) for price data
-- Fan-out on write vs fan-out on read for price distribution
-- Rate limiting and tiered data freshness
-- CDN and edge caching for static asset lists
-- Aggregation pipeline for market data (OHLCV candles, volume, market cap)
+- WebSocket for detail page only (not the list page)
+- VWAP aggregation across multiple exchange feeds
+- TimescaleDB continuous aggregates for OHLCV candles
 
 # Context
 
-We are designing the backend for a page like **Coinbase Explore** — a high-traffic page that displays real-time cryptocurrency market prices for thousands of assets. The page is the #1 entry point for casual users and receives billions of page views per month.
+We are designing the backend for a page like **Coinbase Explore** — a high-traffic page that displays cryptocurrency market prices for thousands of assets. The page is the #1 entry point for casual users and receives billions of page views per month.
+
+**Key observation**: The **list page** (explore page) does NOT update prices in real time via WebSocket. Prices refresh on page load or via client-side polling (~every 60 seconds). Only the **detail page** (e.g., `/price/bitcoin`) shows a live-ticking price chart via WebSocket. This dramatically simplifies the architecture — the list page is essentially a **CDN-cacheable, pre-computed snapshot**.
 
 Core features:
-1. **Asset listing table** — Shows ~1,500+ tradeable assets with name, symbol, price, 24h change %, 24h volume, market cap, and a sparkline chart.
-2. **Real-time price updates** — Prices tick in real time (every 1-5 seconds) without page refresh.
-3. **Categories & filters** — Filter by "Trending", "Top Gainers", "Top Losers", "New Listings", "DeFi", "Layer 1", etc.
-4. **Search** — Instant search across all assets by name or symbol.
-5. **Pagination / infinite scroll** — Default view shows top 50 by market cap; user scrolls or paginates for more.
-6. **Price sparkline** — 24h mini chart for each asset.
+1. **Asset listing table** — Shows ~1,500+ tradeable assets with name, symbol, price, 24h change %, 24h volume, market cap, and a sparkline chart. Prices refresh on page load or every ~60 seconds via polling.
+2. **Categories & filters** — Filter by "Trending", "Top Gainers", "Top Losers", "New Listings", "DeFi", "Layer 1", etc.
+3. **Search** — Instant search across all assets by name or symbol.
+4. **Pagination / infinite scroll** — Default view shows top 50 by market cap; user scrolls or paginates for more.
+5. **Price sparkline** — 24h mini chart for each asset (on list page).
+6. **Detail page** — Single asset view with live-ticking price, OHLCV charts (1d/7d/30d/1y), stats, and description. This is the only page that uses WebSocket.
 
-This is a **read-heavy** system. The write side is a continuous ingestion pipeline from exchanges and market data providers. The read side is serving millions of concurrent users viewing the same data.
+This is a **read-heavy** system. The write side is a continuous ingestion pipeline from exchanges and market data providers. The read side is serving millions of concurrent users viewing mostly the same pre-computed data.
 
 # Requirements
 
 ## Functional Requirements
 
-1. **List assets** — Return a paginated list of crypto assets with current price, 24h price change, volume, and market cap. Support sorting and filtering by category.
-2. **Real-time price stream** — Push price updates to connected clients in real time (target: every 1-5 seconds per asset).
-3. **Search** — Search assets by name or ticker symbol with sub-100ms latency.
-4. **Asset detail** — Get detailed data for a single asset: price, 24h/7d/30d/1y charts (OHLCV candles), description, stats.
-5. **Trending / Top movers** — Pre-computed lists: top gainers, top losers, trending (by user interest/volume spike), new listings.
+1. **List assets** — Return a paginated list of crypto assets with current price, 24h price change, volume, and market cap. Support sorting and filtering by category. Prices are a snapshot, not live-updating.
+2. **Search** — Search assets by name or ticker symbol with sub-100ms latency.
+3. **Asset detail with live price** — Get detailed data for a single asset: live price (WebSocket), 24h/7d/30d/1y charts (OHLCV candles), description, stats.
+4. **Trending / Top movers** — Pre-computed lists: top gainers, top losers, trending (by user interest/volume spike), new listings.
 
 **✍️ Note**: We are NOT designing the trading engine, order book, or wallet system. We assume upstream systems (matching engine, exchange integrations) produce a stream of price ticks that we consume.
 
@@ -39,24 +40,24 @@ This is a **read-heavy** system. The write side is a continuous ingestion pipeli
 
 ### Scale
 
-- **10M+ DAU** viewing the explore page. Peak concurrent WebSocket connections: **2M+**.
+- **10M+ DAU** viewing the explore page.
 - **~1,500 assets** tracked. Each asset gets a price tick every 1-5 seconds from exchanges.
-- Read QPS for HTTP API: **~100K QPS** (page loads, search, pagination). Peak: **500K QPS** during market volatility events (Bitcoin crash/rally).
-- WebSocket fan-out: each price tick must be pushed to **~2M connected clients** within 1-5 seconds.
-- Data freshness: prices must be **< 3 seconds stale** for logged-in users, **< 10 seconds** for anonymous/CDN-cached.
+- Read QPS for list page HTTP API: **~100K QPS** (page loads, search, pagination). Peak: **500K QPS** during market volatility events (Bitcoin crash/rally).
+- Detail page WebSocket connections: **~200K-500K concurrent** (only a fraction of users drill into a specific asset at any time).
+- Data freshness: list page prices can be **30-60 seconds stale** (CDN/polling). Detail page prices must be **< 3 seconds stale** (WebSocket).
 
 ### Availability
 
 - **99.99% uptime** — Users check prices during market crashes, which is when load is highest. Downtime during volatility is catastrophic for trust.
 - Multi-region deployment. No single region failure should take down the price page.
-- Graceful degradation: if real-time WebSocket fails, fall back to polling every 5 seconds. If price ingestion lag exceeds 30 seconds, show a stale-data warning banner.
+- Graceful degradation: if the detail page WebSocket fails, fall back to polling every 5 seconds. If price ingestion lag exceeds 30 seconds, show a stale-data warning banner.
 
 ### Latency
 
-- Initial page load (asset list API): **< 100ms p99** (CDN-served for anonymous users).
-- WebSocket price update delivery: **< 2 seconds p99** from exchange tick to client screen.
+- List page API (asset list): **< 100ms p99** (CDN-served for most users).
 - Search API: **< 50ms p99**.
-- Sparkline chart data: **< 200ms p99** (pre-computed, cached).
+- Detail page WebSocket price delivery: **< 3 seconds p99** from exchange tick to client screen.
+- Chart data API: **< 200ms p99** (pre-computed, cached).
 
 ### Consistency
 
@@ -67,7 +68,7 @@ This is a **read-heavy** system. The write side is a continuous ingestion pipeli
 
 ### Market volatility spikes (thundering herd)
 
-When Bitcoin drops 10% in an hour, traffic spikes 5-10x. WebSocket connections surge. The price ingestion pipeline gets flooded with ticks. We must handle this gracefully without cascading failures.
+When Bitcoin drops 10% in an hour, traffic spikes 5-10x on the list page. The CDN absorbs most of this. Detail page WebSocket connections surge for BTC. We must handle this gracefully without cascading failures.
 
 ### Exchange feed outage
 
@@ -75,7 +76,7 @@ If a price feed from a major exchange goes down, we should fall back to the last
 
 ### Stale data display
 
-If our ingestion pipeline falls behind, the client should show a "Prices may be delayed" warning. We track data freshness via a heartbeat mechanism.
+If our ingestion pipeline falls behind, the client should show a "Prices may be delayed" warning. We track data freshness via a timestamp in the API response — the client checks `updated_at` and shows a warning if it's too old.
 
 ### New asset listing
 
@@ -85,12 +86,12 @@ When a new asset is listed, we need to add it to the asset catalog, backfill spa
 
 # API Design
 
-## Public API (served by API Gateway)
+## Public API (served by API Gateway / CDN)
 
 ### List Assets
 
 ```
-GET /v1/assets?page=1&page_size=50&sort=market_cap_desc&category=defi
+GET /v1/assets?page=1&page_size=50&sort=market_cap_desc&filter=all
 
 Response 200:
 {
@@ -111,11 +112,31 @@ Response 200:
   ],
   "total": 1523,
   "page": 1,
-  "page_size": 50
+  "page_size": 50,
+  "filter": "all",
+  "updated_at": "2026-03-07T12:00:32Z"
 }
 ```
 
-**✍️ Note**: Prices are in integer cents (never float) to avoid floating-point precision issues. The `sparkline_24h` array contains 24 hourly price points — small enough to inline, avoids a separate API call per asset.
+**Filter parameter**: The `filter` param selects a pre-computed view of the asset list:
+
+| Filter value | Description | Sort order |
+|---|---|---|
+| `all` | All tradeable assets (default) | By market cap descending |
+| `gainers` | Assets with positive 24h price change | By 24h change % descending |
+| `losers` | Assets with negative 24h price change | By 24h change % ascending |
+| `trending` | Assets with unusual volume/interest spikes | By trending score |
+| `new` | Recently listed assets | By listing date descending |
+| `defi` | DeFi protocol tokens | By market cap |
+| `layer1` | Layer 1 blockchains | By market cap |
+
+**✍️ Note**: Each filter value maps to a **separate pre-computed page in Redis**. When the user clicks "Gainers", the client fetches `GET /v1/assets?filter=gainers&page=1`. This hits CDN → Redis key `asset_list:gainers:page:1` — a pre-built JSON blob. No on-demand sorting or filtering. This is why filters are fast: the work is done in the background, not at request time.
+
+The total number of pre-computed pages: ~7 filters × ~30 pages each = ~210 Redis keys, ~2MB total. Negligible.
+
+**✍️ Note**: Prices are in integer cents (never float) to avoid floating-point precision issues. The `sparkline_24h` array contains 24 hourly price points — small enough to inline, avoids a separate API call per asset. The `updated_at` field lets the client detect stale data.
+
+**✍️ Note**: This response is **CDN-cacheable** with a 30-60 second TTL. The vast majority of list page traffic is served from the CDN edge — never hitting our origin servers. The client may poll this endpoint every ~60 seconds to refresh prices, but there's no WebSocket for the list view.
 
 ### Search Assets
 
@@ -132,7 +153,7 @@ Response 200:
 }
 ```
 
-**✍️ Note**: Search matches on both `name` and `symbol` with prefix matching. With only ~1,500 assets, we can use an in-memory trie or prefix index — no need for Elasticsearch for search alone.
+**✍️ Note**: Search matches on both `name` and `symbol` with prefix matching. With only ~1,500 assets, we can use an in-memory trie or prefix index — no need for Elasticsearch.
 
 ### Get Asset Detail
 
@@ -160,9 +181,12 @@ Response 200:
       { "t": 1709600000, "o": 6780000, "h": 6850000, "l": 6750000, "c": 6810000, "v": 120000000 },
       ...
     ]
-  }
+  },
+  "updated_at": "2026-03-07T12:00:32Z"
 }
 ```
+
+**✍️ Note**: The detail page loads this REST API for the initial snapshot + chart data, then opens a WebSocket for live price ticks. The REST response is CDN-cacheable with a shorter TTL (~10 seconds) since detail page users expect fresher data.
 
 ### Get Trending / Top Movers
 
@@ -181,20 +205,20 @@ Response 200:
 }
 ```
 
-**✍️ Note**: Trending lists are pre-computed every 60 seconds and cached. Lists available: `top_gainers`, `top_losers`, `trending`, `highest_volume`, `new_listings`.
+**✍️ Note**: Trending lists are pre-computed every 60 seconds and cached at CDN with 60-second TTL. Lists available: `top_gainers`, `top_losers`, `trending`, `highest_volume`, `new_listings`.
 
-## WebSocket API (real-time price stream)
+## WebSocket API (detail page live price only)
 
 ```
 Connect: wss://stream.example.com/v1/prices
 
-Client → Server (subscribe):
+Client → Server (subscribe to ONE asset):
 {
   "action": "subscribe",
-  "channels": ["prices:top50"]    // or "prices:all", "prices:BTC,ETH,SOL"
+  "asset_id": "bitcoin"
 }
 
-Server → Client (price tick):
+Server → Client (price tick, every 1-5 seconds):
 {
   "type": "price_update",
   "data": {
@@ -208,19 +232,16 @@ Server → Client (price tick):
 }
 ```
 
-**✍️ Note**: We support channel-based subscriptions. The default `prices:top50` channel covers what's visible on the first page load. Users who scroll down or filter can subscribe to additional channels. This reduces unnecessary fan-out — no need to push 1,500 asset updates to a user only viewing the top 50.
+**✍️ Note**: Unlike the list page (which uses HTTP polling), the detail page uses WebSocket for a **single asset's** live price. The user is viewing `/price/bitcoin` — they only need BTC ticks. This keeps the fan-out problem small: each WebSocket client subscribes to exactly 1 asset.
 
-**Alternative: Server-Sent Events (SSE) vs WebSocket**
+**❓ Why WebSocket on detail page but not on list page?**
 
-| | WebSocket | SSE |
-|---|---|---|
-| Direction | Bidirectional | Server → Client only |
-| Protocol | ws:// | HTTP |
-| Reconnection | Manual | Auto-reconnect built in |
-| Load balancer support | Needs sticky sessions or L4 | Works with standard HTTP LBs |
-| Browser support | Universal | Universal (except old IE) |
+| Page | Data needed | Update frequency | Users | Best approach |
+|---|---|---|---|---|
+| **List page** | 50 assets | Every 30-60 seconds is fine | 10M DAU (huge) | HTTP + CDN (cacheable, simple) |
+| **Detail page** | 1 asset | Every 1-5 seconds (live chart) | ~200-500K concurrent | WebSocket (low fan-out, single asset) |
 
-For this use case, SSE is a strong alternative because we only need server-to-client push. WebSocket's bidirectional capability is useful for subscription management (subscribe/unsubscribe channels) but SSE can handle this via URL params. **We choose WebSocket** because the subscribe/unsubscribe pattern for channels is cleaner with bidirectional messaging, and most CDN/edge platforms now support WebSocket well.
+The list page serves **the same data to all users** (top 50 by market cap) — perfect for CDN caching. Opening a WebSocket for every list page visitor would create millions of unnecessary persistent connections for data that can be 60 seconds stale. The detail page needs live ticks for the chart animation, but only for one asset per user — a much simpler fan-out problem.
 
 ---
 
@@ -229,7 +250,8 @@ For this use case, SSE is a strong alternative because we only need server-to-cl
 ```
                           ┌────────────────────────────────────────────┐
                           │              CDN / Edge Cache              │
-                          │     (static asset list, sparkline data)    │
+                          │     (list page API, trending, sparklines)  │
+                          │         TTL: 30-60 seconds                 │
                           └────────────────────┬───────────────────────┘
                                                │
                                                │ cache miss
@@ -239,36 +261,36 @@ For this use case, SSE is a strong alternative because we only need server-to-cl
                                  │                     │
                     ┌────────────▼──────┐    ┌─────────▼──────────────┐
                     │   REST API Fleet  │    │  WebSocket Gateway      │
-                    │   (stateless)     │    │  Fleet (sticky conn)    │
-                    │                   │    │                         │
-                    │ • List assets     │    │ • Price subscriptions   │
-                    │ • Search          │    │ • Channel management    │
-                    │ • Asset detail    │    │ • Heartbeat             │
-                    │ • Trending lists  │    └────────┬────────────────┘
-                    └────────┬─────────┘             │
+                    │   (stateless)     │    │  Fleet                  │
+                    │                   │    │  (detail page only)     │
+                    │ • List assets     │    │                         │
+                    │ • Search          │    │ • Single-asset price    │
+                    │ • Asset detail    │    │   subscription          │
+                    │ • Trending lists  │    │ • Heartbeat             │
+                    └────────┬─────────┘    └────────┬────────────────┘
                              │                       │ subscribe to
-                             │ read from             │ price channels
+                             │ read from             │ per-asset channel
                     ┌────────▼─────────┐    ┌────────▼────────────────┐
                     │   Redis Cluster   │    │  Pub/Sub Broker         │
-                    │   (price cache)   │    │  (Redis Pub/Sub or      │
-                    │                   │    │   NATS / Kafka)         │
-                    │ • Latest prices   │    └────────┬────────────────┘
-                    │ • Sparkline data  │             │ publish
-                    │ • Trending lists  │             │ price ticks
-                    │ • Search index    │    ┌────────▼────────────────┐
-                    └────────┬─────────┘    │  Price Aggregation      │
-                             │              │  Service                 │
-                             │ write-behind │                         │
-                             │              │ • Normalizes feeds      │
-                    ┌────────▼─────────┐    │ • Computes VWAP         │
-                    │   TimescaleDB /  │    │ • Generates sparklines  │
-                    │   PostgreSQL      │    │ • Computes trending     │
+                    │   (price cache)   │    │  (Redis Pub/Sub)        │
                     │                   │    └────────┬────────────────┘
-                    │ • OHLCV candles   │             │ consume
-                    │ • Historical data │             │
-                    │ • Asset metadata  │    ┌────────▼────────────────┐
-                    └──────────────────┘    │  Exchange Feed Adapters  │
-                                            │                         │
+                    │ • Latest prices   │             │ publish
+                    │ • Pre-computed    │             │ price ticks
+                    │   list pages      │    ┌────────▼────────────────┐
+                    │ • Sparkline data  │    │  Price Aggregation      │
+                    │ • Trending lists  │    │  Service                │
+                    └────────┬─────────┘    │                         │
+                             │              │ • Normalizes feeds      │
+                             │ write-behind │ • Computes VWAP         │
+                             │              │ • Generates sparklines  │
+                    ┌────────▼─────────┐    │ • Computes trending     │
+                    │   TimescaleDB /  │    │ • Pre-builds list pages │
+                    │   PostgreSQL      │    └────────┬────────────────┘
+                    │                   │             │ consume
+                    │ • OHLCV candles   │             │
+                    │ • Historical data │    ┌────────▼────────────────┐
+                    │ • Asset metadata  │    │  Exchange Feed Adapters  │
+                    └──────────────────┘    │                         │
                                             │ • Binance WebSocket     │
                                             │ • Coinbase Pro WS       │
                                             │ • Kraken WS             │
@@ -282,36 +304,31 @@ Stateful connectors that maintain WebSocket connections to major crypto exchange
 
 ### Price Aggregation Service
 
-The brain of the ingestion pipeline. Consumes raw ticks from all exchange adapters, computes the **Volume-Weighted Average Price (VWAP)** across exchanges, and produces the canonical price for each asset. Also computes derived data: 24h change %, sparkline arrays, trending lists. Publishes aggregated price ticks to the Pub/Sub broker and writes to Redis.
+The brain of the system. Consumes raw ticks from all exchange adapters, computes the **Volume-Weighted Average Price (VWAP)** across exchanges, and produces the canonical price for each asset. Also pre-computes all derived data: sorted list pages, 24h change %, sparkline arrays, trending lists. Writes everything to Redis. Publishes per-asset price ticks to Pub/Sub for WebSocket consumers.
 
-### Redis Cluster (Price Cache)
+### Redis Cluster (Price Cache + Pre-Computed Data)
 
-The primary read store for all API requests. Stores:
-- Latest price per asset (key: `price:{asset_id}`) — updated every 1-5 seconds.
-- Pre-computed asset list pages (key: `asset_list:page:{n}:sort:{sort}`) — updated every 5-10 seconds.
-- Sparkline arrays (key: `sparkline:{asset_id}:24h`) — updated every 5 minutes.
-- Trending lists (key: `trending:{list_name}`) — updated every 60 seconds.
-- Search index (sorted set: `search_index` scored by rank, or a simple hash map).
+The primary read store for all API requests. Stores pre-computed responses for every API endpoint so the REST API is a simple key lookup.
 
-### Pub/Sub Broker (Redis Pub/Sub or NATS)
+### Pub/Sub Broker (Redis Pub/Sub)
 
-Distributes price ticks from the aggregation service to all WebSocket gateway instances. Each WebSocket gateway subscribes to price channels. When a new price tick arrives, the gateway pushes it to all connected clients subscribed to that channel.
+Distributes per-asset price ticks from the aggregation service to WebSocket gateway instances. Each gateway subscribes only to channels for assets its connected clients are viewing. With ~1,500 assets and ~200-500K total WebSocket connections, the fan-out per channel is manageable.
 
 ### REST API Fleet
 
-Stateless HTTP servers that serve the list, search, detail, and trending APIs. All reads go to Redis first (cache hit rate > 99% for price data). Cache misses fall through to TimescaleDB.
+Stateless HTTP servers. All reads go to Redis (cache hit rate > 99%). Cache misses fall through to TimescaleDB for chart data. The CDN absorbs 70%+ of list page traffic before it reaches the API fleet.
 
 ### WebSocket Gateway Fleet
 
-Maintains long-lived WebSocket connections with clients. Each gateway instance handles ~50K-100K concurrent connections. Subscribes to price channels on the Pub/Sub broker and fans out to connected clients. Sticky connections — a client stays on the same gateway for the duration of the session.
+Maintains WebSocket connections for **detail page users only**. Each user subscribes to one asset at a time. The gateway subscribes to the corresponding Pub/Sub channel and forwards ticks. Much smaller scale than if we had WebSocket on the list page.
 
 ### TimescaleDB / PostgreSQL
 
-Time-series database for historical OHLCV candle data. Used for chart rendering (7d, 30d, 1y charts) and backfill. Not on the hot read path — Redis serves most reads. Also stores asset metadata (name, description, categories).
+Time-series database for historical OHLCV candle data. Used for chart rendering (7d, 30d, 1y charts). Not on the hot read path for the list page. Also stores asset metadata (name, description, categories).
 
 ### CDN / Edge Cache
 
-Caches the initial page load API response (top 50 assets by market cap) at the edge with a short TTL (5-10 seconds). This absorbs the thundering herd during market events. Anonymous users always hit the CDN; logged-in users bypass CDN for fresher data.
+The first line of defense. Caches the list page API response at the edge with a 30-60 second TTL. This absorbs the thundering herd during market events. The CDN is the reason the list page doesn't need WebSocket — a 30-60 second refresh cycle is acceptable, and the CDN handles the scale.
 
 ---
 
@@ -319,30 +336,13 @@ Caches the initial page load API response (top 50 assets by market cap) at the e
 
 ## 1. Price Ingestion Pipeline
 
-The most critical component. A price tick flows through the system in this order:
-
 ```
-Exchange WS Feed → Exchange Adapter → Price Aggregation Service → Redis + Pub/Sub → WebSocket Gateway → Client
+Exchange WS Feed → Exchange Adapter → Price Aggregation Service → Redis + Pub/Sub
 ```
-
-**Target: < 2 seconds end-to-end latency from exchange tick to client screen.**
 
 ### Exchange Feed Adapters
 
-Each adapter maintains a persistent WebSocket connection to one exchange. Design:
-
-```
-┌────────────────────────────────┐
-│      Exchange Adapter (per exchange)          │
-│                                               │
-│  ┌──────────┐    ┌────────────┐    ┌────────┐ │
-│  │ WS Client│───▶│ Normalizer │───▶│ Output │ │
-│  │ (reconnect│   │ (format,   │    │ Queue  │ │
-│  │  + backoff)│  │  dedup,    │    │        │ │
-│  └──────────┘   │  validate) │    └────────┘ │
-│                  └────────────┘               │
-└───────────────────────────────────────────────┘
-```
+Each adapter maintains a persistent WebSocket connection to one exchange:
 
 - **Reconnection with exponential backoff** — Exchange feeds drop periodically. The adapter auto-reconnects and replays from the last sequence number.
 - **Deduplication** — Some exchanges send duplicate ticks. We dedup by `(exchange, asset, sequence_number)`.
@@ -361,166 +361,170 @@ For each asset, we maintain a sliding window of recent ticks from all exchanges.
 
 **✍️ Note**: VWAP is the industry standard for aggregated crypto prices. An alternative is the **median price** across exchanges, which is more robust against a single exchange showing an outlier price. CoinGecko uses a combination of both. For simplicity, we use VWAP with outlier filtering (drop ticks > 2 standard deviations from the running mean).
 
-### Derived Data Computation
-
-The aggregation service also computes:
-- **24h price change %** — Compare current VWAP to VWAP from 24 hours ago (looked up from Redis or TimescaleDB).
-- **24h volume** — Sum of trade volume across exchanges in the past 24 hours.
-- **Market cap** — `price × circulating_supply` (circulating supply is updated daily from CoinGecko).
-- **Sparkline** — 24 hourly data points; re-computed every 5 minutes by reading the last 24 hours of candle data.
-- **Trending lists** — Sorted by 24h price change % (gainers/losers), by 24h volume (highest volume), by 1h price momentum (trending).
-
-## 2. Real-Time Price Distribution (Fan-Out)
-
-This is the hardest scaling challenge: pushing price updates to **2M+ concurrent WebSocket clients** within seconds.
-
-### Architecture: Two-Level Fan-Out
-
-```
-                    ┌───────────────────────────┐
-                    │  Price Aggregation Service │
-                    │  (single logical stream)   │
-                    └─────────────┬─────────────┘
-                                  │ publish to Pub/Sub
-                                  │ (one message per asset tick)
-                    ┌─────────────▼─────────────┐
-                    │    Pub/Sub Broker Layer     │
-                    │  (NATS / Redis Pub/Sub)     │
-                    │                             │
-                    │  Channel: prices:BTC        │
-                    │  Channel: prices:ETH        │
-                    │  Channel: prices:top50      │
-                    └──┬──────┬──────┬──────┬────┘
-                       │      │      │      │
-              ┌────────▼┐ ┌──▼────┐ ┌▼─────┐ ┌▼────────┐
-              │ WS GW 1 │ │WS GW 2│ │WS GW3│ │WS GW N  │
-              │ (50K    │ │(50K   │ │(50K  │ │(50K     │
-              │  conns) │ │ conns)│ │conns)│ │ conns)  │
-              └────┬────┘ └──┬────┘ └──┬───┘ └────┬────┘
-                   │         │         │          │
-              50K clients  50K     50K        50K clients
-```
-
-**Level 1: Pub/Sub broker → WebSocket Gateways**
-- The aggregation service publishes one message per price tick to a Pub/Sub channel (e.g., `prices:BTC`).
-- Each WebSocket gateway subscribes to channels that its connected clients care about.
-- With 40 gateway instances (2M / 50K per instance), one Pub/Sub message is delivered to ~40 subscribers. This is easy for NATS or Redis Pub/Sub.
-
-**Level 2: WebSocket Gateway → Clients**
-- Each gateway iterates through its local subscription map and pushes the price update to subscribed clients.
-- A gateway with 50K clients subscribed to `prices:top50` needs to send 50K WebSocket messages per tick. At 1 tick/second, that's 50K messages/second per gateway — achievable with efficient I/O (epoll, io_uring).
-
-**❓ Why not use Kafka for the Pub/Sub layer?**
-
-Kafka is designed for durable, ordered, replayed message streams. For real-time price fan-out, we need:
-- **Low latency** (< 100ms from publish to all subscribers).
-- **Ephemeral** messages — if a tick is missed, the next tick supersedes it. No need for replay.
-- **Topic fan-out** — Kafka's consumer group model doesn't support broadcasting the same message to all consumers in a group.
-
-NATS or Redis Pub/Sub are better fits. They are fire-and-forget, low-latency, and support broadcast fan-out natively. The tradeoff is no durability — but price ticks are ephemeral by nature.
-
-**Alternative: Kafka Streams for price aggregation, NATS for fan-out.** Kafka is still useful in the ingestion pipeline (exchange → aggregation) where we want durability and replay. The fan-out from aggregation to WebSocket gateways uses NATS.
-
-### Connection Management
-
-**❓ How do we handle 2M concurrent WebSocket connections?**
-
-- **40 gateway instances** × 50K connections each.
-- Each connection consumes ~10-20KB of memory (buffer + metadata). 50K connections ≈ 750MB RAM per instance. Comfortable on a 4GB instance.
-- We use an **L4 load balancer** (NLB) that distributes new connections across gateway instances. Once established, connections are sticky.
-- **Heartbeat**: Gateway sends a ping every 30 seconds. Client responds with pong. If no pong for 90 seconds, close the connection.
-- **Reconnection**: Client-side logic auto-reconnects with exponential backoff (1s, 2s, 4s, max 30s). On reconnect, re-subscribe to channels and fetch latest prices via HTTP API to fill the gap.
-
-**❓ How do we handle a gateway instance going down?**
-
-- The L4 load balancer detects the unhealthy instance (TCP health check fails).
-- ~50K clients immediately disconnect and auto-reconnect (client-side logic). The load balancer distributes them across remaining healthy instances.
-- During the ~2 second reconnection window, clients show the last known price (cached locally in the browser). No data loss — just a brief stale display.
-
-### Bandwidth Optimization
-
-Each price tick JSON message is ~200 bytes. For the `prices:top50` channel, that's 50 ticks/second (50 assets × 1 tick/sec) × 200 bytes = 10KB/s per client. For 50K clients per gateway, that's 500MB/s outbound — too high.
-
-**Optimization 1: Batch updates**
-Instead of sending one message per asset, batch all price changes into one message every 1 second:
-
-```json
-{
-  "type": "price_batch",
-  "data": [
-    { "id": "BTC", "p": 6834521, "c": -234 },
-    { "id": "ETH", "p": 345621, "c": -178 },
-    ...
-  ],
-  "ts": 1709600123
-}
-```
-
-This reduces 50 messages to 1 message per second. Batched payload: ~2KB per client per second. For 50K clients: **100MB/s** outbound. Achievable with a 1Gbps NIC.
-
-**Optimization 2: Delta encoding**
-Only send fields that changed since the last update. If BTC's price changed but volume didn't, only send the price field.
-
-**Optimization 3: Binary protocol (MessagePack / Protobuf)**
-JSON is verbose. MessagePack reduces payload size by ~30%. Protobuf by ~50%. Tradeoff: debugging is harder, and client-side decoding adds complexity. For a browser-based client, MessagePack is a good middle ground.
-
-## 3. Caching Strategy
-
-Redis is the heart of the read path. Every API response is served from Redis.
-
-### Cache Structure
-
-| Key pattern | Value | TTL | Update frequency |
-|---|---|---|---|
-| `price:{asset_id}` | Latest price JSON | 30s | Every 1-5s |
-| `asset_list:mcap:page:{n}` | Pre-sorted page of 50 assets | 10s | Every 5-10s |
-| `asset_list:gainers:page:1` | Top gainers list | 60s | Every 60s |
-| `sparkline:{asset_id}:24h` | Array of 24 hourly prices | 5min | Every 5min |
-| `asset_detail:{asset_id}` | Full asset metadata + stats | 5min | Every 5min |
-| `search_index` | Sorted set (score=rank, member=asset_json) | 1h | On asset catalog change |
-| `trending:{list}` | Pre-computed trending list | 60s | Every 60s |
-| `candles:{asset_id}:{interval}` | OHLCV candle data | 5min | Every 5min |
-
 ### Pre-Computation Pipeline
 
-The Price Aggregation Service runs a periodic pipeline:
+This is the key insight: **the list page serves pre-computed data, not live data**. The aggregation service runs periodic pipelines that write directly to Redis:
 
 ```
-Every 1-5 seconds:
+Every 10-30 seconds:
   → Update price:{asset_id} in Redis for all assets that changed
-
-Every 5-10 seconds:
   → Re-sort all assets by market cap
-  → Write asset_list:mcap:page:{1..30} to Redis (30 pages × 50 assets)
-
-Every 60 seconds:
-  → Compute top gainers, top losers, trending, highest volume lists
-  → Write trending:{list} to Redis
+  → For EACH filter (all, gainers, losers, trending, new, defi, layer1):
+      → Filter + sort the assets according to the filter's logic
+      → Write pre-built JSON responses:
+          asset_list:{filter}:page:1 ... asset_list:{filter}:page:N
+          (each key = complete JSON response for that page)
 
 Every 5 minutes:
   → Recompute sparkline arrays from candle data
   → Write sparkline:{asset_id}:24h to Redis for all assets
 ```
 
-**✍️ Note**: Pre-computing and caching the sorted asset list pages means the REST API is a simple Redis GET — no sorting or filtering at request time. This is the key to achieving < 100ms p99 latency.
-
-### CDN Layer
-
-For anonymous users (70%+ of traffic), the CDN serves a cached version of the asset list API with a 5-10 second TTL. This absorbs the thundering herd during volatile markets.
-
+The REST API for `GET /v1/assets?filter=gainers&page=1` is literally:
 ```
-CDN edge → Cache HIT (5s TTL) → Return cached response
-CDN edge → Cache MISS → Forward to API → Cache response → Return
+return redis.get("asset_list:gainers:page:1")
 ```
 
-Even 5-second staleness is acceptable for the explore page. Users who need real-time prices are on the WebSocket stream.
+No sorting, no filtering, no database query at request time. Every filter tab the user clicks maps to a different pre-computed key. This is why the API achieves < 100ms p99 — it's a single Redis GET of a pre-built JSON blob.
 
-**❓ What about cache stampede?**
+**❓ Why pre-compute entire response pages instead of individual prices?**
 
-When the CDN TTL expires, many concurrent requests hit the origin simultaneously. We mitigate with:
-1. **Stale-while-revalidate** — CDN serves stale content while fetching fresh data in the background. Users always get a fast response.
-2. **Request coalescing** — CDN collapses multiple origin requests for the same URL into one.
-3. **Background refresh** — Our API proactively pushes updated responses to the CDN (cache warming) before the TTL expires.
+If we stored individual prices and sorted/filtered at request time, each API call would:
+1. Fetch ~1,500 individual price keys from Redis.
+2. Filter by category and sort by the appropriate metric.
+3. Slice to the requested page.
+4. Serialize to JSON.
+
+At 500K QPS, that's 500K sort+filter operations per second — wasteful because the result is identical for all users within the same 30-second window. Pre-computing the sorted/filtered pages once every 10-30 seconds and storing the complete JSON response means each API request is O(1).
+
+The tradeoff is more storage in Redis (~7 filters × ~30 pages × ~10KB = ~2MB total), which is negligible.
+
+## 2. List Page Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         List Page Flow                          │
+│                                                                 │
+│  User opens explore page                                        │
+│       │                                                         │
+│       ▼                                                         │
+│  Browser → CDN edge                                             │
+│       │                                                         │
+│       ├── Cache HIT (within 30-60s TTL)                         │
+│       │   → Return cached JSON instantly (< 20ms)               │
+│       │                                                         │
+│       └── Cache MISS                                            │
+│           → Forward to API Gateway                              │
+│           → REST API does Redis GET("asset_list:mcap:page:1")   │
+│           → Return response, CDN caches it                      │
+│                                                                 │
+│  After 60 seconds, client JS polls the same endpoint            │
+│  → CDN serves updated cache (refreshed by other requests)       │
+│                                                                 │
+│  User clicks "Gainers" filter tab                               │
+│  → Client fetches GET /v1/assets?filter=gainers&page=1          │
+│  → CDN cache (or Redis GET of pre-computed gainers page)        │
+│  → Different filter = different CDN cache key = different Redis  │
+│    pre-computed blob. All equally fast.                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**✍️ Note**: The list page is architecturally similar to a news homepage or product catalog — it's a **cacheable, pre-computed snapshot** that refreshes periodically. The core scaling strategy is CDN + pre-computation, not real-time push. This is a deliberate simplification that works because users don't need second-by-second prices on a list of 50 assets — they need a directional snapshot ("BTC is around $68K, down 2% today").
+
+### CDN Configuration
+
+```
+Cache-Control: public, max-age=30, stale-while-revalidate=60
+
+CDN rules:
+  /v1/assets?*                → Cache 30s, stale-while-revalidate 60s
+  /v1/assets/trending?*       → Cache 60s, stale-while-revalidate 120s
+  /v1/assets/search?*         → Cache 10s (search results change with prices)
+  /v1/assets/{id}             → Cache 10s  (detail page initial load)
+```
+
+**Stale-while-revalidate** is critical: when the TTL expires, the CDN serves the stale response immediately while fetching a fresh one in the background. Users always get a fast response. This eliminates the thundering herd problem entirely — during a Bitcoin crash, millions of users hit the CDN, and the CDN makes exactly 1 request to origin per TTL window.
+
+**❓ What about cache stampede at origin?**
+
+Even with CDN, the origin still receives cache-miss requests (one per TTL window per edge PoP). During extreme traffic, many edge PoPs expire simultaneously. Mitigations:
+
+1. **Request coalescing** — CDN collapses multiple origin requests for the same URL into one (all major CDNs support this).
+2. **Cache warming** — The aggregation service proactively pushes updated responses to the CDN via API (Cloudflare Purge + re-cache, or Fastly's surrogate key invalidation) every 30 seconds, before the TTL expires.
+3. **Origin shield** — CDN uses a mid-tier cache layer (shield PoP) between edge PoPs and origin. All edge cache misses go to the shield first, which collapses them further.
+
+## 3. Detail Page — WebSocket Live Price
+
+Only the detail page (e.g., `/price/bitcoin`) uses WebSocket for live ticks. The scope is much smaller than "all explore page visitors":
+
+- **~200K-500K concurrent WebSocket connections** (5-10% of DAU drill into a detail page at any moment).
+- Each connection subscribes to **exactly 1 asset**.
+- Popular assets (BTC, ETH) have more subscribers; long-tail assets may have 0.
+
+### Architecture
+
+```
+                    ┌───────────────────────────┐
+                    │  Price Aggregation Service │
+                    │                            │
+                    │  On each VWAP update:      │
+                    │  PUBLISH prices:BTC {...}   │
+                    │  PUBLISH prices:ETH {...}   │
+                    └─────────────┬──────────────┘
+                                  │
+                    ┌─────────────▼─────────────┐
+                    │  Redis Pub/Sub              │
+                    │                             │
+                    │  Channel: prices:bitcoin    │
+                    │  Channel: prices:ethereum   │
+                    │  Channel: prices:solana     │
+                    │  ...1,500 channels          │
+                    └──┬──────┬──────┬──────┬────┘
+                       │      │      │      │
+              ┌────────▼┐ ┌──▼────┐ ┌▼─────┐ ┌▼────────┐
+              │ WS GW 1 │ │WS GW 2│ │WS GW3│ │WS GW N  │
+              │(subscr  │ │       │ │      │ │         │
+              │ BTC,ETH)│ │       │ │      │ │         │
+              └────┬────┘ └──┬────┘ └──┬───┘ └────┬────┘
+                   │         │         │          │
+              Clients     Clients   Clients    Clients
+              viewing     viewing   viewing    viewing
+              /price/btc  various   various    various
+```
+
+**Each WebSocket gateway only subscribes to channels for assets its clients are viewing.** When a client connects and sends `subscribe: bitcoin`, the gateway:
+1. Checks if it's already subscribed to `prices:bitcoin` on Pub/Sub.
+2. If not, subscribes. If yes, just adds the client to the local subscriber list.
+3. When a tick arrives on `prices:bitcoin`, the gateway iterates through its local subscriber list and sends the tick to each client.
+
+**❓ How big is the fan-out per asset?**
+
+| Asset | Estimated concurrent viewers | Fan-out per tick |
+|---|---|---|
+| Bitcoin (BTC) | ~50K-100K | 50K-100K WebSocket pushes |
+| Ethereum (ETH) | ~20K-50K | 20K-50K |
+| Top 10 assets | ~5K-20K each | Moderate |
+| Long-tail (rank 100+) | ~10-500 each | Trivial |
+
+Even for BTC (the worst case), 100K pushes per tick at 1 tick/sec is well within the capacity of a distributed WebSocket gateway fleet. With 10 gateway instances, each handles ~10K BTC subscribers — easy.
+
+**❓ Why Redis Pub/Sub and not NATS or Kafka?**
+
+For this scale (~1,500 channels, each receiving 1 message/sec, ~10-20 gateway subscribers per channel), Redis Pub/Sub is the simplest choice:
+- We already have Redis for the cache layer. No new infrastructure.
+- Redis Pub/Sub handles ~1M messages/sec. Our load is ~1,500 msgs/sec — 0.15% of capacity.
+- Fire-and-forget semantics are perfect for ephemeral price ticks.
+
+NATS would also work and is a better choice if the gateway fleet grows beyond ~50 instances (Redis Pub/Sub doesn't scale horizontally as well). But at our current scale, Redis Pub/Sub avoids adding a new dependency.
+
+### Connection Management
+
+- **5-10 gateway instances** × 20K-50K connections each = 200K-500K total.
+- Each connection consumes ~10-20KB of memory. 50K connections ≈ 750MB RAM per instance.
+- **L4 load balancer** (NLB) distributes new connections across gateways.
+- **Heartbeat**: Gateway sends ping every 30 seconds. Client responds with pong. If no pong for 90 seconds, close connection.
+- **Reconnection**: Client auto-reconnects with exponential backoff. On reconnect, re-subscribe and fetch latest price via REST to fill the gap.
+- If a gateway dies, ~50K clients reconnect across remaining instances within ~2 seconds. During the gap, client shows last known price.
 
 ## 4. Search
 
@@ -547,21 +551,19 @@ Trie:
 ```
 
 On search request `q=eth`:
-1. Traverse the trie to find all assets starting with "eth" (by name or symbol).
+1. Traverse the trie to find all assets matching "eth" (by name or symbol).
 2. Return results sorted by rank (top assets first).
 3. Total latency: < 1ms (in-memory trie traversal).
 
 The trie is rebuilt on startup from Redis and updated when assets are added/removed (rare event).
 
-**Alternative: Elasticsearch**
-
-Overkill for 1,500 items. Adds operational complexity (cluster management, JVM tuning) for no benefit. If we needed full-text search across descriptions or fuzzy matching, ES would make sense. For prefix matching on name/symbol, a trie is simpler and faster.
+**Alternative: Elasticsearch** — Overkill for 1,500 items. If we needed full-text search across descriptions or fuzzy matching, ES would make sense. For prefix matching on name/symbol, a trie is simpler and faster.
 
 ## 5. Sparkline and Chart Data
 
-### Sparkline (24h mini chart)
+### Sparkline (24h mini chart — list page)
 
-The 24h sparkline is an array of 24 hourly prices. It's pre-computed every 5 minutes by the aggregation service:
+The 24h sparkline is an array of 24 hourly prices. Pre-computed every 5 minutes by the aggregation service:
 
 ```python
 # Pseudocode
@@ -575,7 +577,7 @@ def compute_sparkline(asset_id):
     return [c.close for c in candles]  # 24 data points
 ```
 
-The sparkline is embedded in the asset list response — no extra API call needed.
+The sparkline is embedded in the list page response — no extra API call needed.
 
 ### OHLCV Candle Data (for detail page charts)
 
@@ -598,7 +600,7 @@ CREATE TABLE price_candles (
 SELECT create_hypertable('price_candles', 'bucket_time');
 ```
 
-**Continuous aggregates** in TimescaleDB automatically roll up 1-minute candles into 5m, 1h, and 1d candles:
+**Continuous aggregates** automatically roll up 1-minute candles into 5m, 1h, and 1d candles:
 
 ```sql
 CREATE MATERIALIZED VIEW candles_1h
@@ -615,7 +617,7 @@ WHERE interval = '1m'
 GROUP BY asset_id, time_bucket('1 hour', bucket_time);
 ```
 
-**✍️ Note**: TimescaleDB's continuous aggregates are incrementally updated as new data arrives — no batch job needed. This gives us real-time candle charts without manual ETL.
+**✍️ Note**: TimescaleDB's continuous aggregates are incrementally updated as new data arrives — no batch job needed.
 
 ### Storage Estimate
 
@@ -627,29 +629,35 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);
 
 ### Redis Cluster (Primary Read Store)
 
-No schema needed — key-value store. See the cache structure table above.
+| Key pattern | Value | TTL | Update frequency |
+|---|---|---|---|
+| `asset_list:{filter}:page:{n}` | Pre-built JSON response per filter | 60s | Every 10-30s |
+| `price:{asset_id}` | Latest price JSON | 60s | Every 1-5s |
+| `sparkline:{asset_id}:24h` | Array of 24 hourly prices | 10min | Every 5min |
+| `asset_detail:{asset_id}` | Full asset metadata + stats | 5min | Every 5min |
+| `search_index` | Sorted set for search | 1h | On asset catalog change |
 
-Redis Cluster with **6+ nodes** (3 primaries + 3 replicas). Each primary handles ~50K ops/sec. Total cluster capacity: ~150K ops/sec. At peak 500K API QPS with 99% cache hit rate, actual Redis QPS is ~500K (each API call makes 1-2 Redis GETs). We may need a larger cluster (12-18 nodes) at peak.
+Redis Cluster with **6 nodes** (3 primaries + 3 replicas). At peak 500K API QPS with 99%+ CDN hit rate, actual Redis QPS is ~5K-50K (only CDN cache misses reach origin). This is comfortable for a small Redis cluster.
 
-**✍️ Note**: We use Redis as the primary read store, NOT PostgreSQL. This is a deliberate design choice. The explore page is extremely read-heavy with data that changes every few seconds. Redis gives us < 1ms read latency. PostgreSQL would require constant index scans on rapidly changing data — unnecessary overhead.
+**✍️ Note**: The CDN absorbs the vast majority of read traffic. Redis only serves CDN cache misses + detail page lookups + WebSocket fan-out. This is why we don't need 12-18 Redis nodes — the CDN does the heavy lifting.
 
 ### TimescaleDB (Historical Data Store)
 
 Two key tables:
 
 - **`price_candles`** — OHLCV candle data. Partitioned by time (automatic hypertable). Indexed on `(asset_id, interval, bucket_time)`. Stores 1m, 5m, 1h, 1d candles.
-- **`assets`** — Asset metadata catalog. Stores `asset_id` (PK), `symbol`, `name`, `description`, `categories` (JSONB), `circulating_supply`, `max_supply`, `logo_url`, `listed_at`, `updated_at`. ~1,500 rows. Cached in Redis with 1h TTL.
+- **`assets`** — Asset metadata catalog. Stores `asset_id` (PK), `symbol`, `name`, `description`, `categories` (JSONB), `circulating_supply`, `max_supply`, `logo_url`, `listed_at`, `updated_at`. ~1,500 rows. Cached in Redis.
 
-### Why TimescaleDB (and not raw PostgreSQL, InfluxDB, or ClickHouse)?
+### Why TimescaleDB?
 
 | Option | Pros | Cons |
 |---|---|---|
-| **TimescaleDB** | PostgreSQL-compatible (familiar SQL), continuous aggregates, automatic partitioning, compression | Not as fast as InfluxDB for pure time-series writes |
-| InfluxDB | Purpose-built for time-series, fast writes | Custom query language (Flux), no SQL joins, harder to store asset metadata alongside |
-| ClickHouse | Extremely fast analytical queries, columnar | Overkill for our write volume (~2M rows/day), operational complexity |
-| Raw PostgreSQL | Simple | No automatic partitioning, no continuous aggregates, manual vacuuming of time-series data |
+| **TimescaleDB** | PostgreSQL-compatible, continuous aggregates, automatic partitioning, compression | Not as fast as InfluxDB for pure time-series writes |
+| InfluxDB | Purpose-built for time-series, fast writes | Custom query language (Flux), no SQL joins |
+| ClickHouse | Extremely fast analytical queries, columnar | Overkill for ~2M rows/day |
+| Raw PostgreSQL | Simple | No auto partitioning, no continuous aggregates |
 
-**We choose TimescaleDB** because it gives us PostgreSQL compatibility (familiar, battle-tested) with time-series superpowers (continuous aggregates, compression, automatic partitioning). Our write volume is low enough that InfluxDB's write performance advantage doesn't matter.
+**We choose TimescaleDB** because our write volume is modest (~2M rows/day) and the continuous aggregates feature eliminates the need for a separate ETL pipeline.
 
 ## 7. Failure Handling
 
@@ -665,28 +673,28 @@ Exchange feed health check:
     → Continue using other exchange feeds for VWAP
     → If ALL feeds degraded:
       → Freeze prices at last known value
-      → Display "Prices may be delayed" banner on client
-      → Switch client to polling mode (fetch from cache every 10s)
+      → Set updated_at to last known time
+      → Client detects stale updated_at and shows warning banner
 ```
 
-### WebSocket gateway failure
+### CDN / API failure
+
+- CDN has built-in redundancy (Cloudflare/Fastly global PoP network).
+- If origin API goes down, CDN serves stale content via `stale-if-error` directive. Users see slightly old prices but the page stays up.
+- If Redis goes down, API falls back to TimescaleDB. Latency degrades from < 10ms to ~50-100ms.
+
+### WebSocket gateway failure (detail page)
 
 - L4 health check detects failure within 5 seconds.
-- Clients auto-reconnect to a healthy gateway.
-- During the ~2 second gap, client shows last known prices.
-- No data loss: prices are ephemeral; the next tick fills the gap.
-
-### Redis failure
-
-- Redis Cluster tolerates individual node failures (replica promotes to primary).
-- If an entire Redis cluster goes down (unlikely), the API falls back to TimescaleDB. Latency degrades from < 10ms to ~50-100ms. Still acceptable.
-- The CDN continues serving cached responses, absorbing most traffic.
+- ~50K clients auto-reconnect across remaining healthy gateways.
+- During the ~2 second gap, client shows last known price.
+- No data loss — the next tick fills the gap.
 
 ### Price Aggregation Service failure
 
 - Run 3+ replicas. Each consumes from the same exchange adapter output queues.
-- If one replica fails, others continue processing. Redis and Pub/Sub are updated by the surviving replicas.
-- Use leader election (via Redis lock or ZooKeeper) to prevent duplicate computation of trending lists.
+- Use leader election (via Redis lock) to prevent duplicate computation of pre-built list pages.
+- If all replicas fail, Redis continues serving the last-computed data (stale but available). Client sees stale `updated_at` and shows warning.
 
 ---
 
@@ -694,35 +702,31 @@ Exchange feed health check:
 
 ## Rate Limiting
 
-Tiered rate limiting to protect the system:
-
 | Tier | Rate Limit | Data Freshness |
 |---|---|---|
-| Authenticated (logged-in) | 100 req/s per user | Real-time WebSocket |
-| Anonymous (no auth) | 20 req/s per IP | CDN-cached (5-10s stale) |
-| API key (developer) | 1000 req/s per key | Real-time (with paid plans) |
-
-WebSocket connections are also rate-limited: max 5 subscribe/unsubscribe messages per second per connection.
+| Anonymous (CDN-served) | Effectively unlimited (CDN handles) | 30-60s stale |
+| Authenticated (logged-in) | 100 req/s per user | 10-30s stale |
+| API key (developer) | 1000 req/s per key | Real-time (paid tier) |
 
 ## Multi-Currency Support
 
-Prices are stored in USD cents. For other fiat currencies (EUR, GBP, JPY), we:
+Prices are stored in USD cents. For other fiat currencies (EUR, GBP, JPY):
 1. Fetch exchange rates from a forex API (updated every 60 seconds).
-2. Store exchange rates in Redis.
-3. The client-side converts USD prices to the user's local currency using the cached exchange rate.
+2. Store rates in Redis.
+3. Server-side conversion when building the pre-computed list pages — generate separate pages per currency (`asset_list:mcap:usd:page:1`, `asset_list:mcap:eur:page:1`).
 
-**Alternative**: Server-side conversion. This increases Redis storage (every price × N currencies) but reduces client-side complexity. For a global product, server-side conversion is better because it ensures consistency.
+**Alternative**: Client-side conversion (simpler, fewer cached pages, but potential rounding inconsistencies across clients). For a global product, server-side is better for consistency.
 
 ## Monitoring & Alerting
 
 Key metrics:
 - **Price freshness** — Time since last tick per asset. Alert if > 30 seconds.
-- **WebSocket connection count** — Monitor per gateway. Alert if a single gateway exceeds 80% capacity (40K connections).
-- **Pub/Sub latency** — Time from publish to gateway delivery. Alert if p99 > 500ms.
-- **Redis latency** — p99 GET latency. Alert if > 5ms.
-- **API latency** — p99 by endpoint. Alert if list API > 200ms or search > 100ms.
-- **Exchange feed health** — Per-exchange uptime. Alert if any feed degraded > 5 minutes.
 - **CDN hit rate** — Should be > 95%. Drop indicates cache misconfiguration.
+- **API latency** — p99 by endpoint. Alert if list API > 200ms or search > 100ms.
+- **WebSocket connection count** — Monitor per gateway. Alert if approaching capacity.
+- **Redis latency** — p99 GET latency. Alert if > 5ms.
+- **Exchange feed health** — Per-exchange uptime. Alert if any feed degraded > 5 minutes.
+- **Pre-computation pipeline lag** — Alert if list pages haven't been refreshed in > 60 seconds.
 
 ## Scalability
 
@@ -730,13 +734,13 @@ Key metrics:
 
 | Component | Scale | Architecture |
 |---|---|---|
-| REST API | ~500K QPS peak | 50+ stateless instances behind LB |
-| WebSocket Gateway | 2M concurrent connections | 40+ instances, 50K conn each |
-| Redis Cluster | ~500K ops/sec peak | 12-18 nodes (6-9 primaries) |
-| Pub/Sub (NATS) | ~1,500 msgs/sec (one per asset) | 3-node NATS cluster |
-| Price Aggregation | ~300K ticks/min ingested | 3+ replicas |
-| TimescaleDB | ~2M rows/day, ~80 GB/year | Single primary + 2 read replicas |
-| CDN | Absorbs 70%+ of read traffic | Global edge network |
+| CDN | Absorbs 95%+ of list page traffic | Global edge network |
+| REST API | ~50K QPS at origin (after CDN) | 10-20 stateless instances |
+| WebSocket Gateway | 200K-500K concurrent connections | 5-10 instances |
+| Redis Cluster | ~5K-50K ops/sec (after CDN) | 6 nodes (3 primaries) |
+| Redis Pub/Sub | ~1,500 msgs/sec | Same Redis cluster |
+| Price Aggregation | ~300K ticks/min ingested | 3 replicas |
+| TimescaleDB | ~2M rows/day, ~8 GB/year | Single primary + 2 replicas |
 
 ### Multi-Region Architecture
 
@@ -748,16 +752,11 @@ Key metrics:
          │                  │                  │
     ┌────▼────┐        ┌────▼────┐        ┌────▼────┐
     │ US-EAST │        │ EU-WEST │        │ AP-EAST │
-    │ Region  │        │ Region  │        │ Region  │
     │         │        │         │        │         │
+    │ CDN PoP │        │ CDN PoP │        │ CDN PoP │
     │ REST API│        │ REST API│        │ REST API│
-    │ Fleet   │        │ Fleet   │        │ Fleet   │
-    │         │        │         │        │         │
     │ WS GW   │        │ WS GW   │        │ WS GW   │
-    │ Fleet   │        │ Fleet   │        │ Fleet   │
-    │         │        │         │        │         │
     │ Redis   │        │ Redis   │        │ Redis   │
-    │ Cluster │        │ Cluster │        │ Cluster │
     └────┬────┘        └────┬────┘        └────┬────┘
          │                  │                  │
          └──────────────────┼──────────────────┘
@@ -772,54 +771,47 @@ Key metrics:
               └──────────┬─────────────────┘
                          │
               Cross-region replication
-              (Redis → Redis, NATS → NATS)
+              (Redis → Redis via replication)
 ```
 
 **Design: Centralized ingestion, replicated read layer**
 
-Unlike payments (where data must stay in region), price data is global and identical for all users. Therefore:
+Price data is global and identical for all users. Therefore:
 
-1. **Ingestion is centralized** in one primary region (US-EAST). Exchange feed adapters and the Price Aggregation Service run here. This avoids the complexity of multi-region deduplication of the same exchange ticks.
+1. **Ingestion is centralized** in one primary region (US-EAST). Exchange feed adapters and the Price Aggregation Service run here. This avoids duplicate exchange connections and price divergence across regions.
 
-2. **Read layer is replicated** to all regions. The Price Aggregation Service publishes to a cross-region Pub/Sub (NATS with gateway mode, or Redis cross-region replication). Each region's Redis cluster and WebSocket gateways receive the same price updates.
+2. **Read layer is replicated** to all regions. The Price Aggregation Service writes to US-EAST Redis, which replicates to EU-WEST and AP-EAST Redis clusters. Each region's CDN and REST API read from their local Redis.
 
-3. **Cross-region replication latency**: ~50-100ms (US → EU), ~150-200ms (US → APAC). This means APAC users see prices ~200ms behind US users — acceptable for a price display page (not a trading engine).
+3. **Cross-region replication latency**: ~50-100ms (US → EU), ~150-200ms (US → APAC). APAC users see prices ~200ms behind US users — imperceptible for a list page that refreshes every 30-60 seconds.
 
 **❓ What if the primary ingestion region goes down?**
 
-Failover strategy:
-1. A hot standby Price Aggregation Service runs in EU-WEST.
-2. Exchange Feed Adapters in EU-WEST are in passive mode (connected but not publishing).
-3. If US-EAST goes down, a DNS failover promotes EU-WEST's ingestion pipeline within ~30 seconds.
-4. During the ~30s gap, all regions continue serving the last known prices from their local Redis cache.
+1. A hot standby aggregation service runs in EU-WEST (passive mode).
+2. If US-EAST fails, DNS failover promotes EU-WEST within ~30 seconds.
+3. During the gap, all regions continue serving the last-known prices from their local Redis + CDN cache. The CDN `stale-if-error` directive ensures pages stay up even if all origins fail.
 
 **❓ Why not run ingestion in every region?**
 
-Running independent ingestion in each region would mean:
-- Each region connects to the same exchanges → 3x the connections, potential rate limiting from exchanges.
-- VWAP computation would produce slightly different prices in each region (due to network jitter). Users switching regions would see price flickers.
-- More operational complexity for no real benefit.
-
-Centralized ingestion with replicated reads is the standard pattern for market data distribution systems.
+- Each region would connect to the same exchanges → 3x connections, potential rate limiting.
+- VWAP computation would produce slightly different prices per region (network jitter). Users switching regions would see price flickers.
+- More operational complexity for no benefit — price data doesn't need regional affinity.
 
 ---
 
 # Summary
 
-The core of this design for a Coinbase Explore-like page at scale:
+The core of this design:
 
-1. **Read-heavy architecture** — Redis as the primary read store, not PostgreSQL. Pre-compute everything (sorted lists, sparklines, trending). The API server is a thin Redis proxy.
+1. **CDN-first architecture for the list page** — The explore page is a cacheable snapshot, not a live feed. 30-60 second TTL at CDN absorbs 95%+ of traffic. The API server barely does any work.
 
-2. **Two-level fan-out for real-time prices** — Price Aggregation → NATS Pub/Sub → WebSocket Gateways → Clients. Channel-based subscriptions limit fan-out to what each client actually views.
+2. **Pre-computation over on-demand calculation** — Sorted list pages, trending lists, sparklines are all pre-built by the aggregation service and stored as complete JSON responses in Redis. The REST API is a single Redis GET.
 
-3. **CDN as the first line of defense** — 5-10 second TTL on the asset list API absorbs 70%+ of traffic (anonymous users). Stale-while-revalidate prevents cache stampedes.
+3. **WebSocket only on the detail page** — Live price ticks are only needed when a user is viewing a single asset's chart. This keeps WebSocket connections at ~200-500K (manageable) instead of millions. Each client subscribes to exactly 1 asset.
 
-4. **Pre-computation over on-demand calculation** — Trending lists, sparklines, sorted pages, and VWAP are all computed in the background and pushed to Redis. Request-time computation is near zero.
+4. **Simple Pub/Sub for WebSocket fan-out** — Redis Pub/Sub distributes per-asset ticks to the gateway fleet. At ~1,500 msgs/sec total, this is trivial for Redis. No need for NATS or Kafka.
 
-5. **Centralized ingestion, replicated reads** — Exchange feeds are consumed in one region. Aggregated prices are replicated globally via cross-region Pub/Sub. This avoids duplicate exchange connections and price divergence across regions.
+5. **Centralized ingestion, replicated reads** — Exchange feeds are consumed in one region. Aggregated prices are replicated globally via Redis cross-region replication. Avoid duplicate exchange connections and price divergence.
 
-6. **Graceful degradation** — Exchange feed failure → use remaining feeds. WebSocket failure → client falls back to polling. Redis failure → fall through to TimescaleDB. Primary region failure → hot standby promotion. Every failure mode has a fallback.
+6. **Graceful degradation everywhere** — CDN serves stale on origin failure. Redis serves stale on aggregation failure. Client detects stale `updated_at` and warns user. Every failure mode has a fallback, and the page stays up.
 
-7. **TimescaleDB for historical data** — Continuous aggregates automatically roll up candle data. Compression keeps storage trivial (~4-8 GB/year). PostgreSQL compatibility means no new query language to learn.
-
-8. **Simplicity where possible** — In-memory trie for search (1,500 assets don't need Elasticsearch). Redis sorted sets for rankings. No sharding needed for TimescaleDB at this write volume. Complexity is reserved for the fan-out problem, which is the genuine hard part.
+7. **Simplicity as a feature** — 1,500 assets don't need Elasticsearch (use a trie). ~2M candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.
