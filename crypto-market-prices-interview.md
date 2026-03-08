@@ -9,7 +9,7 @@
 - VWAP aggregation across multiple exchange feeds
 - Server-side candle aggregation with forming candle streaming (not client-side tick aggregation)
 - TimescaleDB continuous aggregates for OHLCV candles
-- GraphQL with persisted queries as an alternative to REST (used by Coinbase in production)
+- REST over GraphQL for simplicity — URL-based CDN caching vs. persisted query infrastructure
 - Market health aggregation (market cap, BTC dominance, buy/sell ratio)
 
 # Context
@@ -92,7 +92,7 @@ When a new asset is listed, we need to add it to the asset catalog, backfill spa
 
 # API Design
 
-## REST API Approach (our design)
+## REST API
 
 ### List Assets
 
@@ -161,46 +161,17 @@ The total number of pre-computed pages: ~7 filters × ~5 sort options × ~40 pag
 
 **✍️ Note**: The response includes **market-level aggregate data** (market health stats, BTC/ETH headers, top gainers) alongside the asset list. This means a single request loads the entire explore page — no extra API calls needed. This is CDN-cacheable with a 30-60 second TTL.
 
-### ❓ GraphQL vs REST — Real-World Comparison
+### ❓ Why REST over GraphQL?
 
-Coinbase's production API uses **GraphQL with persisted queries**:
+We use REST because the URL-based caching model is trivially CDN-friendly — each filter/sort/page combination is a unique URL that Cloudflare/Fastly can cache without any extra infrastructure. This is ideal for a read-heavy explore page where the response shape is fixed and predictable.
 
-```
-POST /graphql/query
-{
-  "operationName": "ExploreQuery",
-  "variables": {
-    "currency": "USD",
-    "filter": "LISTED",
-    "limit": 10,
-    "sort": "RANK",
-    "order": "ASC",
-    "page": 1,
-    "resolution": "DAY",
-    "skipSparklines": true
-  },
-  "extensions": {
-    "persistedQuery": {
-      "sha256Hash": "a1b2c3d4..."  // pre-registered query hash
-    }
-  }
-}
-```
-
-**Persisted queries**: Instead of sending the full GraphQL query string (which can be large), the client sends only a `sha256Hash`. The server maps hash → pre-registered query. Benefits:
-- **Bandwidth savings** — No query string in every request
+That said, GraphQL is a valid alternative here (and Coinbase actually uses it in production). The key challenge with GraphQL is CDN caching — GraphQL typically uses POST requests with a query body, which CDNs can't cache by default. The solution is **persisted queries**: the client sends a `sha256Hash` of a pre-registered query instead of the full query string. The server maps hash → whitelisted query. This gives you:
+- **CDN cacheability** — The hash-based URL is stable and cacheable, restoring REST-like caching behavior
 - **Security** — Server only executes whitelisted queries (prevents arbitrary GraphQL abuse)
-- **CDN-cacheable** — Hash-based URL is stable and cacheable (GET with query hash in URL)
+- **Bandwidth savings** — No query string in every request
+- **Client flexibility** — Clients can request only the fields they need (e.g., `skipSparklines: true`)
 
-| Aspect | REST (our design) | GraphQL (Coinbase actual) |
-|---|---|---|
-| **Simplicity** | Simple URL-based caching, easy CDN integration | Requires persisted query infrastructure |
-| **Flexibility** | Multiple endpoints for different data | Single query returns everything the page needs |
-| **Over-fetching** | Client gets fixed response shape | Client can request only needed fields |
-| **Caching** | URL-based CDN caching (trivial) | Need persisted query hashes for CDN caching |
-| **Client control** | Less flexible — server defines response shape | Client can add/remove fields (e.g., skip sparklines) |
-
-**✍️ Note for interview**: Either approach works. REST is simpler to explain and implement. If the interviewer asks about GraphQL, mention persisted queries as a key optimization — without them, GraphQL POST requests are hard to CDN-cache. Coinbase's approach is a good example of a "best of both worlds" pattern: GraphQL flexibility with REST-like cacheability via persisted query hashes.
+The trade-off is complexity: persisted queries require build-time query registration, hash management, and a query allowlist. For this explore page where we have a fixed number of well-defined queries, REST is simpler and achieves the same performance. The backend architecture is identical either way — pre-computed Redis lookups behind a CDN.
 
 ### Search Assets
 
@@ -1017,7 +988,7 @@ Key metrics:
 | Component | Scale | Architecture |
 |---|---|---|
 | CDN | Absorbs 95%+ of list page traffic | Global edge network |
-| REST API (or GraphQL) | ~50K QPS at origin (after CDN) | 10-20 stateless instances |
+| REST API | ~50K QPS at origin (after CDN) | 10-20 stateless instances |
 | WebSocket Gateway | 200K-500K concurrent connections | 5-10 instances |
 | Redis Cluster | ~5K-50K ops/sec (after CDN) | 6 nodes (3 primaries) |
 | Redis Pub/Sub | ~500-1,000 msgs/sec (lazy emit, active channels only) | Same Redis cluster |
@@ -1080,41 +1051,6 @@ Price data is global and identical for all users. Therefore:
 
 ---
 
-# Real-World API Comparison (Coinbase Production)
-
-Analysis of Coinbase's actual `ExploreQuery` GraphQL request reveals several design insights:
-
-### What aligns with our design
-
-| Aspect | Our Design | Coinbase Actual | Aligned? |
-|---|---|---|---|
-| Pre-computed responses | CDN-cached JSON blobs per filter/page | Single query returns full pre-built response | ✅ Yes |
-| Filter support | 7 filter categories | `filter: "LISTED"` + sort/order params | ✅ Similar |
-| Pagination | Page-based with page_size | `limit: 10`, `page` param | ✅ Yes |
-| Lazy sparklines | Sparklines can be skipped | `skipSparklines: true` flag | ✅ Yes |
-| CDN-friendly | Stateless, cacheable responses | Persisted queries enable CDN caching | ✅ Yes |
-| No WebSocket on list | HTTP polling for list page | GraphQL POST for explore page | ✅ Yes |
-
-### Key differences
-
-| Aspect | Our Design | Coinbase Actual | Impact |
-|---|---|---|---|
-| Protocol | REST with URL-based caching | GraphQL with persisted queries (`sha256Hash`) | GraphQL offers client flexibility; persisted queries restore cacheability |
-| Query granularity | Separate endpoints (list, trending, search) | Single `ExploreQuery` returns everything | Fewer round trips, but larger response |
-| Price format | Decimal strings | Decimal strings (e.g., `"67287.395"`) | Aligned after update |
-| Percent changes | 24h only (originally) | 5 periods: hour, day, week, month, year | Updated to match |
-| Market health data | Not originally covered | `marketHealthV2`: market cap, volume, BTC dominance, buy/sell ratio — each with chart data | Updated to include |
-| Featured assets | Not covered | `btcHeader` / `ethHeader` with dedicated market cap + volume | Updated to include |
-| Asset metadata | Basic (name, symbol, price) | Includes `color`, `imageUrl`, `supportedContextsForLocation` (isTradable, isDex, isWallet) | Updated to include |
-| Asset count | ~1,500 assumed | 383 (`totalAssetCount`) | Corrected |
-| Page size | 50 | 10 | Corrected |
-
-### Interview takeaway
-
-Both REST and GraphQL work well here. The key architectural insight is the same: **pre-compute and cache everything**. Whether you expose it as a REST endpoint or a GraphQL persisted query, the backend is doing the same work — building a complete JSON response in Redis and serving it with minimal computation. In an interview, explain the REST approach (simpler to describe) but mention GraphQL with persisted queries as an alternative if the interviewer probes deeper.
-
----
-
 # Summary
 
 The core of this design:
@@ -1123,7 +1059,7 @@ The core of this design:
 
 2. **Pre-computation over on-demand calculation** — Sorted list pages, trending lists, sparklines, and market health stats are all pre-built by the aggregation service and stored as complete JSON responses in Redis. The REST API is a single Redis GET.
 
-3. **Single response = entire page** — Matching Coinbase's actual pattern, a single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. This minimizes round trips.
+3. **Single response = entire page** — A single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. This minimizes round trips.
 
 4. **WebSocket only on the detail page** — Live price ticks are only needed when a user is viewing a single asset's chart. This keeps WebSocket connections at ~200-500K (manageable) instead of millions. Each client subscribes to exactly 1 asset.
 
@@ -1135,6 +1071,4 @@ The core of this design:
 
 8. **Graceful degradation everywhere** — CDN serves stale on origin failure. Redis serves stale on aggregation failure. Client detects stale `updated_at` and warns user. Every failure mode has a fallback, and the page stays up.
 
-9. **REST or GraphQL — same backend** — Whether exposed as REST endpoints or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility (e.g., `skipSparklines`) but requires persisted query infrastructure for cacheability.
-
-10. **Simplicity as a feature** — ~400 listed assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.
+9. **Simplicity as a feature** — ~400 listed assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). REST over GraphQL because URL-based CDN caching is trivial — no persisted query infrastructure needed. The hardest scaling problem is CDN cache management, not real-time fan-out.

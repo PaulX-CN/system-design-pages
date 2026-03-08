@@ -432,7 +432,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="nav-item" data-section="hld" onclick="scrollToSection('hld')">High Level Design</div>
   <div class="nav-item" data-section="detailed" onclick="scrollToSection('detailed')">Detailed Design</div>
   <div class="nav-item" data-section="failure" onclick="scrollToSection('failure')">Failure Handling</div>
-  <div class="nav-item" data-section="comparison" onclick="scrollToSection('comparison')">Real-World API</div>
   <div class="nav-item" data-section="other" onclick="scrollToSection('other')">Other</div>
   <div class="nav-item" data-section="summary" onclick="scrollToSection('summary')">Summary</div>
 </nav>
@@ -494,8 +493,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <div class="cc-desc">Automatic OHLCV candle roll-ups for time-series data</div>
     </div>
     <div class="concept-card">
-      <div class="cc-title">GraphQL + Persisted Queries</div>
-      <div class="cc-desc">Alternative to REST used by Coinbase in production</div>
+      <div class="cc-title">REST over GraphQL</div>
+      <div class="cc-desc">URL-based CDN caching vs. persisted query infrastructure</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">Market Health Aggregation</div>
@@ -645,10 +644,10 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="sec-head">
     <span class="sec-num">03</span>
     <span class="sec-title">API Design</span>
-    <span class="sec-tag">REST + GraphQL comparison + WebSocket</span>
+    <span class="sec-tag">REST API + WebSocket</span>
   </div>
 
-  <h3 class="sub-head">REST API Approach (Our Design)</h3>
+  <h3 class="sub-head">REST API</h3>
 
   <!-- List Assets -->
   <div class="api-endpoint">
@@ -717,46 +716,21 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     <div class="note-body">Total number of pre-computed pages: ~7 filters &times; ~5 sort options &times; ~40 pages each &asymp; <strong>~1,400 Redis keys, ~15MB total</strong>. Negligible for Redis. Prices are <strong>decimal strings</strong> (e.g., <code>"67287.395"</code>), matching Coinbase's production API. Percent changes span <strong>5 time periods</strong> (hour, day, week, month, year). The response includes <strong>market-level aggregate data</strong> alongside the asset list &mdash; a single request loads the entire explore page.</div>
   </div>
 
-  <!-- GraphQL Comparison -->
-  <h3 class="sub-head">GraphQL vs REST &mdash; Real-World Comparison</h3>
+  <!-- Why REST over GraphQL -->
+  <h3 class="sub-head">Why REST over GraphQL?</h3>
 
-  <p class="body-text">Coinbase's production API uses <strong>GraphQL with persisted queries</strong>:</p>
+  <p class="body-text">We use REST because the URL-based caching model is trivially CDN-friendly &mdash; each filter/sort/page combination is a unique URL that Cloudflare/Fastly can cache without any extra infrastructure. This is ideal for a read-heavy explore page where the response shape is fixed and predictable.</p>
 
-  <div class="code-block">POST /graphql/query
-{
-  "operationName": "ExploreQuery",
-  "variables": {
-    "currency": "USD",
-    "filter": "LISTED",
-    "limit": 10,
-    "sort": "RANK",
-    "order": "ASC",
-    "page": 1,
-    "resolution": "DAY",
-    "skipSparklines": true
-  },
-  "extensions": {
-    "persistedQuery": {
-      "sha256Hash": "a1b2c3d4..."  // pre-registered query hash
-    }
-  }
-}</div>
+  <p class="body-text">That said, GraphQL is a valid alternative here. The key challenge with GraphQL is CDN caching &mdash; GraphQL typically uses POST requests with a query body, which CDNs can&rsquo;t cache by default. The solution is <strong>persisted queries</strong>: the client sends a <code>sha256Hash</code> of a pre-registered query instead of the full query string. The server maps hash &rarr; whitelisted query. This gives you:</p>
 
-  <p class="body-text"><strong>Persisted queries</strong>: Instead of sending the full GraphQL query string, the client sends only a <code>sha256Hash</code>. The server maps hash &rarr; pre-registered query. Benefits: <strong>bandwidth savings</strong> (no query string), <strong>security</strong> (only whitelisted queries), <strong>CDN-cacheable</strong> (hash-based URL is stable).</p>
+  <ul class="body-text" style="margin-left:1.5rem;margin-bottom:1.2rem;color:var(--text);">
+    <li><strong>CDN cacheability</strong> &mdash; The hash-based URL is stable and cacheable, restoring REST-like caching behavior</li>
+    <li><strong>Security</strong> &mdash; Server only executes whitelisted queries (prevents arbitrary GraphQL abuse)</li>
+    <li><strong>Bandwidth savings</strong> &mdash; No query string in every request</li>
+    <li><strong>Client flexibility</strong> &mdash; Clients can request only the fields they need (e.g., <code>skipSparklines: true</code>)</li>
+  </ul>
 
-  <table class="scale-table">
-    <tr><th>Aspect</th><th>REST (Our Design)</th><th>GraphQL (Coinbase Actual)</th></tr>
-    <tr><td>Simplicity</td><td>Simple URL-based caching, easy CDN integration</td><td>Requires persisted query infrastructure</td></tr>
-    <tr><td>Flexibility</td><td>Multiple endpoints for different data</td><td>Single query returns everything the page needs</td></tr>
-    <tr><td>Over-fetching</td><td>Client gets fixed response shape</td><td>Client can request only needed fields</td></tr>
-    <tr><td>Caching</td><td>URL-based CDN caching (trivial)</td><td>Need persisted query hashes for CDN caching</td></tr>
-    <tr><td>Client control</td><td>Less flexible &mdash; server defines response shape</td><td>Client can add/remove fields (e.g., skip sparklines)</td></tr>
-  </table>
-
-  <div class="note-card">
-    <div class="note-label">Interview Tip</div>
-    <div class="note-body">Either approach works. REST is simpler to explain and implement. If the interviewer asks about GraphQL, mention <strong>persisted queries</strong> as a key optimization &mdash; without them, GraphQL POST requests are hard to CDN-cache. Coinbase's approach is a &ldquo;best of both worlds&rdquo; pattern: GraphQL flexibility with REST-like cacheability via persisted query hashes.</div>
-  </div>
+  <p class="body-text">The trade-off is complexity: persisted queries require build-time query registration, hash management, and a query allowlist. For this explore page where we have a fixed number of well-defined queries, REST is simpler and achieves the same performance. The backend architecture is identical either way &mdash; pre-computed Redis lookups behind a CDN.</p>
 
   <!-- Search -->
   <h3 class="sub-head">Search Assets</h3>
@@ -1597,51 +1571,10 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
       &rarr; Client detects stale updated_at and shows warning banner</div>
 </section>
 
-<!-- 07 REAL-WORLD API COMPARISON -->
-<section id="comparison">
-  <div class="sec-head">
-    <span class="sec-num">07</span>
-    <span class="sec-title">Real-World API Comparison</span>
-    <span class="sec-tag">Coinbase production analysis</span>
-  </div>
-
-  <p class="body-text">Analysis of Coinbase's actual <code>ExploreQuery</code> GraphQL request reveals several design insights:</p>
-
-  <h3 class="sub-head">What Aligns with Our Design</h3>
-  <table class="scale-table">
-    <tr><th>Aspect</th><th>Our Design</th><th>Coinbase Actual</th><th>Aligned?</th></tr>
-    <tr><td>Pre-computed responses</td><td>CDN-cached JSON blobs per filter/page</td><td>Single query returns full pre-built response</td><td style="color:var(--green);">Yes</td></tr>
-    <tr><td>Filter support</td><td>7 filter categories</td><td>filter: "LISTED" + sort/order params</td><td style="color:var(--green);">Similar</td></tr>
-    <tr><td>Pagination</td><td>Page-based with page_size</td><td>limit: 10, page param</td><td style="color:var(--green);">Yes</td></tr>
-    <tr><td>Lazy sparklines</td><td>Sparklines can be skipped</td><td>skipSparklines: true flag</td><td style="color:var(--green);">Yes</td></tr>
-    <tr><td>CDN-friendly</td><td>Stateless, cacheable responses</td><td>Persisted queries enable CDN caching</td><td style="color:var(--green);">Yes</td></tr>
-    <tr><td>No WebSocket on list</td><td>HTTP polling for list page</td><td>GraphQL POST for explore page</td><td style="color:var(--green);">Yes</td></tr>
-  </table>
-
-  <h3 class="sub-head">Key Differences</h3>
-  <table class="scale-table">
-    <tr><th>Aspect</th><th>Our Design</th><th>Coinbase Actual</th><th>Impact</th></tr>
-    <tr><td>Protocol</td><td>REST with URL-based caching</td><td>GraphQL with persisted queries (sha256Hash)</td><td>GraphQL offers client flexibility; persisted queries restore cacheability</td></tr>
-    <tr><td>Query granularity</td><td>Separate endpoints (list, trending, search)</td><td>Single ExploreQuery returns everything</td><td>Fewer round trips, but larger response</td></tr>
-    <tr><td>Price format</td><td>Decimal strings</td><td>Decimal strings (e.g., "67287.395")</td><td>Aligned after update</td></tr>
-    <tr><td>Percent changes</td><td>24h only (originally)</td><td>5 periods: hour, day, week, month, year</td><td>Updated to match</td></tr>
-    <tr><td>Market health data</td><td>Not originally covered</td><td>marketHealthV2: market cap, volume, BTC dominance, buy/sell ratio with charts</td><td>Updated to include</td></tr>
-    <tr><td>Featured assets</td><td>Not covered</td><td>btcHeader / ethHeader with dedicated market cap + volume</td><td>Updated to include</td></tr>
-    <tr><td>Asset metadata</td><td>Basic (name, symbol, price)</td><td>Includes color, imageUrl, supportedContextsForLocation</td><td>Updated to include</td></tr>
-    <tr><td>Asset count</td><td>~1,500 assumed</td><td>383 (totalAssetCount)</td><td>Corrected</td></tr>
-    <tr><td>Page size</td><td>50</td><td>10</td><td>Corrected</td></tr>
-  </table>
-
-  <div class="note-card">
-    <div class="note-label">Interview Takeaway</div>
-    <div class="note-body">Both REST and GraphQL work well here. The key architectural insight is the same: <strong>pre-compute and cache everything</strong>. Whether you expose it as a REST endpoint or a GraphQL persisted query, the backend is doing the same work &mdash; building a complete JSON response in Redis and serving it with minimal computation. In an interview, explain the REST approach (simpler to describe) but mention GraphQL with persisted queries as an alternative if the interviewer probes deeper.</div>
-  </div>
-</section>
-
-<!-- 08 OTHER CONSIDERATIONS -->
+<!-- 07 OTHER CONSIDERATIONS -->
 <section id="other">
   <div class="sec-head">
-    <span class="sec-num">08</span>
+    <span class="sec-num">07</span>
     <span class="sec-title">Other Considerations</span>
     <span class="sec-tag">Rate limiting, multi-currency, monitoring, scalability</span>
   </div>
@@ -1681,7 +1614,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
   <table class="scale-table">
     <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
     <tr><td>CDN</td><td>Absorbs 95%+ of list page traffic</td><td>Global edge network</td></tr>
-    <tr><td>REST API (or GraphQL)</td><td>~50K QPS at origin (after CDN)</td><td>10-20 stateless instances</td></tr>
+    <tr><td>REST API</td><td>~50K QPS at origin (after CDN)</td><td>10-20 stateless instances</td></tr>
     <tr><td>WebSocket Gateway</td><td>200K-500K concurrent connections</td><td>5-10 instances</td></tr>
     <tr><td>Redis Cluster</td><td>~5K-50K ops/sec (after CDN)</td><td>6 nodes (3 primaries)</td></tr>
     <tr><td>Redis Pub/Sub</td><td>~500-1,000 msgs/sec (lazy emit)</td><td>Same Redis cluster</td></tr>
@@ -1747,9 +1680,9 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
 <!-- 09 SUMMARY -->
 <section id="summary">
   <div class="sec-head">
-    <span class="sec-num">09</span>
+    <span class="sec-num">08</span>
     <span class="sec-title">Summary</span>
-    <span class="sec-tag">10 key design points</span>
+    <span class="sec-tag">9 key design points</span>
   </div>
 
   <div class="summary-grid">
@@ -1766,7 +1699,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
     <div class="summary-card">
       <div class="sc-num">03</div>
       <div class="sc-title">Single Response = Entire Page</div>
-      <div class="sc-desc">Matching Coinbase's actual pattern, a single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. Minimizes round trips.</div>
+      <div class="sc-desc">A single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. Minimizes round trips.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">04</div>
@@ -1795,13 +1728,8 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">09</div>
-      <div class="sc-title">REST or GraphQL &mdash; Same Backend</div>
-      <div class="sc-desc">Whether exposed as REST or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility but requires persisted query infrastructure.</div>
-    </div>
-    <div class="summary-card">
-      <div class="sc-num">10</div>
       <div class="sc-title">Simplicity as a Feature</div>
-      <div class="sc-desc">~400 assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). List page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
+      <div class="sc-desc">~400 assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). List page doesn't need WebSocket (CDN + polling). REST over GraphQL because URL-based CDN caching is trivial. The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
     </div>
   </div>
 </section>
