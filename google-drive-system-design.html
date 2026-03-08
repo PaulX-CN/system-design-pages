@@ -643,12 +643,12 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="principles">
       <div class="principle">
-        <div class="principle-title">Per-file chunk versioning</div>
-        <div class="principle-desc">Files split into 4-8MB chunks scoped to each file. On edit, only the modified chunk gets a new version — unchanged chunks are untouched. Simplifies GC: delete a file, delete its chunks. SHA-256 used for integrity verification, not dedup.</div>
+        <div class="principle-title">Dual storage model</div>
+        <div class="principle-desc">Two distinct paths: (1) Binary files (PDFs, images, videos) stored as 4-8MB chunks with per-file versioning. (2) Collaborative documents (Docs, Sheets) stored as a structured document model — OT operates on this model, checkpointed as a serialized blob. Chunk system and OT system serve different file types.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Chunked resumable uploads</div>
-        <div class="principle-desc">Files split into 4-8MB chunks client-side. Each chunk uploaded independently with retry. Resumable from last successful chunk after network failure. Critical for mobile on spotty connections.</div>
+        <div class="principle-title">Chunked resumable uploads (binary files)</div>
+        <div class="principle-desc">Binary files split into 4-8MB chunks client-side. Each chunk uploaded independently with retry. Resumable from last successful chunk after network failure. Critical for mobile on spotty connections. Not used for collaborative documents.</div>
       </div>
       <div class="principle">
         <div class="principle-title">Hierarchical ACL with inheritance</div>
@@ -722,8 +722,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             </div>
             <div class="comp" onclick="openPanel('blob')">
               <div class="comp-top"><span class="comp-icon">&#x1F4E6;</span><span class="comp-name">Blob Storage Service</span></div>
-              <div class="comp-role">Chunked upload/download + versioning</div>
-              <div class="comp-detail">Handles resumable uploads (initiate, upload chunk, finalize). Chunks scoped per file with version tracking. SHA-256 for integrity verification. Pre-signed URL generation for direct S3 upload/download.</div>
+              <div class="comp-role">Binary file chunked upload/download + versioning</div>
+              <div class="comp-detail">Handles binary files (PDFs, images, videos) via resumable chunked uploads. Chunks scoped per file with version tracking. SHA-256 for integrity verification. Pre-signed URL generation for direct S3 upload/download. NOT used for collaborative documents (those go through Collaboration Service).</div>
             </div>
             <div class="comp" onclick="openPanel('sharing')">
               <div class="comp-top"><span class="comp-icon">&#x1F465;</span><span class="comp-name">Sharing &amp; Permission Service</span></div>
@@ -742,8 +742,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             </div>
             <div class="comp" onclick="openPanel('collab')">
               <div class="comp-top"><span class="comp-icon">&#x1F4DD;</span><span class="comp-name">Collaboration Service</span></div>
-              <div class="comp-role">Real-time co-editing + OT/CRDT</div>
-              <div class="comp-detail">WebSocket connections for real-time editing. Operational Transform (Google Docs-style) or CRDT for conflict-free merges. Cursor position broadcast. Presence indicators.</div>
+              <div class="comp-role">Real-time co-editing on structured document model via OT</div>
+              <div class="comp-detail">Manages collaborative documents (Docs, Sheets, Slides) as a structured document model (JSON/protobuf), NOT binary chunks. OT operates on this model. In-memory state checkpointed to blob storage every 30s. WebSocket connections for real-time editing. Cursor broadcast + presence.</div>
             </div>
           </div>
         </div>
@@ -761,7 +761,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="comp" onclick="openPanel('objectstore')">
               <div class="comp-top"><span class="comp-icon">&#x1F5C4;</span><span class="comp-name">Object Store (S3/GCS)</span></div>
               <div class="comp-role">Blob storage + 11 nines durability</div>
-              <div class="comp-detail">Stores file chunks keyed by content hash. Multi-tier: hot (S3 Standard), warm (S3 IA), cold (Glacier). Lifecycle policies auto-tiering based on access patterns.</div>
+              <div class="comp-detail">Two types of objects: (1) Binary file chunks keyed by {file_id}/{chunk_index}/{version}. (2) Collaborative document snapshots (serialized document model) keyed by {doc_id}/{revision}. Multi-tier: hot, warm, cold. Lifecycle auto-tiering based on access patterns.</div>
             </div>
             <div class="comp" onclick="openPanel('metadb')">
               <div class="comp-top"><span class="comp-icon">&#x1F4BE;</span><span class="comp-name">Metadata DB (PostgreSQL)</span></div>
@@ -1506,8 +1506,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <div class="flow-block open" id="f1">
         <div class="flow-hd" onclick="toggleFlow('f1')">
           <div class="flow-num">F-01</div>
-          <div class="flow-title">Resumable File Upload</div>
-          <div class="flow-meta">Chunked + integrity check + virus scan</div>
+          <div class="flow-title">Resumable File Upload (Binary Files)</div>
+          <div class="flow-meta">Chunked + integrity check + virus scan — PDFs, images, videos only</div>
           <div class="flow-chevron">></div>
         </div>
         <div class="flow-bd">
@@ -1723,14 +1723,14 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="flow-step">
               <div class="fs-num">08</div>
               <div class="fs-svc">Persistence</div>
-              <div class="fs-action">Every 30 seconds OR every 100 ops (whichever comes first): Checkpoint routine runs. (1) Serialize current document state to blob storage (S3). (2) Write checkpoint record to DB: { doc_id, revision: 118, blob_url, timestamp }. (3) Truncate ops log: delete ops before revision 118 (they're now baked into the checkpoint). (4) Also write ops to a durable WAL (write-ahead log in Kafka) BEFORE applying them, so on server crash, ops between checkpoints can be replayed.</div>
-              <div class="fs-note">WAL + checkpoint = zero data loss even on crash between checkpoints</div>
+              <div class="fs-action">Every 30 seconds OR every 100 ops (whichever comes first): Checkpoint routine runs. (1) Serialize the in-memory document model (JSON/protobuf tree — NOT binary file chunks) to a single blob in S3 at key {doc_id}/{revision}. (2) Write checkpoint record to doc_snapshots table: { doc_id, revision: 118, blob_url, timestamp }. (3) Truncate doc_ops: delete ops before revision 118 (they're baked into the snapshot). (4) Ops are also written to a durable WAL (Kafka) BEFORE applying, so on crash, ops between checkpoints can be replayed.</div>
+              <div class="fs-note">WAL + checkpoint of document model = zero data loss. This is separate from binary file chunk storage.</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">09</div>
               <div class="fs-svc">Session End</div>
-              <div class="fs-action">When all users disconnect (or after idle timeout of 5 min): Final checkpoint written. Session object evicted from memory. File metadata updated with latest version number and size. Kafka event FILE_MODIFIED published for sync service / search reindex / notifications. Subsequent opens load from the latest checkpoint.</div>
-              <div class="fs-note">Graceful handoff from real-time to at-rest storage</div>
+              <div class="fs-action">When all users disconnect (or after idle timeout of 5 min): Final checkpoint — serialize document model to S3, write doc_snapshots record. Session object evicted from memory. File metadata (files table) updated with latest version number and size. Kafka event FILE_MODIFIED published for sync service / search reindex / notifications. Subsequent opens load from the latest doc_snapshot + replay any ops from WAL.</div>
+              <div class="fs-note">Graceful handoff from in-memory document model to at-rest serialized snapshot</div>
             </div>
           </div>
         </div>
@@ -1876,7 +1876,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="db-hd" onclick="toggleDb('db3')">
           <div class="db-icon">&#x1F4E6;</div>
           <div class="db-title-wrap">
-            <div class="db-name">Blob Metadata (Chunks)</div>
+            <div class="db-name">Binary File Chunks</div>
             <div class="db-meta-row">
               <span class="db-badge pg">PostgreSQL</span>
               <span class="db-badge s3">S3/GCS Object Store</span>
@@ -1889,7 +1889,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="db-schema">
               <div class="db-sec-label">Core Tables</div>
               <div class="schema-block">
-                <div class="schema-table">file_chunks <span>-- per-file chunk storage</span></div>
+                <div class="schema-table">file_chunks <span>-- binary file chunk storage (PDFs, images, videos)</span></div>
                 <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
                 <div class="schema-col"><span class="col-name">chunk_index</span><span class="col-type">INT</span><span class="col-note">ordering</span></div>
                 <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span><span class="col-note">chunk version</span></div>
@@ -1908,6 +1908,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="db-schema" style="border-right:none">
               <div class="db-sec-label">Design Decisions</div>
               <ul class="db-notes-list">
+                <li><strong>Binary files only:</strong> file_chunks stores binary files (PDFs, images, videos, ZIPs). Collaborative documents (Docs, Sheets, Slides) use a separate storage path — see Collaborative Document DB (doc_snapshots + doc_ops).</li>
                 <li><strong>Per-file scoping:</strong> Chunks belong to a specific file. No cross-file sharing. Delete a file = delete its chunks from S3. Simple ownership model, no ref_count needed.</li>
                 <li><strong>Version-level chunking:</strong> On edit, only the modified chunk gets a new version. Unchanged chunks keep their existing version. Query for file version N: SELECT the latest chunk version <= N for each chunk_index.</li>
                 <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on created_at. Retrieval from cold adds 3-5h latency.</li>
@@ -1920,6 +1921,64 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
       <div class="db-card" id="db4">
         <div class="db-hd" onclick="toggleDb('db4')">
+          <div class="db-icon">&#x1F4DD;</div>
+          <div class="db-title-wrap">
+            <div class="db-name">Collaborative Document DB</div>
+            <div class="db-meta-row">
+              <span class="db-badge pg">PostgreSQL (snapshots)</span>
+              <span class="db-badge kafka">Kafka (ops WAL)</span>
+              <span class="db-badge s3">S3/GCS (serialized model)</span>
+            </div>
+          </div>
+          <div class="db-scale-tag">Separate from binary file_chunks</div>
+        </div>
+        <div class="db-bd">
+          <div class="db-inner">
+            <div class="db-schema">
+              <div class="db-sec-label">Core Tables</div>
+              <div class="schema-block">
+                <div class="schema-table">doc_snapshots <span>-- checkpointed document state</span></div>
+                <div class="schema-col"><span class="col-name pk">doc_id</span><span class="col-type">UUID FK -> files.id</span></div>
+                <div class="schema-col"><span class="col-name pk">revision</span><span class="col-type">BIGINT</span><span class="col-note">server revision at checkpoint</span></div>
+                <div class="schema-col"><span class="col-name">blob_url</span><span class="col-type">VARCHAR</span><span class="col-note">s3://{doc_id}/{revision}</span></div>
+                <div class="schema-col"><span class="col-name">size_bytes</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>PK:</strong> (doc_id, revision)<br>
+                  <strong>Latest:</strong> WHERE doc_id=? ORDER BY revision DESC LIMIT 1<br>
+                  <strong>Cleanup:</strong> Keep last N snapshots per doc (e.g., 50), GC older ones
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">doc_ops <span>-- in-flight ops log (bounded)</span></div>
+                <div class="schema-col"><span class="col-name pk">doc_id</span><span class="col-type">UUID FK -> files.id</span></div>
+                <div class="schema-col"><span class="col-name pk">revision</span><span class="col-type">BIGINT</span><span class="col-note">server-assigned sequential</span></div>
+                <div class="schema-col"><span class="col-name">op_type</span><span class="col-type">ENUM(insert, delete, format, ...)</span></div>
+                <div class="schema-col"><span class="col-name">op_data</span><span class="col-type">JSONB</span><span class="col-note">{pos, text, attrs, ...}</span></div>
+                <div class="schema-col"><span class="col-name">author_id</span><span class="col-type">UUID</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>PK:</strong> (doc_id, revision)<br>
+                  <strong>Replay:</strong> WHERE doc_id=? AND revision > ? ORDER BY revision ASC<br>
+                  <strong>Truncation:</strong> DELETE WHERE doc_id=? AND revision &lt;= ? (after checkpoint)
+                </div>
+              </div>
+            </div>
+            <div class="db-schema" style="border-right:none">
+              <div class="db-sec-label">Design Decisions</div>
+              <ul class="db-notes-list">
+                <li><strong>Document model ≠ file chunks:</strong> Collaborative docs (Docs, Sheets, Slides) store state as a structured model (JSON/protobuf tree of paragraphs, cells, slides). OT operates on this model. Binary files (PDFs, videos) use file_chunks. These are completely separate storage paths.</li>
+                <li><strong>Checkpoint = serialized snapshot:</strong> Every 30s or 100 ops, the in-memory document model is serialized and written to S3 as a single blob. The doc_snapshots table tracks which revision each snapshot represents. On server recovery, load latest snapshot + replay ops from WAL.</li>
+                <li><strong>Ops log is bounded:</strong> Only ops since the last checkpoint are kept in doc_ops (~1000 ops max). After each checkpoint, ops before that revision are truncated. Kafka WAL provides durable backup for crash recovery between checkpoints.</li>
+                <li><strong>No chunk splitting concern:</strong> A Google Doc with 100 pages is still one document model (~1-5MB serialized). There are no "chunks that grow too big" — the entire model is one unit for OT. Size is naturally bounded by document content.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-card" id="db5">
+        <div class="db-hd" onclick="toggleDb('db5')">
           <div class="db-icon">&#x1F4DC;</div>
           <div class="db-title-wrap">
             <div class="db-name">Activity / Audit DB</div>
@@ -1979,6 +2038,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     <div class="key-principles" style="margin-bottom:32px;">
       <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Core Problem</div><div class="kp-body">5 users have the same document open. All typing simultaneously. Each keystroke must appear on all 5 screens in <100ms, and all 5 copies must converge to the exact same text — even if two users type at the same character position at the same instant.</div></div>
       <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Solution: Operational Transform (OT)</div><div class="kp-body">Every edit is an "operation" (insert or delete at a position). When concurrent ops conflict, a mathematical transform function adjusts positions so every user's intent is preserved. The server is the single source of truth that assigns a total ordering.</div></div>
+      <div class="kp" style="border-left-color:var(--gold)"><div class="kp-title" style="color:var(--gold)">Key Architecture: Document Model ≠ File Chunks</div><div class="kp-body">Collaborative documents (Docs, Sheets, Slides) are NOT stored as binary file chunks. They use a <strong>structured document model</strong> — a JSON/protobuf tree representing paragraphs, styles, tables, etc. OT operates on this model with semantic operations (insert text at position, apply bold to range). The in-memory document state is periodically <strong>checkpointed</strong> by serializing the entire model to a single blob in object storage. Binary files (PDFs, videos, images) use the chunked upload/download path — these are separate systems serving different file types.</div></div>
     </div>
 
     <!-- OT Walkthrough -->
@@ -2225,16 +2285,22 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
           <td>Folder listing = single shard. Cross-shard for shared files (scatter-gather).</td>
         </tr>
         <tr>
-          <td>file_chunks</td>
+          <td>file_chunks (binary files)</td>
           <td>1T+ rows, ~20TB</td>
           <td>Shard by file_id (co-located with file metadata by owner_id)</td>
-          <td>All chunks for a file on same shard. Download = single shard query. GC on file delete = single shard.</td>
+          <td>Binary files only (PDFs, images, videos). All chunks for a file on same shard. Download = single shard query. GC on file delete = single shard.</td>
+        </tr>
+        <tr>
+          <td>doc_snapshots + doc_ops (collab docs)</td>
+          <td>~100M snapshots, bounded ops</td>
+          <td>Shard by doc_id. Ops truncated at each checkpoint.</td>
+          <td>Collaborative docs (Docs, Sheets, Slides) use structured document model. Snapshot = serialized model blob in S3. Ops log bounded to ~1000 ops between checkpoints. Completely separate from file_chunks.</td>
         </tr>
         <tr>
           <td>Object Store (S3/GCS)</td>
           <td>2PB+</td>
           <td>Multi-tier: hot (Standard) / warm (IA) / cold (Glacier)</td>
-          <td>Lifecycle auto-tiering saves 40-60% cost. 11 nines durability built-in.</td>
+          <td>Stores both binary file chunks AND collaborative doc snapshots. Lifecycle auto-tiering saves 40-60% cost. 11 nines durability built-in.</td>
         </tr>
         <tr>
           <td>activity_log</td>
@@ -2251,7 +2317,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       </tbody>
     </table>
     <div class="key-principles">
-      <div class="kp"><div class="kp-title">Per-file chunk versioning</div><div class="kp-body">Chunks scoped to each file. On edit, only modified chunks get new versions — unchanged chunks untouched. Delete a file = delete its chunks. Simple ownership, no cross-file dependencies, straightforward GC.</div></div>
+      <div class="kp"><div class="kp-title">Dual storage model</div><div class="kp-body">Binary files: per-file chunk versioning. On edit, only modified chunks get new versions. Collaborative docs: structured document model with OT. Checkpointed as serialized blobs. Two completely separate storage paths, unified by the files metadata table.</div></div>
       <div class="kp"><div class="kp-title">CDN for read path</div><div class="kp-body">Popular shared files cached at edge. Pre-signed URLs bypass application servers entirely for downloads. p99 first-byte &lt;500ms. CloudFront/Akamai with 200+ edge locations globally.</div></div>
       <div class="kp"><div class="kp-title">Metadata sharding by owner_id</div><div class="kp-body">All of a user's files on same shard. Folder listing, search, quota calc = single-shard queries. Shared files require cross-shard reads but are 10-15% of total reads.</div></div>
       <div class="kp"><div class="kp-title">Hot user handling</div><div class="kp-body">Users with 100K+ files: virtual sharding splits their data across N sub-shards. Folder listing uses scatter-gather within virtual shard group. Prevents single-shard bottleneck.</div></div>
@@ -2413,7 +2479,7 @@ const panels = {
     icon: '\u{26A1}', title: 'CDN (CloudFront/Akamai)', subtitle: 'Download acceleration + edge caching',
     sections: [
       { title: 'Caching Strategy', items: ['Shared files with 100+ views cached at edge automatically', 'Pre-signed URLs: include token + expiry in URL, CDN validates', 'Cache invalidation on file update: API call to CDN purge endpoint', 'Cache key: file_id + version ensures new version = new cache key (no stale content)', 'Geographic routing: user -> nearest edge PoP -> origin if cache miss'] },
-      { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key (content_hash), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs.' }
+      { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key ({file_id}/{chunk_index}/{version}), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs.' }
     ]
   },
   metadata: {
@@ -2421,12 +2487,13 @@ const panels = {
     sections: [
       { title: 'Core Responsibilities', text: 'Manages the file/folder hierarchy. Every file and folder is a row in the files table. parent_id creates the tree structure. Owner is the user who created the file. Versions tracked via version column + file_versions table for history.' },
       { title: 'Optimistic Concurrency', items: ['Every metadata update requires If-Match: ETag header', 'ETag = hash of (id + version + modified_at)', 'PUT /files/{id} with stale ETag -> 412 Precondition Failed', 'Client must refetch, show diff to user, retry with new ETag', 'No pessimistic locks: read-heavy workload (100:1 read:write ratio)'] },
-      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy: deep copy file metadata + copy chunk records with new file_id'] }
+      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy binary file: deep copy metadata + copy chunk records with new file_id', 'Copy collaborative doc: deep copy metadata + copy latest doc snapshot with new doc_id'] }
     ]
   },
   blob: {
-    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Chunked upload/download + per-file versioning',
+    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Binary file chunked upload/download + per-file versioning',
     sections: [
+      { title: 'Scope: Binary Files Only', text: 'This service handles PDFs, images, videos, ZIPs, and other binary files. Collaborative documents (Docs, Sheets, Slides) are NOT handled here — they go through the Collaboration Service, which manages a structured document model with OT and checkpoints.' },
       { title: 'Resumable Upload Protocol', items: ['POST /uploads/resumable: initiate session, get upload_id (24h TTL)', 'PUT /uploads/{id} with Content-Range header for each chunk', 'Server tracks received chunks. Client can query progress.', 'Final chunk: server verifies full-file SHA-256 checksum', 'On failure: client resumes from last acknowledged chunk offset'] },
       { title: 'Per-file Chunk Storage', items: ['Chunks keyed by {file_id}/{chunk_index}/{version} in S3', 'Each chunk belongs to exactly one file — simple ownership', 'SHA-256 used for integrity verification, not dedup', 'On edit: only modified chunks get a new version, unchanged chunks untouched', 'Delete file: delete all chunks for that file_id from S3 + DB'] },
       { title: 'Download Path', items: ['Generate pre-signed S3 URL (1h TTL)', 'Redirect client to CDN/S3 directly (302 redirect)', 'Range request support for partial downloads and video streaming', 'Chunks reassembled in order by chunk_index from file_chunks table', 'Large files: parallel chunk download on client for speed'] }
@@ -2456,21 +2523,21 @@ const panels = {
     ]
   },
   collab: {
-    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing + OT + WebSocket + server authority',
+    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing on structured document model via OT',
     sections: [
+      { title: 'Document Model (NOT Chunks)', text: 'Collaborative documents (Docs, Sheets, Slides) use a structured document model — a JSON/protobuf tree representing paragraphs, styles, tables, cells, etc. OT operates on this semantic model, NOT on binary file chunks. A 100-page Google Doc is one in-memory model (~1-5MB), not a collection of 4-8MB binary chunks. Binary files (PDFs, videos) use the separate Blob Storage Service with chunked uploads.' },
       { title: 'What Clients Send', text: 'Every keystroke or edit produces an operation: insert(position, text) or delete(position, length). The client applies ops locally immediately (optimistic update), then sends to server with the last known server_rev. Rule: only 1 unacknowledged op in flight at a time. Additional keystrokes are buffered and composed into a single op, sent after ACK.' },
-      { title: 'Server-side OT Pipeline', items: ['1. Receive op from client with its server_rev reference', '2. Acquire per-document in-memory mutex (microseconds, no I/O)', '3. Fetch all ops between client\'s server_rev and current rev from ops log', '4. Transform client op against each intervening op (adjust positions)', '5. Write transformed op to WAL (Kafka) for crash durability', '6. Apply to in-memory canonical document state, increment revision', '7. ACK originating client, broadcast transformed op to all others'] },
-      { title: 'How Documents Converge', items: ['Server assigns total ordering via sequential revision numbers', 'OT transform function satisfies TP1: both orderings yield same result', '1-op-in-flight rule ensures causal consistency per client', 'All clients apply the same set of ops in the same server-determined order', 'After processing all ops, every client reaches identical document state'] },
-      { title: 'Persistence & Recovery', items: ['Checkpoint: snapshot full document to blob storage every 30s or 100 ops', 'WAL (Kafka): every op written durably before applying to memory', 'On server crash: load last checkpoint + replay WAL from checkpoint revision', 'Recovery time: <2s. Clients auto-reconnect with exponential backoff', 'Session end: final checkpoint + evict from memory + publish FILE_MODIFIED'] },
-      { title: 'Architecture & Scaling', items: ['Consistent hash(doc_id) -> server: one doc pinned to one server', 'WebSocket connection per active editor per document', 'In-memory state: ~1-5MB per doc (text + ops log + sessions)', 'Single 64GB server handles ~15K concurrent docs', 'Cross-region: ops forwarded to primary region for OT, ~100-200ms latency', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
+      { title: 'Server-side OT Pipeline', items: ['1. Receive op from client with its server_rev reference', '2. Acquire per-document in-memory mutex (microseconds, no I/O)', '3. Fetch all ops between client\'s server_rev and current rev from ops log', '4. Transform client op against each intervening op (adjust positions)', '5. Write transformed op to WAL (Kafka) for crash durability', '6. Apply to in-memory canonical document model, increment revision', '7. ACK originating client, broadcast transformed op to all others'] },
+      { title: 'Persistence & Recovery', items: ['Checkpoint: serialize entire document model to blob storage (S3) every 30s or 100 ops', 'doc_snapshots table: tracks {doc_id, revision, blob_url} for each checkpoint', 'WAL (Kafka): every op written durably before applying to memory', 'On server crash: load last snapshot + replay ops from WAL since that revision', 'Recovery time: <2s. Clients auto-reconnect with exponential backoff', 'Session end: final checkpoint + evict from memory + publish FILE_MODIFIED'] },
+      { title: 'Architecture & Scaling', items: ['Consistent hash(doc_id) -> server: one doc pinned to one server', 'WebSocket connection per active editor per document', 'In-memory state: ~1-5MB per doc (document model + ops log + sessions)', 'Single 64GB server handles ~15K concurrent docs', 'Cross-region: ops forwarded to primary region for OT, ~100-200ms latency', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
       { title: 'Presence & Cursors', items: ['Cursor position broadcast via WebSocket every 100ms (throttled)', 'Cursor updates are fire-and-forget (no persistence, no OT)', 'User presence: "Alice is viewing", "Bob is editing at line 42"', 'Heartbeat every 30s to detect stale sessions', 'Idle timeout: 5min without activity -> remove from active editors'] }
     ]
   },
   objectstore: {
     icon: '\u{1F5C4}', title: 'Object Store (S3/GCS)', subtitle: 'Blob storage + 11 nines durability + lifecycle',
     sections: [
-      { title: 'Storage Architecture', text: 'File chunks stored as objects keyed by {file_id}/{chunk_index}/{version}. Bucket structure: s3://drive-chunks-{region}/{owner_id_prefix}/{file_id}/. Prefix partitioning by owner_id prefix prevents S3 request throttling on hot prefixes. Cross-region replication for disaster recovery.' },
-      { title: 'Lifecycle Policies', items: ['Hot tier (S3 Standard): created within last 30 days. Lowest latency, highest cost.', 'Warm tier (S3 IA): 30-90 days since creation. 40% cheaper, same durability.', 'Cold tier (Glacier): >90 days. 80% cheaper. 3-5 hour retrieval time.', 'Auto-transition based on chunk created_at timestamp', 'User-triggered restore from cold: async, notify when ready'] }
+      { title: 'Dual Storage in Object Store', text: 'Two types of objects: (1) Binary file chunks keyed by {file_id}/{chunk_index}/{version} in s3://drive-chunks-{region}/. (2) Collaborative document snapshots keyed by {doc_id}/{revision} in s3://drive-docs-{region}/. Separate buckets for different lifecycle policies. Prefix partitioning prevents S3 request throttling. Cross-region replication for disaster recovery.' },
+      { title: 'Lifecycle Policies', items: ['Binary chunks: Hot (Standard) -> Warm (IA, 30d) -> Cold (Glacier, 90d)', 'Doc snapshots: Hot only (always need fast recovery). Old snapshots GC\'d after N retained.', 'Auto-transition based on created_at timestamp', 'User-triggered restore from cold: async, notify when ready'] }
     ]
   },
   metadb: {
