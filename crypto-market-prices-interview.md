@@ -7,6 +7,7 @@
 - Write-behind caching (Redis) for price data
 - WebSocket for detail page only (not the list page)
 - VWAP aggregation across multiple exchange feeds
+- Server-side candle aggregation with forming candle streaming (not client-side tick aggregation)
 - TimescaleDB continuous aggregates for OHLCV candles
 - GraphQL with persisted queries as an alternative to REST (used by Coinbase in production)
 - Market health aggregation (market cap, BTC dominance, buy/sell ratio)
@@ -270,15 +271,28 @@ Response 200:
 
 **✍️ Note**: Trending lists are pre-computed every 60 seconds and cached at CDN with 60-second TTL. Lists available: `top_gainers`, `top_losers`, `trending`, `highest_volume`, `new_listings`. In Coinbase's actual API, top gainers are embedded in the main explore query response (as `topGainersHeader` containing top 3 names) rather than as a separate endpoint — this reduces round trips.
 
-## WebSocket API (detail page live price only)
+## WebSocket API (detail page live price + chart data)
+
+The detail page WebSocket serves two types of real-time data:
+1. **Live price ticker** — Current price updated every 1-5 seconds
+2. **Live candle/kline data** — Pre-aggregated OHLCV candles for the chart the user is viewing
 
 ```
 Connect: wss://stream.example.com/v1/prices
 
-Client → Server (subscribe to ONE asset):
+Client → Server (subscribe to price ticker):
 {
   "action": "subscribe",
+  "channel": "ticker",
   "asset_id": "bitcoin"
+}
+
+Client → Server (subscribe to candle/kline stream):
+{
+  "action": "subscribe",
+  "channel": "candles",
+  "asset_id": "bitcoin",
+  "interval": "5m"
 }
 
 Server → Client (price tick, every 1-5 seconds):
@@ -287,22 +301,66 @@ Server → Client (price tick, every 1-5 seconds):
   "data": {
     "id": "bitcoin",
     "symbol": "BTC",
-    "price_usd": 6834521,
-    "price_change_24h_pct": -234,
-    "volume_24h_usd": 2845000000,
+    "price_usd": "68345.21",
+    "percent_change": { "hour": -0.45, "day": -2.34 },
+    "volume_24h_usd": "28450000000",
     "timestamp": 1709600123
+  }
+}
+
+Server → Client (candle update, every 1-2 seconds):
+{
+  "type": "candle_update",
+  "data": {
+    "asset_id": "bitcoin",
+    "interval": "5m",
+    "start": 1709600100,
+    "open": "68100.50",
+    "high": "68350.00",
+    "low": "68050.25",
+    "close": "68345.21",
+    "volume": "124.5",
+    "is_closed": false
   }
 }
 ```
 
-**✍️ Note**: Unlike the list page (which uses HTTP polling), the detail page uses WebSocket for a **single asset's** live price. The user is viewing `/price/bitcoin` — they only need BTC ticks. This keeps the fan-out problem small: each WebSocket client subscribes to exactly 1 asset.
+**✍️ Note**: The `is_closed` flag is critical. When `is_closed: false`, the client updates the rightmost (forming) bar on the chart. When `is_closed: true`, the client freezes that bar and starts a new one. This is the industry-standard pattern used by Binance (`"x": true/false`), and most trading platforms.
+
+**❓ How does real-time chart data flow work?**
+
+This is a common interview question: *"If I'm on a 5-minute chart, does the client receive 1-second ticks and aggregate them into 5-minute candles? Or does the server send 5-minute candles directly?"*
+
+**Answer: The server sends pre-aggregated candles. The client does NOT aggregate raw ticks.**
+
+The flow:
+1. User opens `/price/bitcoin` and selects the 5-minute chart
+2. Client fetches historical 5m candles via REST (`GET /v1/assets/bitcoin?chart_period=7d&interval=5m`)
+3. Client subscribes to the WebSocket candle stream: `{ channel: "candles", asset_id: "bitcoin", interval: "5m" }`
+4. Server sends the **current forming candle** every ~1 second, with updated OHLCV values
+5. When the 5-minute period ends, server sends one final message with `is_closed: true`
+6. Next message starts a new candle with a new `start` timestamp
+
+**❓ Why server-side aggregation, not client-side?**
+
+| Approach | Server-side aggregation (our design) | Client-side aggregation |
+|---|---|---|
+| **Client complexity** | Simple — just render the candle object | Complex — must maintain OHLCV state, handle time boundaries, deal with missed ticks |
+| **Bandwidth** | 1 candle object per second (~200 bytes) | 1 raw trade per trade (~100 bytes, but 10-100x more messages for active assets) |
+| **Consistency** | All clients see identical candles | Different clients may compute slightly different values (missed ticks, clock drift) |
+| **Resolution switching** | Client re-subscribes with new interval, server sends the right candle | Client must re-aggregate all raw ticks for the new resolution |
+| **Scalability** | Server computes once, fans out to N clients | N clients all independently doing the same computation |
+
+Server-side is the clear winner. This is how Binance (`@kline_5m` stream), Coinbase (candles channel), and all major exchanges work.
+
+**✍️ Note**: Unlike the list page (which uses HTTP polling), the detail page uses WebSocket for a **single asset's** live price and chart data. The user is viewing `/price/bitcoin` — they only need BTC ticks and BTC candles. This keeps the fan-out problem small: each WebSocket client subscribes to exactly 1 asset.
 
 **❓ Why WebSocket on detail page but not on list page?**
 
 | Page | Data needed | Update frequency | Users | Best approach |
 |---|---|---|---|---|
 | **List page** | 50 assets | Every 30-60 seconds is fine | 10M DAU (huge) | HTTP + CDN (cacheable, simple) |
-| **Detail page** | 1 asset | Every 1-5 seconds (live chart) | ~200-500K concurrent | WebSocket (low fan-out, single asset) |
+| **Detail page** | 1 asset (price + chart) | Every 1-2 seconds (live chart) | ~200-500K concurrent | WebSocket (low fan-out, single asset) |
 
 The list page serves **the same data to all users** (top 50 by market cap) — perfect for CDN caching. Opening a WebSocket for every list page visitor would create millions of unnecessary persistent connections for data that can be 60 seconds stale. The detail page needs live ticks for the chart animation, but only for one asset per user — a much simpler fan-out problem.
 
@@ -524,49 +582,139 @@ Even with CDN, the origin still receives cache-miss requests (one per TTL window
 2. **Cache warming** — The aggregation service proactively pushes updated responses to the CDN via API (Cloudflare Purge + re-cache, or Fastly's surrogate key invalidation) every 30 seconds, before the TTL expires.
 3. **Origin shield** — CDN uses a mid-tier cache layer (shield PoP) between edge PoPs and origin. All edge cache misses go to the shield first, which collapses them further.
 
-## 3. Detail Page — WebSocket Live Price
+## 3. Detail Page — WebSocket Live Price & Chart Data
 
-Only the detail page (e.g., `/price/bitcoin`) uses WebSocket for live ticks. The scope is much smaller than "all explore page visitors":
+Only the detail page (e.g., `/price/bitcoin`) uses WebSocket for live ticks and chart data. The scope is much smaller than "all explore page visitors":
 
 - **~200K-500K concurrent WebSocket connections** (5-10% of DAU drill into a detail page at any moment).
-- Each connection subscribes to **exactly 1 asset**.
+- Each connection subscribes to **exactly 1 asset** (price ticker + candle stream for the selected chart interval).
 - Popular assets (BTC, ETH) have more subscribers; long-tail assets may have 0.
 
 ### Architecture
 
 ```
-                    ┌───────────────────────────┐
-                    │  Price Aggregation Service │
-                    │                            │
-                    │  On each VWAP update:      │
-                    │  PUBLISH prices:BTC {...}   │
-                    │  PUBLISH prices:ETH {...}   │
-                    └─────────────┬──────────────┘
+                    ┌───────────────────────────────────────┐
+                    │       Price Aggregation Service        │
+                    │                                        │
+                    │  On each VWAP update:                  │
+                    │  1. Update running candle OHLCV state  │
+                    │     for every active interval (1m,5m,  │
+                    │     15m,1h,4h,1d)                      │
+                    │  2. PUBLISH prices:BTC { price_tick }  │
+                    │  3. PUBLISH candles:BTC:5m { candle }  │
+                    │     (with is_closed=false)              │
+                    │  4. On period boundary:                 │
+                    │     PUBLISH candles:BTC:5m { candle,   │
+                    │       is_closed=true }                  │
+                    │     → Reset candle state for new period │
+                    └─────────────┬─────────────────────────┘
                                   │
                     ┌─────────────▼─────────────┐
                     │  Redis Pub/Sub              │
                     │                             │
-                    │  Channel: prices:bitcoin    │
-                    │  Channel: prices:ethereum   │
-                    │  Channel: prices:solana     │
-                    │  ...~400 channels           │
+                    │  prices:bitcoin    (ticker)  │
+                    │  prices:ethereum   (ticker)  │
+                    │  candles:bitcoin:1m          │
+                    │  candles:bitcoin:5m          │
+                    │  candles:bitcoin:1h          │
+                    │  candles:ethereum:5m         │
+                    │  ...~400 × ~6 intervals     │
                     └──┬──────┬──────┬──────┬────┘
                        │      │      │      │
               ┌────────▼┐ ┌──▼────┐ ┌▼─────┐ ┌▼────────┐
               │ WS GW 1 │ │WS GW 2│ │WS GW3│ │WS GW N  │
               │(subscr  │ │       │ │      │ │         │
-              │ BTC,ETH)│ │       │ │      │ │         │
+              │ BTC     │ │       │ │      │ │         │
+              │ ticker  │ │       │ │      │ │         │
+              │ +5m     │ │       │ │      │ │         │
+              │ candles)│ │       │ │      │ │         │
               └────┬────┘ └──┬────┘ └──┬───┘ └────┬────┘
                    │         │         │          │
               Clients     Clients   Clients    Clients
               viewing     viewing   viewing    viewing
               /price/btc  various   various    various
+              (5m chart)
 ```
 
-**Each WebSocket gateway only subscribes to channels for assets its clients are viewing.** When a client connects and sends `subscribe: bitcoin`, the gateway:
-1. Checks if it's already subscribed to `prices:bitcoin` on Pub/Sub.
+**Each WebSocket gateway only subscribes to channels for assets AND intervals its clients are viewing.** When a client connects and sends `subscribe: { channel: "candles", asset_id: "bitcoin", interval: "5m" }`, the gateway:
+1. Checks if it's already subscribed to `candles:bitcoin:5m` on Pub/Sub.
 2. If not, subscribes. If yes, just adds the client to the local subscriber list.
-3. When a tick arrives on `prices:bitcoin`, the gateway iterates through its local subscriber list and sends the tick to each client.
+3. When a candle update arrives on `candles:bitcoin:5m`, the gateway forwards it to all local subscribers.
+4. Client updates the rightmost bar on the chart (if `is_closed: false`) or starts a new bar (if `is_closed: true`).
+
+### Server-Side Candle Aggregation (How the Forming Candle Works)
+
+The Price Aggregation Service maintains **running OHLCV state** for every `(asset, interval)` combination:
+
+```python
+# Pseudocode — candle aggregation in the Price Aggregation Service
+class CandleAggregator:
+    def __init__(self, asset_id, interval_seconds):
+        self.asset_id = asset_id
+        self.interval = interval_seconds  # e.g., 300 for 5m
+        self.current_candle = None
+        self.reset_candle()
+
+    def reset_candle(self):
+        """Start a new candle period."""
+        now = time.time()
+        period_start = now - (now % self.interval)  # align to interval boundary
+        self.current_candle = {
+            "start": period_start,
+            "open": None, "high": None, "low": None, "close": None,
+            "volume": 0, "is_closed": False
+        }
+
+    def on_trade(self, price, volume, timestamp):
+        """Called on each incoming trade tick after VWAP computation."""
+        candle = self.current_candle
+
+        # Check if this trade belongs to a new candle period
+        if timestamp >= candle["start"] + self.interval:
+            # Close the current candle
+            candle["is_closed"] = True
+            self.publish(candle)  # final message for this period
+            self.persist(candle)  # write closed candle to TimescaleDB
+            self.reset_candle()
+            candle = self.current_candle
+
+        # Update running OHLCV
+        if candle["open"] is None:
+            candle["open"] = price
+        candle["high"] = max(candle["high"] or price, price)
+        candle["low"] = min(candle["low"] or price, price)
+        candle["close"] = price
+        candle["volume"] += volume
+
+    def emit(self):
+        """Called every ~1 second by a timer to push the forming candle."""
+        if self.current_candle["open"] is not None:
+            self.publish(self.current_candle)  # is_closed=false
+
+    def publish(self, candle):
+        redis.publish(f"candles:{self.asset_id}:{self.interval}s", json.dumps(candle))
+
+    def persist(self, candle):
+        """Write closed candle to TimescaleDB for historical queries."""
+        db.execute(
+            "INSERT INTO price_candles (asset_id, interval, bucket_time, open, high, low, close, volume) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (self.asset_id, f"{self.interval // 60}m", candle["start"],
+             candle["open"], candle["high"], candle["low"], candle["close"], candle["volume"])
+        )
+```
+
+**Key design decisions:**
+
+1. **Emit cadence**: The forming candle is pushed every ~1 second (via a timer calling `emit()`), regardless of trade frequency. This gives the client smooth chart updates without overwhelming it with per-trade messages.
+
+2. **Candle closure**: On the period boundary (e.g., every 5 minutes for a 5m chart), the service sends one final message with `is_closed: true`, then persists the closed candle to TimescaleDB.
+
+3. **Multiple intervals simultaneously**: The service runs one `CandleAggregator` instance per `(asset, interval)` pair. For ~400 assets × 6 intervals (1m, 5m, 15m, 1h, 4h, 1d) = ~2,400 aggregator instances — trivial for a single service.
+
+4. **Resolution switching**: When a user switches from 5m to 1h chart, the client unsubscribes from `candles:bitcoin:5m` and subscribes to `candles:bitcoin:1h`. The gateway adjusts its Pub/Sub subscriptions accordingly. Historical candles for the new resolution are fetched via REST.
+
+**✍️ Note**: This is exactly how Binance's `@kline_5m` stream works. Each message is a complete candle snapshot (not a diff), with `"x": false` for forming candles and `"x": true` for closed candles. Coinbase's candles channel works similarly but infers closure from a changed `start` timestamp rather than an explicit flag.
 
 **❓ How big is the fan-out per asset?**
 
@@ -581,10 +729,13 @@ Even for BTC (the worst case), 100K pushes per tick at 1 tick/sec is well within
 
 **❓ Why Redis Pub/Sub and not NATS or Kafka?**
 
-For this scale (~400 channels, each receiving 1 message/sec, ~10-20 gateway subscribers per channel), Redis Pub/Sub is the simplest choice:
+With candle channels, total Pub/Sub channels are: ~400 ticker channels + ~400 assets × ~6 intervals = ~2,800 channels. Each channel receives ~1 message/sec. Total: ~2,800 msgs/sec.
+
+For this scale, Redis Pub/Sub is the simplest choice:
 - We already have Redis for the cache layer. No new infrastructure.
-- Redis Pub/Sub handles ~1M messages/sec. Our load is ~400 msgs/sec — 0.04% of capacity.
-- Fire-and-forget semantics are perfect for ephemeral price ticks.
+- Redis Pub/Sub handles ~1M messages/sec. Our load is ~2,800 msgs/sec — 0.3% of capacity.
+- Fire-and-forget semantics are perfect for ephemeral price ticks and forming candles.
+- Gateway only subscribes to channels for assets AND intervals its clients are viewing — most channels have 0 gateway subscribers.
 
 NATS would also work and is a better choice if the gateway fleet grows beyond ~50 instances (Redis Pub/Sub doesn't scale horizontally as well). But at our current scale, Redis Pub/Sub avoids adding a new dependency.
 
@@ -810,7 +961,7 @@ Key metrics:
 | REST API (or GraphQL) | ~50K QPS at origin (after CDN) | 10-20 stateless instances |
 | WebSocket Gateway | 200K-500K concurrent connections | 5-10 instances |
 | Redis Cluster | ~5K-50K ops/sec (after CDN) | 6 nodes (3 primaries) |
-| Redis Pub/Sub | ~400 msgs/sec | Same Redis cluster |
+| Redis Pub/Sub | ~2,800 msgs/sec (tickers + candles) | Same Redis cluster |
 | Price Aggregation | ~80K ticks/min ingested | 3 replicas |
 | TimescaleDB | ~576K rows/day, ~2 GB/year | Single primary + 2 replicas |
 
@@ -917,12 +1068,14 @@ The core of this design:
 
 4. **WebSocket only on the detail page** — Live price ticks are only needed when a user is viewing a single asset's chart. This keeps WebSocket connections at ~200-500K (manageable) instead of millions. Each client subscribes to exactly 1 asset.
 
-5. **Simple Pub/Sub for WebSocket fan-out** — Redis Pub/Sub distributes per-asset ticks to the gateway fleet. At ~400 msgs/sec total, this is trivial for Redis. No need for NATS or Kafka.
+5. **Server-side candle aggregation** — The server computes OHLCV candles and streams the forming candle to clients every ~1 second with an `is_closed` flag. Clients never aggregate raw ticks — they just render the candle object. This is the industry standard (Binance `@kline_5m`, Coinbase candles channel).
 
-6. **Centralized ingestion, replicated reads** — Exchange feeds are consumed in one region. Aggregated prices are replicated globally via Redis cross-region replication. Avoid duplicate exchange connections and price divergence.
+6. **Simple Pub/Sub for WebSocket fan-out** — Redis Pub/Sub distributes ticker + candle updates to the gateway fleet. At ~2,800 msgs/sec total, this is trivial for Redis. No need for NATS or Kafka.
 
-7. **Graceful degradation everywhere** — CDN serves stale on origin failure. Redis serves stale on aggregation failure. Client detects stale `updated_at` and warns user. Every failure mode has a fallback, and the page stays up.
+7. **Centralized ingestion, replicated reads** — Exchange feeds are consumed in one region. Aggregated prices are replicated globally via Redis cross-region replication. Avoid duplicate exchange connections and price divergence.
 
-8. **REST or GraphQL — same backend** — Whether exposed as REST endpoints or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility (e.g., `skipSparklines`) but requires persisted query infrastructure for cacheability.
+8. **Graceful degradation everywhere** — CDN serves stale on origin failure. Redis serves stale on aggregation failure. Client detects stale `updated_at` and warns user. Every failure mode has a fallback, and the page stays up.
 
-9. **Simplicity as a feature** — ~400 listed assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.
+9. **REST or GraphQL — same backend** — Whether exposed as REST endpoints or GraphQL with persisted queries (like Coinbase), the architecture is the same: pre-computed Redis lookups behind a CDN. GraphQL adds client flexibility (e.g., `skipSparklines`) but requires persisted query infrastructure for cacheability.
+
+10. **Simplicity as a feature** — ~400 listed assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). The list page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.
