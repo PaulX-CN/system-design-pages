@@ -589,7 +589,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
   <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
   <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
-  <div class="nav-item" onclick="scrollToSection('collaboration')">Collaboration</div>
   <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
   <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
   <div class="nav-item" onclick="scrollToSection('pitfalls')">Pitfalls</div>
@@ -619,7 +618,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <span class="pill hi">Delta Sync</span>
       <span class="pill hi">Per-file Chunk Versioning</span>
       <span class="pill">Optimistic Concurrency (ETags)</span>
-      <span class="pill">Real-time Collaboration</span>
+      <span class="pill hi">Content-Addressable Dedup</span>
       <span class="pill">Append-only Audit Trail</span>
     </div>
   </div>
@@ -643,12 +642,12 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="principles">
       <div class="principle">
-        <div class="principle-title">Dual storage model</div>
-        <div class="principle-desc">Two distinct paths: (1) Binary files (PDFs, images, videos) stored as 4-8MB chunks with per-file versioning. (2) Collaborative documents (Docs, Sheets) stored as a structured document model — OT operates on this model, checkpointed as a serialized blob. Chunk system and OT system serve different file types.</div>
+        <div class="principle-title">Content-addressable storage (SHA-256 dedup)</div>
+        <div class="principle-desc">File chunks keyed by SHA-256 hash. Upload: compute hash per chunk, check if hash exists in chunk store. If yes, skip upload and increment ref_count. Two users uploading the same 1GB video store it once. Saves 20-30% storage at scale.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Chunked resumable uploads (binary files)</div>
-        <div class="principle-desc">Binary files split into 4-8MB chunks client-side. Each chunk uploaded independently with retry. Resumable from last successful chunk after network failure. Critical for mobile on spotty connections. Not used for collaborative documents.</div>
+        <div class="principle-title">Chunked resumable uploads</div>
+        <div class="principle-desc">Files split into 4-8MB chunks client-side. SHA-256 per chunk for dedup + integrity. Each chunk uploaded independently with retry. Resumable from last successful chunk after network failure. Critical for mobile on spotty connections.</div>
       </div>
       <div class="principle">
         <div class="principle-title">Hierarchical ACL with inheritance</div>
@@ -710,7 +709,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="layer-hd" onclick="toggleLayer('l2')">
           <div class="l-accent" style="background:var(--green)"></div>
           <div class="l-name" style="color:var(--green)">L2 — Core Services</div>
-          <div class="l-scale">Metadata + Blob + Sharing + Sync + Search + Collab</div>
+          <div class="l-scale">Metadata + Blob + Sharing + Sync + Search</div>
           <div class="l-chevron">></div>
         </div>
         <div class="layer-bd">
@@ -722,8 +721,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             </div>
             <div class="comp" onclick="openPanel('blob')">
               <div class="comp-top"><span class="comp-icon">&#x1F4E6;</span><span class="comp-name">Blob Storage Service</span></div>
-              <div class="comp-role">Binary file chunked upload/download + versioning</div>
-              <div class="comp-detail">Handles binary files (PDFs, images, videos) via resumable chunked uploads. Chunks scoped per file with version tracking. SHA-256 for integrity verification. Pre-signed URL generation for direct S3 upload/download. NOT used for collaborative documents (those go through Collaboration Service).</div>
+              <div class="comp-role">Chunked upload/download + dedup + versioning</div>
+              <div class="comp-detail">Handles resumable uploads (initiate, upload chunk, finalize). Content-addressable: chunks keyed by SHA-256 hash. Dedup on upload — if hash exists, skip upload, increment ref_count. Pre-signed URL generation for direct S3 upload/download.</div>
             </div>
             <div class="comp" onclick="openPanel('sharing')">
               <div class="comp-top"><span class="comp-icon">&#x1F465;</span><span class="comp-name">Sharing &amp; Permission Service</span></div>
@@ -739,11 +738,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
               <div class="comp-top"><span class="comp-icon">&#x1F50D;</span><span class="comp-name">Search Service</span></div>
               <div class="comp-role">Full-text + metadata search (Elasticsearch)</div>
               <div class="comp-detail">Indexes file names, content (OCR for images, text extraction for docs), owner, shared-with, MIME type. Elasticsearch cluster. Permission-filtered results at query time.</div>
-            </div>
-            <div class="comp" onclick="openPanel('collab')">
-              <div class="comp-top"><span class="comp-icon">&#x1F4DD;</span><span class="comp-name">Collaboration Service</span></div>
-              <div class="comp-role">Real-time co-editing on structured document model via OT</div>
-              <div class="comp-detail">Manages collaborative documents (Docs, Sheets, Slides) as a structured document model (JSON/protobuf), NOT binary chunks. OT operates on this model. In-memory state checkpointed to blob storage every 30s. WebSocket connections for real-time editing. Cursor broadcast + presence.</div>
             </div>
           </div>
         </div>
@@ -761,7 +755,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="comp" onclick="openPanel('objectstore')">
               <div class="comp-top"><span class="comp-icon">&#x1F5C4;</span><span class="comp-name">Object Store (S3/GCS)</span></div>
               <div class="comp-role">Blob storage + 11 nines durability</div>
-              <div class="comp-detail">Two types of objects: (1) Binary file chunks keyed by {file_id}/{chunk_index}/{version}. (2) Collaborative document snapshots (serialized document model) keyed by {doc_id}/{revision}. Multi-tier: hot, warm, cold. Lifecycle auto-tiering based on access patterns.</div>
+              <div class="comp-detail">Stores file chunks keyed by content SHA-256 hash. Multi-tier: hot (S3 Standard), warm (S3 IA), cold (Glacier). Lifecycle policies auto-tiering based on access patterns. Dedup means identical chunks stored once regardless of how many files reference them.</div>
             </div>
             <div class="comp" onclick="openPanel('metadb')">
               <div class="comp-top"><span class="comp-icon">&#x1F4BE;</span><span class="comp-name">Metadata DB (PostgreSQL)</span></div>
@@ -1259,123 +1253,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       </div>
     </div>
 
-    <!-- Collaboration Service APIs -->
-    <div class="api-group" id="api-collab">
-      <div class="api-group-hd" onclick="toggleApi('api-collab')">
-        <div class="l-accent" style="background:var(--teal)"></div>
-        <div class="l-name" style="color:var(--teal)">Collaboration Service APIs</div>
-        <div class="l-scale">WebSocket protocol + OT operations + presence</div>
-        <div class="api-chevron">></div>
-      </div>
-      <div class="api-group-bd">
-
-        <div class="api-endpoint">
-          <div class="api-sig">
-            <span class="api-method post">POST</span>
-            <span class="api-path">/api/v1/collab/ticket</span>
-            <span class="api-desc">Request collaboration session ticket</span>
-          </div>
-          <div class="api-rr">
-            <div>
-              <div class="code-label">Request</div>
-              <div class="code-block"><span class="kw">POST</span> /api/v1/collab/ticket
-<span class="cm">Authorization: Bearer {access_token}</span>
-
-{
-  <span class="str">"doc_id"</span>: <span class="str">"file_9b4e..."</span>
-}</div>
-            </div>
-            <div>
-              <div class="code-label">Response 200</div>
-              <div class="code-block">{
-  <span class="str">"ticket"</span>: <span class="str">"tkt_a1b2c3d4..."</span>,
-  <span class="str">"ws_url"</span>: <span class="str">"wss://collab.example.com/docs/file_9b4e..."</span>,
-  <span class="str">"expires_in"</span>: <span class="num">30</span>  <span class="cm">// seconds</span>
-}
-<span class="cm">// Ticket is single-use, scoped to doc_id</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="api-endpoint">
-          <div class="api-sig">
-            <span class="api-method get" style="background:rgba(0,212,170,0.15);color:var(--teal);border:1px solid rgba(0,212,170,0.3);">WS</span>
-            <span class="api-path">wss://collab.example.com/docs/{docId}?ticket={token}</span>
-            <span class="api-desc">WebSocket connection + message protocol</span>
-          </div>
-          <div class="api-rr">
-            <div>
-              <div class="code-label">Client -> Server messages</div>
-              <div class="code-block"><span class="cm">// 1. Send edit operation</span>
-{
-  <span class="str">"type"</span>: <span class="str">"op"</span>,
-  <span class="str">"ops"</span>: [
-    { <span class="str">"type"</span>: <span class="str">"insert"</span>,
-      <span class="str">"pos"</span>: <span class="num">42</span>,
-      <span class="str">"text"</span>: <span class="str">"Hello"</span> },
-    { <span class="str">"type"</span>: <span class="str">"delete"</span>,
-      <span class="str">"pos"</span>: <span class="num">10</span>,
-      <span class="str">"len"</span>: <span class="num">3</span> }
-  ],
-  <span class="str">"server_rev"</span>: <span class="num">15</span>  <span class="cm">// last known rev</span>
-}
-
-<span class="cm">// 2. Cursor update (throttled 100ms)</span>
-{
-  <span class="str">"type"</span>: <span class="str">"cursor"</span>,
-  <span class="str">"pos"</span>: <span class="num">47</span>,
-  <span class="str">"sel_end"</span>: <span class="num">52</span>  <span class="cm">// if selecting</span>
-}
-
-<span class="cm">// 3. Heartbeat (every 30s)</span>
-{ <span class="str">"type"</span>: <span class="str">"ping"</span> }</div>
-            </div>
-            <div>
-              <div class="code-label">Server -> Client messages</div>
-              <div class="code-block"><span class="cm">// 1. Session joined (initial)</span>
-{
-  <span class="str">"type"</span>: <span class="str">"session_init"</span>,
-  <span class="str">"doc_snapshot"</span>: <span class="str">"..."</span>,
-  <span class="str">"server_rev"</span>: <span class="num">15</span>,
-  <span class="str">"users"</span>: [
-    { <span class="str">"id"</span>: <span class="str">"user_A"</span>, <span class="str">"name"</span>: <span class="str">"Alice"</span>,
-      <span class="str">"color"</span>: <span class="str">"#3b82f6"</span>,
-      <span class="str">"cursor"</span>: <span class="num">120</span> }
-  ]
-}
-
-<span class="cm">// 2. ACK for your op</span>
-{ <span class="str">"type"</span>: <span class="str">"ack"</span>, <span class="str">"server_rev"</span>: <span class="num">18</span> }
-
-<span class="cm">// 3. Remote op (from another user)</span>
-{
-  <span class="str">"type"</span>: <span class="str">"remote_op"</span>,
-  <span class="str">"ops"</span>: [{ <span class="str">"type"</span>: <span class="str">"insert"</span>,
-    <span class="str">"pos"</span>: <span class="num">47</span>, <span class="str">"text"</span>: <span class="str">"Hello"</span> }],
-  <span class="str">"server_rev"</span>: <span class="num">18</span>,
-  <span class="str">"author"</span>: <span class="str">"user_A"</span>
-}
-
-<span class="cm">// 4. Presence events</span>
-{ <span class="str">"type"</span>: <span class="str">"user_joined"</span>,
-  <span class="str">"user"</span>: { <span class="str">"id"</span>: <span class="str">"user_C"</span>, ... } }
-{ <span class="str">"type"</span>: <span class="str">"user_left"</span>,
-  <span class="str">"user_id"</span>: <span class="str">"user_B"</span> }
-
-<span class="cm">// 5. Remote cursor</span>
-{ <span class="str">"type"</span>: <span class="str">"cursor"</span>,
-  <span class="str">"user_id"</span>: <span class="str">"user_A"</span>,
-  <span class="str">"pos"</span>: <span class="num">50</span> }
-
-<span class="cm">// 6. Pong</span>
-{ <span class="str">"type"</span>: <span class="str">"pong"</span> }</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
     <!-- Search Service APIs -->
     <div class="api-group" id="api5">
       <div class="api-group-hd" onclick="toggleApi('api5')">
@@ -1492,6 +1369,41 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         </div>
       </div>
     </div>
+    <div class="state-machine">
+      <div class="sm-title">Extended Sync States
+        <span style="font-size:11px;font-weight:400;color:var(--muted)">Selective sync + upload queuing for multi-device</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">SELECTIVE_SYNC</div><div class="state-desc">placeholder only, not downloaded</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">DOWNLOADING</div><div class="state-desc">on-demand fetch triggered</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state success"><div class="state-name">IN_SYNC</div><div class="state-desc">local = remote</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state active"><div class="state-name">SELECTIVE_SYNC</div><div class="state-desc">LRU eviction</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="state active"><div class="state-name">LOCAL_MODIFIED</div><div class="state-desc">changes detected</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">QUEUED_UPLOAD</div><div class="state-desc">waiting for bandwidth/network</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state warning"><div class="state-name">SYNCING</div><div class="state-desc">uploading chunks</div></div>
+          <div class="sm-arrow right">-></div>
+          <div class="state success"><div class="state-name">IN_SYNC</div><div class="state-desc">confirmed</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);padding:8px 0;border-top:1px dashed var(--border);line-height:1.8;">
+          <strong style="color:var(--text)">Key transitions:</strong>
+          SELECTIVE_SYNC -> DOWNLOADING (user opens file or pins it) |
+          DOWNLOADING -> IN_SYNC (content fetched from CDN/S3) |
+          IN_SYNC -> SELECTIVE_SYNC (LRU eviction when disk low) |
+          LOCAL_MODIFIED -> QUEUED_UPLOAD (no network or bandwidth throttled) |
+          QUEUED_UPLOAD -> SYNCING (network available, bandwidth permits) |
+          QUEUED_UPLOAD -> QUEUED_UPLOAD (mobile: deferred to WiFi for large files) |
+          Battery &lt; 15%: pause all SYNCING -> QUEUED_UPLOAD
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- 05 DATA FLOWS -->
@@ -1527,13 +1439,13 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="flow-step">
               <div class="fs-num">03</div>
               <div class="fs-svc">Blob Service</div>
-              <div class="fs-action">For each chunk: upload to S3 with key = {file_id}/{chunk_index}/{version}. Verify SHA-256 of uploaded bytes matches client-declared hash. Insert chunk record into file_chunks table scoped to this file.</div>
-              <div class="fs-note">Per-file chunks — simple ownership, simple GC</div>
+              <div class="fs-action">For each chunk: check if SHA-256 hash exists in chunks table. If YES (dedup hit): skip S3 upload, increment ref_count, insert file_chunk_map entry pointing to existing chunk. If NO: upload to S3 with key = content_hash, insert into chunks table with ref_count=1, insert file_chunk_map entry.</div>
+              <div class="fs-note">Inline dedup — identical chunks never stored twice</div>
             </div>
             <div class="flow-step">
               <div class="fs-num">04</div>
               <div class="fs-svc">Metadata Svc</div>
-              <div class="fs-action">All chunks received: verify full-file SHA-256 matches declared checksum. Update file status UPLOADING -> PROCESSING. Insert file_chunks mapping rows. Publish FILE_UPLOADED to Kafka.</div>
+              <div class="fs-action">All chunks received: verify full-file SHA-256 matches declared checksum. Update file status UPLOADING -> PROCESSING. Verify all file_chunk_map entries are complete for this version. Publish FILE_UPLOADED to Kafka.</div>
               <div class="fs-note">Checksum mismatch = reject + cleanup chunks</div>
             </div>
             <div class="flow-step">
@@ -1665,76 +1577,34 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
               <div class="fs-action">If local changes conflict with server (same file, different edits): create conflict copy "filename (conflict copy).ext". Both versions preserved. User picks winner manually.</div>
               <div class="fs-note">Never silently overwrite user data</div>
             </div>
+            <div class="flow-step">
+              <div class="fs-num">05</div>
+              <div class="fs-svc">Smart Sync</div>
+              <div class="fs-action">Not all files synced to local disk. Placeholder files (cloud icon) shown in file browser for files not pinned. On file open: trigger on-demand download from CDN/S3. Pinned files always synced locally. LRU eviction: when disk low, evict least-recently-used local copies back to placeholder state. User configurable: "Always keep on device" per folder.</div>
+              <div class="fs-note">Saves 60-80% local disk space on laptops</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">06</div>
+              <div class="fs-svc">Platform Sync</div>
+              <div class="fs-action">Desktop: full sync engine with local SQLite, file system watcher (inotify/FSEvents), background process. Mobile: metadata-only sync by default. File content downloaded on-demand. Upload: only from explicit user action (share, camera upload). Battery awareness: pause sync when battery < 15%. Network awareness: large uploads deferred to WiFi. Cellular: metadata sync only.</div>
+              <div class="fs-note">Mobile sync is metadata-first, content-lazy</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">07</div>
+              <div class="fs-svc">Bandwidth Mgr</div>
+              <div class="fs-action">Upload throttling: configurable max bandwidth (default: 80% of available). Concurrent uploads: 3-4 chunks in parallel on broadband, 1 chunk on mobile. Compression: metadata deltas gzip'd (90% compression). Chunk-level diff for file edits: on re-upload, only upload changed chunks (dedup handles this automatically via SHA-256 comparison). Priority queue: user-triggered actions > background sync > pre-fetch.</div>
+              <div class="fs-note">Dedup + chunking = only changed data uploaded on edit</div>
+            </div>
+            <div class="flow-step">
+              <div class="fs-num">08</div>
+              <div class="fs-svc">Protocol Ver</div>
+              <div class="fs-action">Sync protocol includes version header. Server supports N and N-1 simultaneously. Breaking changes: force client update via min_version field in sync response. Backwards-compatible changes: new optional fields in delta payload. Client reports its version on connect. Server adapts response format. Gradual rollout: canary 1% -> 10% -> 50% -> 100%.</div>
+              <div class="fs-note">Never break old clients abruptly</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="flow-block" id="f5">
-        <div class="flow-hd" onclick="toggleFlow('f5')">
-          <div class="flow-num">F-05</div>
-          <div class="flow-title">Real-time Collaboration (5 users editing one doc)</div>
-          <div class="flow-meta">WebSocket + OT transform pipeline + server authority + convergence</div>
-          <div class="flow-chevron">></div>
-        </div>
-        <div class="flow-bd">
-          <div class="flow-steps">
-            <div class="flow-step">
-              <div class="fs-num">01</div>
-              <div class="fs-svc">Client</div>
-              <div class="fs-action">User opens document. Client requests a one-time collaboration ticket from Auth Service (scoped to doc_id, expires in 30s). Establishes WebSocket to Collaboration Service at ws://collab.example.com/docs/{doc_id}?ticket={token}. Server validates ticket, returns the current document snapshot + server revision number + list of active user cursors.</div>
-              <div class="fs-note">Ticket prevents replay attacks; WebSocket for sub-50ms round-trip</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">02</div>
-              <div class="fs-svc">Collab Service</div>
-              <div class="fs-action">Register user in the in-memory session for this document. Session tracks: (a) canonical document state, (b) current server revision number, (c) ordered ops log since last checkpoint, (d) connected clients list. Broadcast presence event { type: "user_joined", user_id, display_name, color } to all other 4 clients via their WebSocket connections.</div>
-              <div class="fs-note">Each active document is pinned to one collab server via consistent hashing on doc_id</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">03</div>
-              <div class="fs-svc">Client (typing)</div>
-              <div class="fs-action">User types "Hello" at position 42. Client creates operation: { type: "insert", pos: 42, text: "Hello", client_rev: 7, server_rev: 15 }. Client applies op to local document immediately (optimistic). Sends op to server. Client buffers: if another keystroke happens before server ACKs, it's queued locally (not sent yet). At most 1 unacknowledged op in flight at a time.</div>
-              <div class="fs-note">Optimistic apply = no typing lag. 1-op-in-flight rule simplifies OT</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">04</div>
-              <div class="fs-svc">OT Engine (server)</div>
-              <div class="fs-action">Server receives op from Client A at server_rev=15, but server is now at rev 17 (two ops from other clients arrived first). Server must transform A's op against those 2 intervening ops: (1) Fetch ops [16, 17] from the ops log. (2) For each: transform(A_op, server_op) -> A_op'. Example: if op 16 was insert at pos 30, and A's insert was at pos 42, A's position shifts to 47 (30 < 42, so +5 for the 5 chars inserted). (3) After transforming against all intervening ops, apply A_op' to server state. Assign new revision 18. Append to ops log.</div>
-              <div class="fs-note">Transform = adjust positions so the intent is preserved despite concurrent edits</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">05</div>
-              <div class="fs-svc">Broadcast</div>
-              <div class="fs-action">Server sends the transformed op to all OTHER connected clients (B, C, D, E): { type: "insert", pos: 47, text: "Hello", server_rev: 18, author: "user_A" }. Server sends ACK to Client A: { ack: true, server_rev: 18 }. Client A now knows its op is committed. If Client A has buffered ops, it sends the next one (with server_rev: 18).</div>
-              <div class="fs-note">ACK before next send = serialization point ensuring causal ordering</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">06</div>
-              <div class="fs-svc">Remote Clients</div>
-              <div class="fs-action">Client B receives op at server_rev 18. But Client B has 1 pending local op that hasn't been ACKed yet. Client B transforms the incoming server op against its pending local op (client-side OT). Applies the transformed op to its local document. Result: Client B's document now reflects both its own pending edit AND Client A's edit, with positions correctly adjusted. All 5 clients converge to the same document state once all ops are ACKed.</div>
-              <div class="fs-note">Client-side OT handles the "both editing at the same time" case</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">07</div>
-              <div class="fs-svc">Cursor Sync</div>
-              <div class="fs-action">Every 100ms (throttled), each client sends cursor position: { type: "cursor", pos: 47, selection_end: 52 }. Server broadcasts to other clients without transformation (cursors are ephemeral, best-effort). Displayed as colored cursor lines with user name labels. No persistence needed — cursors are purely in-memory.</div>
-              <div class="fs-note">Fire-and-forget; slight cursor jitter is acceptable UX</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">08</div>
-              <div class="fs-svc">Persistence</div>
-              <div class="fs-action">Every 30 seconds OR every 100 ops (whichever comes first): Checkpoint routine runs. (1) Serialize the in-memory document model (JSON/protobuf tree — NOT binary file chunks) to a single blob in S3 at key {doc_id}/{revision}. (2) Write checkpoint record to doc_snapshots table: { doc_id, revision: 118, blob_url, timestamp }. (3) Truncate doc_ops: delete ops before revision 118 (they're baked into the snapshot). (4) Ops are also written to a durable WAL (Kafka) BEFORE applying, so on crash, ops between checkpoints can be replayed.</div>
-              <div class="fs-note">WAL + checkpoint of document model = zero data loss. This is separate from binary file chunk storage.</div>
-            </div>
-            <div class="flow-step">
-              <div class="fs-num">09</div>
-              <div class="fs-svc">Session End</div>
-              <div class="fs-action">When all users disconnect (or after idle timeout of 5 min): Final checkpoint — serialize document model to S3, write doc_snapshots record. Session object evicted from memory. File metadata (files table) updated with latest version number and size. Kafka event FILE_MODIFIED published for sync service / search reindex / notifications. Subsequent opens load from the latest doc_snapshot + replay any ops from WAL.</div>
-              <div class="fs-note">Graceful handoff from in-memory document model to at-rest serialized snapshot</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
     </div>
   </section>
@@ -1876,7 +1746,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="db-hd" onclick="toggleDb('db3')">
           <div class="db-icon">&#x1F4E6;</div>
           <div class="db-title-wrap">
-            <div class="db-name">Binary File Chunks</div>
+            <div class="db-name">Chunk Store (Content-Addressable)</div>
             <div class="db-meta-row">
               <span class="db-badge pg">PostgreSQL</span>
               <span class="db-badge s3">S3/GCS Object Store</span>
@@ -1889,30 +1759,40 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
             <div class="db-schema">
               <div class="db-sec-label">Core Tables</div>
               <div class="schema-block">
-                <div class="schema-table">file_chunks <span>-- binary file chunk storage (PDFs, images, videos)</span></div>
+                <div class="schema-table">chunks <span>-- content-addressable chunk store</span></div>
+                <div class="schema-col"><span class="col-name pk">content_hash</span><span class="col-type">CHAR(64) PK</span><span class="col-note">SHA-256</span></div>
+                <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span></div>
+                <div class="schema-col"><span class="col-name">ref_count</span><span class="col-type">INT DEFAULT 1</span><span class="col-note">dedup tracking</span></div>
+                <div class="schema-col"><span class="col-name">storage_key</span><span class="col-type">VARCHAR</span><span class="col-note">s3://chunks/{hash}</span></div>
+                <div class="schema-col"><span class="col-name">storage_class</span><span class="col-type">ENUM(hot, warm, cold)</span></div>
+                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
+                <div class="schema-indexes">
+                  <strong>PK:</strong> content_hash (SHA-256)<br>
+                  <strong>GC:</strong> WHERE ref_count = 0 — safe to delete from S3<br>
+                  <strong>Tiering:</strong> (storage_class, created_at) for lifecycle migration
+                </div>
+              </div>
+              <div class="schema-block">
+                <div class="schema-table">file_chunk_map <span>-- maps files to chunks</span></div>
                 <div class="schema-col"><span class="col-name fk">file_id</span><span class="col-type">UUID FK</span></div>
                 <div class="schema-col"><span class="col-name">chunk_index</span><span class="col-type">INT</span><span class="col-note">ordering</span></div>
-                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span><span class="col-note">chunk version</span></div>
-                <div class="schema-col"><span class="col-name">size</span><span class="col-type">BIGINT</span></div>
-                <div class="schema-col"><span class="col-name">checksum_sha256</span><span class="col-type">CHAR(64)</span><span class="col-note">integrity</span></div>
-                <div class="schema-col"><span class="col-name">storage_key</span><span class="col-type">VARCHAR</span><span class="col-note">s3://{file_id}/{chunk_index}/{ver}</span></div>
-                <div class="schema-col"><span class="col-name">storage_class</span><span class="col-type">ENUM(hot, warm, cold)</span></div>
+                <div class="schema-col"><span class="col-name">version_num</span><span class="col-type">INT</span><span class="col-note">file version</span></div>
+                <div class="schema-col"><span class="col-name fk">content_hash</span><span class="col-type">CHAR(64) FK -> chunks</span></div>
                 <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
                 <div class="schema-indexes">
                   <strong>PK:</strong> (file_id, chunk_index, version_num)<br>
                   <strong>Download:</strong> WHERE file_id=? AND version_num=? ORDER BY chunk_index<br>
-                  <strong>Tiering:</strong> (storage_class, created_at) for lifecycle migration
+                  <strong>Dedup lookup:</strong> content_hash index for ref_count management
                 </div>
               </div>
             </div>
             <div class="db-schema" style="border-right:none">
               <div class="db-sec-label">Design Decisions</div>
               <ul class="db-notes-list">
-                <li><strong>Binary files only:</strong> file_chunks stores binary files (PDFs, images, videos, ZIPs). Collaborative documents (Docs, Sheets, Slides) use a separate storage path — see Collaborative Document DB (doc_snapshots + doc_ops).</li>
-                <li><strong>Per-file scoping:</strong> Chunks belong to a specific file. No cross-file sharing. Delete a file = delete its chunks from S3. Simple ownership model, no ref_count needed.</li>
-                <li><strong>Version-level chunking:</strong> On edit, only the modified chunk gets a new version. Unchanged chunks keep their existing version. Query for file version N: SELECT the latest chunk version <= N for each chunk_index.</li>
-                <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on created_at. Retrieval from cold adds 3-5h latency.</li>
-                <li><strong>Chunk size choice:</strong> 4-8MB balances: upload resume granularity (smaller = better), per-file versioning efficiency (larger = fewer chunks to track), and S3 multipart limits.</li>
+                <li><strong>Content-addressable dedup:</strong> Chunks keyed by SHA-256 hash. If two users upload the same file, chunks are stored once. ref_count tracks how many file_chunk_map entries reference each chunk. GC: ref_count=0 means safe to delete from S3.</li>
+                <li><strong>Separate mapping table:</strong> file_chunk_map maps (file_id, chunk_index, version) to content_hash. This separation enables dedup while maintaining per-file chunk ordering.</li>
+                <li><strong>Version-level efficiency:</strong> On edit, only modified chunks get new hashes. Unchanged chunks keep the same content_hash — no re-upload, no new S3 object.</li>
+                <li><strong>Storage tiering:</strong> Hot (S3 Standard): accessed in last 30 days. Warm (S3 IA): 30-90 days. Cold (Glacier): >90 days. Lifecycle rules auto-transition based on created_at.</li>
               </ul>
             </div>
           </div>
@@ -1921,64 +1801,6 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
       <div class="db-card" id="db4">
         <div class="db-hd" onclick="toggleDb('db4')">
-          <div class="db-icon">&#x1F4DD;</div>
-          <div class="db-title-wrap">
-            <div class="db-name">Collaborative Document DB</div>
-            <div class="db-meta-row">
-              <span class="db-badge pg">PostgreSQL (snapshots)</span>
-              <span class="db-badge kafka">Kafka (ops WAL)</span>
-              <span class="db-badge s3">S3/GCS (serialized model)</span>
-            </div>
-          </div>
-          <div class="db-scale-tag">Separate from binary file_chunks</div>
-        </div>
-        <div class="db-bd">
-          <div class="db-inner">
-            <div class="db-schema">
-              <div class="db-sec-label">Core Tables</div>
-              <div class="schema-block">
-                <div class="schema-table">doc_snapshots <span>-- checkpointed document state</span></div>
-                <div class="schema-col"><span class="col-name pk">doc_id</span><span class="col-type">UUID FK -> files.id</span></div>
-                <div class="schema-col"><span class="col-name pk">revision</span><span class="col-type">BIGINT</span><span class="col-note">server revision at checkpoint</span></div>
-                <div class="schema-col"><span class="col-name">blob_url</span><span class="col-type">VARCHAR</span><span class="col-note">s3://{doc_id}/{revision}</span></div>
-                <div class="schema-col"><span class="col-name">size_bytes</span><span class="col-type">BIGINT</span></div>
-                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
-                <div class="schema-indexes">
-                  <strong>PK:</strong> (doc_id, revision)<br>
-                  <strong>Latest:</strong> WHERE doc_id=? ORDER BY revision DESC LIMIT 1<br>
-                  <strong>Cleanup:</strong> Keep last N snapshots per doc (e.g., 50), GC older ones
-                </div>
-              </div>
-              <div class="schema-block">
-                <div class="schema-table">doc_ops <span>-- in-flight ops log (bounded)</span></div>
-                <div class="schema-col"><span class="col-name pk">doc_id</span><span class="col-type">UUID FK -> files.id</span></div>
-                <div class="schema-col"><span class="col-name pk">revision</span><span class="col-type">BIGINT</span><span class="col-note">server-assigned sequential</span></div>
-                <div class="schema-col"><span class="col-name">op_type</span><span class="col-type">ENUM(insert, delete, format, ...)</span></div>
-                <div class="schema-col"><span class="col-name">op_data</span><span class="col-type">JSONB</span><span class="col-note">{pos, text, attrs, ...}</span></div>
-                <div class="schema-col"><span class="col-name">author_id</span><span class="col-type">UUID</span></div>
-                <div class="schema-col"><span class="col-name">created_at</span><span class="col-type">TIMESTAMP</span></div>
-                <div class="schema-indexes">
-                  <strong>PK:</strong> (doc_id, revision)<br>
-                  <strong>Replay:</strong> WHERE doc_id=? AND revision > ? ORDER BY revision ASC<br>
-                  <strong>Truncation:</strong> DELETE WHERE doc_id=? AND revision &lt;= ? (after checkpoint)
-                </div>
-              </div>
-            </div>
-            <div class="db-schema" style="border-right:none">
-              <div class="db-sec-label">Design Decisions</div>
-              <ul class="db-notes-list">
-                <li><strong>Document model ≠ file chunks:</strong> Collaborative docs (Docs, Sheets, Slides) store state as a structured model (JSON/protobuf tree of paragraphs, cells, slides). OT operates on this model. Binary files (PDFs, videos) use file_chunks. These are completely separate storage paths.</li>
-                <li><strong>Checkpoint = serialized snapshot:</strong> Every 30s or 100 ops, the in-memory document model is serialized and written to S3 as a single blob. The doc_snapshots table tracks which revision each snapshot represents. On server recovery, load latest snapshot + replay ops from WAL.</li>
-                <li><strong>Ops log is bounded:</strong> Only ops since the last checkpoint are kept in doc_ops (~1000 ops max). After each checkpoint, ops before that revision are truncated. Kafka WAL provides durable backup for crash recovery between checkpoints.</li>
-                <li><strong>No chunk splitting concern:</strong> A Google Doc with 100 pages is still one document model (~1-5MB serialized). There are no "chunks that grow too big" — the entire model is one unit for OT. Size is naturally bounded by document content.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="db-card" id="db5">
-        <div class="db-hd" onclick="toggleDb('db5')">
           <div class="db-icon">&#x1F4DC;</div>
           <div class="db-title-wrap">
             <div class="db-name">Activity / Audit DB</div>
@@ -2027,244 +1849,12 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
   </section>
 
-  <!-- 07 COLLABORATION DEEP DIVE -->
-  <section id="collaboration">
-    <div class="sec-head">
-      <span class="sec-num">07</span>
-      <span class="sec-title">Real-time Collaboration Deep Dive</span>
-      <span class="sec-tag">OT protocol + server authority + convergence guarantees</span>
-    </div>
+  <!-- Section 07 (Collaboration Deep Dive) removed -->
 
-    <div class="key-principles" style="margin-bottom:32px;">
-      <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Core Problem</div><div class="kp-body">5 users have the same document open. All typing simultaneously. Each keystroke must appear on all 5 screens in <100ms, and all 5 copies must converge to the exact same text — even if two users type at the same character position at the same instant.</div></div>
-      <div class="kp" style="border-left-color:var(--teal)"><div class="kp-title" style="color:var(--teal)">Solution: Operational Transform (OT)</div><div class="kp-body">Every edit is an "operation" (insert or delete at a position). When concurrent ops conflict, a mathematical transform function adjusts positions so every user's intent is preserved. The server is the single source of truth that assigns a total ordering.</div></div>
-      <div class="kp" style="border-left-color:var(--gold)"><div class="kp-title" style="color:var(--gold)">Key Architecture: Document Model ≠ File Chunks</div><div class="kp-body">Collaborative documents (Docs, Sheets, Slides) are NOT stored as binary file chunks. They use a <strong>structured document model</strong> — a JSON/protobuf tree representing paragraphs, styles, tables, etc. OT operates on this model with semantic operations (insert text at position, apply bold to range). The in-memory document state is periodically <strong>checkpointed</strong> by serializing the entire model to a single blob in object storage. Binary files (PDFs, videos, images) use the chunked upload/download path — these are separate systems serving different file types.</div></div>
-    </div>
-
-    <!-- OT Walkthrough -->
-    <div style="margin-bottom:32px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">OT Walkthrough</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400;">Concrete example with 2 concurrent edits</span>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr;gap:3px;">
-        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;">
-          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:8px;">Initial State (server rev 10)</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue2);background:var(--bg);padding:10px 14px;border:1px solid var(--border);border-radius:3px;letter-spacing:0.5px;">
-            "The quick fox"
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px;">Both Alice and Bob see this text. Both start typing at the same time.</div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;">
-          <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--blue);">
-            <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:8px;">Alice's Edit (client-side)</div>
-            <div style="font-size:12px;color:var(--text);line-height:1.7;">
-              Inserts "brown " at position 10<br>
-              <span style="color:var(--muted);">Op: </span><span style="color:var(--gold2);">insert(10, "brown ")</span><br>
-              <span style="color:var(--muted);">Her screen: </span><span style="color:var(--blue2);">"The quick <strong style="color:var(--green);">brown </strong>fox"</span><br>
-              <span style="color:var(--muted);">Sent to server with server_rev: 10</span>
-            </div>
-          </div>
-          <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--orange);">
-            <div style="font-size:12px;font-weight:600;color:var(--orange);margin-bottom:8px;">Bob's Edit (client-side)</div>
-            <div style="font-size:12px;color:var(--text);line-height:1.7;">
-              Inserts " jumps" at position 13 (end)<br>
-              <span style="color:var(--muted);">Op: </span><span style="color:var(--gold2);">insert(13, " jumps")</span><br>
-              <span style="color:var(--muted);">His screen: </span><span style="color:var(--blue2);">"The quick fox<strong style="color:var(--green);"> jumps</strong>"</span><br>
-              <span style="color:var(--muted);">Sent to server with server_rev: 10</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;border-left:3px solid var(--teal);">
-          <div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:8px;">Server Processing (OT Engine)</div>
-          <div style="font-size:12px;color:var(--text);line-height:1.8;">
-            <strong>Step 1:</strong> Alice's op arrives first. Server is at rev 10. No transform needed. Apply insert(10, "brown "). Server state: "The quick brown fox". Assign rev 11. Broadcast to Bob.<br>
-            <strong>Step 2:</strong> Bob's op arrives. His op says server_rev: 10, but server is now at rev 11. Bob missed op [11] (Alice's insert). <strong>Transform required.</strong><br>
-            <strong>Step 3:</strong> Transform Bob's insert(13, " jumps") against Alice's insert(10, "brown "). Since Alice inserted 6 chars at pos 10, and Bob's pos 13 >= 10, Bob's position shifts: 13 + 6 = 19. Transformed op: <span style="color:var(--gold2);">insert(19, " jumps")</span><br>
-            <strong>Step 4:</strong> Apply transformed op. Server state: "The quick brown fox jumps". Assign rev 12. Broadcast transformed op to Alice.
-          </div>
-        </div>
-
-        <div style="background:var(--s1);border:1px solid var(--border);padding:16px 18px;">
-          <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px;">Final Converged State (rev 12) — All Clients</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);background:var(--bg);padding:10px 14px;border:1px solid var(--border);border-radius:3px;letter-spacing:0.5px;">
-            "The quick brown fox jumps"
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px;">Both users' intents preserved. Alice added "brown", Bob added "jumps". OT adjusted Bob's position so both edits land correctly.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Client State Machine -->
-    <div style="margin-bottom:32px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">Client OT State Machine</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400;">Each client cycles through these states</span>
-      </div>
-      <div class="state-machine">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div class="state success"><div class="state-name">SYNCHRONIZED</div><div class="state-desc">no pending ops</div></div>
-          <div class="sm-arrow right">-></div>
-          <div class="state active"><div class="state-name">AWAITING_ACK</div><div class="state-desc">1 op sent, waiting</div></div>
-          <div class="sm-arrow right">-></div>
-          <div class="state warning"><div class="state-name">AWAITING_ACK + BUFFER</div><div class="state-desc">1 sent + more queued</div></div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);padding:12px 0;border-top:1px dashed var(--border);line-height:1.8;margin-top:12px;">
-          <strong style="color:var(--text)">Transitions:</strong><br>
-          SYNCHRONIZED -> AWAITING_ACK: user types, op sent to server<br>
-          AWAITING_ACK -> SYNCHRONIZED: server ACK received, no buffered ops<br>
-          AWAITING_ACK -> AWAITING_ACK+BUFFER: user types again before ACK<br>
-          AWAITING_ACK+BUFFER -> AWAITING_ACK: ACK received, send buffered op (composed into single op), enter AWAITING_ACK<br>
-          <strong style="color:var(--text)">On receiving remote op:</strong> In any state, transform pending/buffered ops against incoming. Apply transformed remote op to local doc.
-        </div>
-      </div>
-    </div>
-
-    <!-- Server-side Write Path -->
-    <div style="margin-bottom:32px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">Server-side Write Path</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400;">What happens on the server for each incoming operation</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr;gap:3px;">
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">1</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Receive & Validate</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">WebSocket message arrives. Validate: is user still authorized? Is server_rev a valid reference point (not too old)? If op references a rev older than the oldest op in the log, reject — client must re-sync from checkpoint.</div></div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">2</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Acquire Document Lock</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Acquire in-memory mutex for this document (not a distributed lock — document is pinned to one server). This serializes all ops for the same doc. Lock held for microseconds (transform + apply is pure CPU, no I/O).</div></div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">3</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Transform Against Concurrent Ops</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Fetch all ops from the ops log between client's server_rev and current server rev. Apply OT transform function iteratively: for each server op, transform the client op to account for it. This adjusts character positions to reflect edits the client hasn't seen yet.</div></div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">4</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Write to WAL (Kafka)</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Before applying to in-memory state, append the transformed op to a durable write-ahead log (Kafka topic partitioned by doc_id). This ensures that if the server crashes, ops between checkpoints can be replayed. Kafka acks = op is durable.</div></div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">5</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Apply to In-Memory State</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Apply transformed op to the canonical in-memory document. Increment server revision. Append op to the in-memory ops log (ring buffer). Release document lock.</div></div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--border2);flex-shrink:0;">6</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:4px;">Broadcast & ACK</div><div style="font-size:12px;color:var(--muted2);line-height:1.6;">Send ACK with new server_rev to the originating client. Send the transformed op (with author + server_rev) to all other connected clients. Non-blocking fan-out via async WebSocket writes.</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Convergence Guarantees -->
-    <div style="margin-bottom:32px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">Why All Clients Converge</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400;">Three properties that guarantee consistency</span>
-      </div>
-      <div class="principles" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));">
-        <div class="principle" style="border-left-color:var(--teal);">
-          <div class="principle-title" style="color:var(--teal);">1. Server Total Ordering</div>
-          <div class="principle-desc">The server assigns a sequential revision to every operation. All clients see ops in the same server-determined order. Even if ops arrive out of order from different clients, the server serializes them. This is the single source of truth.</div>
-        </div>
-        <div class="principle" style="border-left-color:var(--teal);">
-          <div class="principle-title" style="color:var(--teal);">2. Transform Correctness (TP1)</div>
-          <div class="principle-desc">The OT transform function satisfies the "Transformation Property 1": if ops A and B are concurrent, then apply(apply(state, A), T(B, A)) = apply(apply(state, B), T(A, B)). Both orderings produce the same final state. This is a mathematical invariant of the transform functions.</div>
-        </div>
-        <div class="principle" style="border-left-color:var(--teal);">
-          <div class="principle-title" style="color:var(--teal);">3. Causality Preserved</div>
-          <div class="principle-desc">The 1-op-in-flight rule ensures causal ordering: a client won't send op B until op A is ACKed. Combined with server_rev tracking, each op is transformed against exactly the right set of concurrent ops — no more, no less.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Scaling Collaboration -->
-    <div style="margin-bottom:32px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">Scaling to Millions of Concurrent Docs</span>
-      </div>
-      <table class="scale-table">
-        <thead>
-          <tr>
-            <th>Challenge</th>
-            <th>Strategy</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Doc-to-server affinity</td>
-            <td>Consistent hash(doc_id) -> server</td>
-            <td>All WebSocket connections for one doc land on the same server. In-memory state lives on one machine. On server failure: rehash to new server, load from last checkpoint + replay WAL.</td>
-          </tr>
-          <tr>
-            <td>Hot documents (100+ editors)</td>
-            <td>Read-replica fan-out</td>
-            <td>Primary server handles OT + state. Read-only replicas handle cursor broadcasts and presence updates. Ops still serialized through primary. Reduces WebSocket fan-out pressure.</td>
-          </tr>
-          <tr>
-            <td>Memory per document</td>
-            <td>~1-5MB per active doc</td>
-            <td>Document text + ops log (last 1000 ops) + user sessions. A single 64GB server handles ~15K concurrent docs. LRU eviction for idle docs after 5min (checkpoint first).</td>
-          </tr>
-          <tr>
-            <td>Cross-region latency</td>
-            <td>Regional collab servers</td>
-            <td>Users connect to nearest region. Ops forwarded to the primary region (where doc state lives) for OT. ~100-200ms added latency for cross-region users. Acceptable for text editing; not ideal for real-time cursor display.</td>
-          </tr>
-          <tr>
-            <td>Server failure recovery</td>
-            <td>Checkpoint + WAL replay</td>
-            <td>On crash: new server loads last checkpoint from blob storage, replays WAL (Kafka) from checkpoint revision. Clients reconnect automatically (WebSocket reconnect with exponential backoff). <2s recovery time.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- OT Transform Rules -->
-    <div>
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-        <span style="color:var(--teal);">OT Transform Rules</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400;">How positions are adjusted for each op combination</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:3px;">
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
-          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Insert vs Insert</div>
-          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
-            insert(posA, textA) vs insert(posB, textB)<br>
-            If posA < posB: B.pos += len(textA)<br>
-            If posA > posB: A.pos += len(textB)<br>
-            If posA == posB: tie-break by user_id (lower ID goes first)
-          </div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
-          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Insert vs Delete</div>
-          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
-            insert(posA, text) vs delete(posB, lenB)<br>
-            If posA <= posB: B.pos += len(text)<br>
-            If posA > posB + lenB: A.pos -= lenB<br>
-            If posA in [posB, posB+lenB]: split the delete around the insert
-          </div>
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);padding:14px 16px;">
-          <div style="font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:6px;">Delete vs Delete</div>
-          <div style="font-size:12px;color:var(--muted2);line-height:1.7;">
-            delete(posA, lenA) vs delete(posB, lenB)<br>
-            Non-overlapping: adjust positions normally<br>
-            Overlapping: reduce length to avoid double-delete<br>
-            Fully contained: one delete becomes no-op
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- 08 SCALABILITY -->
+  <!-- 07 SCALABILITY -->
   <section id="scalability">
     <div class="sec-head">
-      <span class="sec-num">08</span>
+      <span class="sec-num">07</span>
       <span class="sec-title">Scalability</span>
       <span class="sec-tag">2B files + 2PB storage + 15M DAU</span>
     </div>
@@ -2285,22 +1875,16 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
           <td>Folder listing = single shard. Cross-shard for shared files (scatter-gather).</td>
         </tr>
         <tr>
-          <td>file_chunks (binary files)</td>
-          <td>1T+ rows, ~20TB</td>
-          <td>Shard by file_id (co-located with file metadata by owner_id)</td>
-          <td>Binary files only (PDFs, images, videos). All chunks for a file on same shard. Download = single shard query. GC on file delete = single shard.</td>
-        </tr>
-        <tr>
-          <td>doc_snapshots + doc_ops (collab docs)</td>
-          <td>~100M snapshots, bounded ops</td>
-          <td>Shard by doc_id. Ops truncated at each checkpoint.</td>
-          <td>Collaborative docs (Docs, Sheets, Slides) use structured document model. Snapshot = serialized model blob in S3. Ops log bounded to ~1000 ops between checkpoints. Completely separate from file_chunks.</td>
+          <td>chunks + file_chunk_map</td>
+          <td>1T+ rows, ~15TB (after dedup)</td>
+          <td>chunks: shard by content_hash. file_chunk_map: shard by file_id</td>
+          <td>Dedup saves 20-30% storage. chunks table is append-only (content-addressable). file_chunk_map co-located with file metadata. GC via ref_count: decrement on file delete, purge when ref_count=0.</td>
         </tr>
         <tr>
           <td>Object Store (S3/GCS)</td>
           <td>2PB+</td>
           <td>Multi-tier: hot (Standard) / warm (IA) / cold (Glacier)</td>
-          <td>Stores both binary file chunks AND collaborative doc snapshots. Lifecycle auto-tiering saves 40-60% cost. 11 nines durability built-in.</td>
+          <td>Stores content-addressable chunks. Lifecycle auto-tiering saves 40-60% cost. 11 nines durability built-in. Dedup reduces physical storage by 20-30%.</td>
         </tr>
         <tr>
           <td>activity_log</td>
@@ -2314,20 +1898,32 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
           <td>Redis Cluster (16 shards). Key: acl:{file_id}:{user_id}</td>
           <td>5min TTL. 99% hit rate. Invalidation on permission change.</td>
         </tr>
+        <tr>
+          <td>Change feed (sync)</td>
+          <td>~100K events/sec</td>
+          <td>Kafka partitioned by owner_id. Consumers write to change_log table.</td>
+          <td>Cursor-based delta sync. Clients poll or use SSE/long-poll for real-time push.</td>
+        </tr>
+        <tr>
+          <td>Sync connections</td>
+          <td>~5M concurrent</td>
+          <td>SSE/long-poll with 60s timeout. Stateless sync service behind LB.</td>
+          <td>Each connected client holds one long-poll. Scales horizontally with more sync instances.</td>
+        </tr>
       </tbody>
     </table>
     <div class="key-principles">
-      <div class="kp"><div class="kp-title">Dual storage model</div><div class="kp-body">Binary files: per-file chunk versioning. On edit, only modified chunks get new versions. Collaborative docs: structured document model with OT. Checkpointed as serialized blobs. Two completely separate storage paths, unified by the files metadata table.</div></div>
+      <div class="kp"><div class="kp-title">Content-addressable dedup</div><div class="kp-body">Chunks keyed by SHA-256 hash. Identical chunks across users stored once. ref_count tracks references. GC purges chunks when ref_count drops to zero. Saves 20-30% storage at scale. Upload path: compute hash, check existence, skip upload if chunk already stored.</div></div>
       <div class="kp"><div class="kp-title">CDN for read path</div><div class="kp-body">Popular shared files cached at edge. Pre-signed URLs bypass application servers entirely for downloads. p99 first-byte &lt;500ms. CloudFront/Akamai with 200+ edge locations globally.</div></div>
       <div class="kp"><div class="kp-title">Metadata sharding by owner_id</div><div class="kp-body">All of a user's files on same shard. Folder listing, search, quota calc = single-shard queries. Shared files require cross-shard reads but are 10-15% of total reads.</div></div>
       <div class="kp"><div class="kp-title">Hot user handling</div><div class="kp-body">Users with 100K+ files: virtual sharding splits their data across N sub-shards. Folder listing uses scatter-gather within virtual shard group. Prevents single-shard bottleneck.</div></div>
     </div>
   </section>
 
-  <!-- 09 TRADEOFFS -->
+  <!-- 08 TRADEOFFS -->
   <section id="tradeoffs">
     <div class="sec-head">
-      <span class="sec-num">09</span>
+      <span class="sec-num">08</span>
       <span class="sec-title">Architectural Tradeoffs</span>
       <span class="sec-tag">Staff-level decision framing</span>
     </div>
@@ -2347,27 +1943,27 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <div class="mc-verdict"><strong>Hierarchical tree with parent_id.</strong> Users expect folders. Move = update parent_id (O(1)). Rename = update name (O(1)). Permission inheritance traverses tree bottom-up. Alternative (materialized path "/a/b/c"): move requires updating ALL descendant paths — O(N) writes for large folders.</div>
       </div>
       <div class="matrix-card">
-        <div class="mc-title">OT (Operational Transform) vs CRDT (Conflict-free Replicated Data Type)</div>
-        <div class="mc-row"><span class="mc-label">Server dependency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
-        <div class="mc-row"><span class="mc-label">Offline support</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
-        <div class="mc-row"><span class="mc-label">Memory efficiency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
-        <div class="mc-row"><span class="mc-label">Implementation maturity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
-        <div class="mc-verdict"><strong>OT for Google Docs-style editing.</strong> OT requires a central server (single point of serialization) but is proven at Google's scale, uses less memory (no tombstones), and has simpler intent preservation for text. CRDT shines for peer-to-peer/offline-first apps (Figma uses CRDTs) — no server needed for convergence, but document state grows with edit history (tombstone overhead). For a server-centric system like Google Drive where you always have connectivity, OT is the pragmatic choice. Alternative: hybrid — OT for online editing, CRDT for offline conflict resolution.</div>
+        <div class="mc-title">Inline Dedup vs Async Dedup</div>
+        <div class="mc-row"><span class="mc-label">Upload latency</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Storage savings</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
+        <div class="mc-row"><span class="mc-label">Implementation complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-row"><span class="mc-label">GC complexity</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
+        <div class="mc-verdict"><strong>Inline dedup (on upload).</strong> Check SHA-256 hash before storing each chunk. If hash exists in chunk store, skip upload and increment ref_count. Pro: immediate savings, no duplicate ever written to S3. Con: adds ~5ms lookup per chunk. Async alternative: store everything, background job finds and deduplicates later. Pro: faster uploads. Con: temporary storage waste, complex GC, race conditions during dedup. Our choice: inline — SHA-256 lookup is O(1) in the hash index, and 20-30% storage savings at scale justify the minimal latency cost.</div>
       </div>
       <div class="matrix-card">
         <div class="mc-title">Server-side vs Client-side Encryption</div>
         <div class="mc-row"><span class="mc-label">Security guarantee</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div><div class="bar fill"></div></div></div>
         <div class="mc-row"><span class="mc-label">Feature compatibility</span><div class="mc-val"><div class="bar fill"></div><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
         <div class="mc-row"><span class="mc-label">Search / preview</span><div class="mc-val"><div class="bar fill"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div><div class="bar empty"></div></div></div>
-        <div class="mc-verdict"><strong>Server-side by default, client-side optional.</strong> Client-side encryption (E2EE) prevents server from reading content. But kills search, thumbnails, collaboration, virus scanning. Offer E2EE as enterprise option for sensitive folders. Server-side (AES-256) for everything else.</div>
+        <div class="mc-verdict"><strong>Server-side by default, client-side optional.</strong> Client-side encryption (E2EE) prevents server from reading content. But kills search, thumbnails, dedup, virus scanning. Offer E2EE as enterprise option for sensitive folders. Server-side (AES-256) for everything else.</div>
       </div>
     </div>
   </section>
 
-  <!-- 10 PITFALLS -->
+  <!-- 09 PITFALLS -->
   <section id="pitfalls">
     <div class="sec-head">
-      <span class="sec-num">10</span>
+      <span class="sec-num">09</span>
       <span class="sec-title">Pitfall Questions</span>
       <span class="sec-tag">Expect these at Staff level interviews</span>
     </div>
@@ -2418,25 +2014,24 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         </div>
       </div>
       <div class="pitfall-card">
-        <div class="pf-hd"><div class="pf-q">"5 users are editing a Google Doc simultaneously. The collaboration server crashes mid-session. What happens to their unsaved edits? How do you recover without losing any keystrokes?"</div></div>
+        <div class="pf-hd"><div class="pf-q">"A chunk's ref_count reaches zero after a user deletes their file, but another user uploaded the same chunk 10ms later. How do you prevent the GC job from deleting a chunk that's about to be referenced again?"</div></div>
         <div class="pf-bd">
           <ul class="pf-steps">
-            <li><strong>WAL guarantees zero data loss.</strong> Every op is written to Kafka (partitioned by doc_id) BEFORE applying to in-memory state. Even if the server process is kill -9'd, all acknowledged ops exist in the WAL. Unacknowledged ops (in-flight at crash time) are the client's responsibility — the client will resend on reconnect.</li>
-            <li><strong>Recovery: checkpoint + WAL replay.</strong> The document is reassigned to a new server (consistent hashing with virtual nodes). New server loads the last checkpoint (full document snapshot from blob storage, e.g., at revision 500). Then replays all ops from Kafka from revision 501 onward. Document state is reconstructed in <2 seconds.</li>
-            <li><strong>Client reconnection.</strong> WebSocket disconnect triggers automatic reconnect with exponential backoff (100ms, 200ms, 400ms...). On reconnect, client re-authenticates with a new ticket, receives the current document snapshot + revision. Client diffs its local state against the server snapshot. Any pending/buffered ops that weren't ACKed are transformed against missed server ops and re-submitted.</li>
-            <li><strong>Edge case: split-brain.</strong> If the old server isn't actually dead (network partition), two servers could accept ops for the same doc. Prevention: fencing token on the Kafka WAL. Each server generation gets a monotonic token. Kafka rejects writes from the old generation. Additionally: all clients disconnect on WebSocket error and re-resolve which server to connect to via the load balancer.</li>
-            <li><strong>User experience:</strong> Users see a brief "Reconnecting..." banner (1-3 seconds). No keystrokes lost. Cursors of other users may temporarily disappear during recovery. "Last saved" indicator updates once final checkpoint is written post-recovery. For the user, it's a minor flicker, not a data loss event.</li>
+            <li><strong>Soft-delete window before physical GC.</strong> When ref_count hits 0, set a deleted_at timestamp. GC job only purges chunks where deleted_at &lt; now() - 24h. This gives a large window for any in-flight uploads to re-reference the chunk.</li>
+            <li><strong>Upload path re-checks ref_count atomically.</strong> INSERT into chunks ... ON CONFLICT (content_hash) DO UPDATE SET ref_count = ref_count + 1, deleted_at = NULL. The atomic upsert resurrects a soft-deleted chunk if a new upload references it before GC runs.</li>
+            <li><strong>GC uses conditional delete:</strong> DELETE FROM chunks WHERE content_hash = ? AND ref_count = 0 AND deleted_at &lt; ?. If ref_count was incremented between the GC scan and the delete, the WHERE clause fails and the chunk is preserved.</li>
+            <li><strong>Belt and suspenders:</strong> S3 object deletion is a separate async step after DB deletion. Even if DB row is deleted, the S3 object lingers for 7 days (S3 lifecycle rule). If a re-reference happens during this window, the chunk can be "un-deleted" by re-inserting the DB row pointing to the still-existing S3 object.</li>
           </ul>
         </div>
       </div>
       <div class="pitfall-card">
-        <div class="pf-hd"><div class="pf-q">"What if 200 users open the same Google Doc at once for a company all-hands? Does OT scale to that many concurrent editors?"</div></div>
+        <div class="pf-hd"><div class="pf-q">"A user's laptop closes mid-sync with 200 files queued. They reopen it 3 days later on hotel WiFi (slow, intermittent). How does the sync engine recover without re-uploading everything or corrupting file state?"</div></div>
         <div class="pf-bd">
           <ul class="pf-steps">
-            <li><strong>OT itself scales — the bottleneck is broadcast fan-out.</strong> Transform is O(concurrent_ops_since_last_rev) per incoming op, which is typically 0-5 ops. Even with 200 users, at ~2 ops/sec/user = 400 ops/sec, each transform looks back at most a few ops. The CPU cost is negligible.</li>
-            <li><strong>WebSocket fan-out is the real challenge.</strong> Each op must be broadcast to 199 other connections. At 400 ops/sec * 199 = ~80K WebSocket messages/sec from one server. Solution: batching (aggregate ops into 50ms windows, send one batch instead of 20 individual messages) + read-replica fan-out (primary handles OT, replicas handle broadcasting to subsets of clients).</li>
-            <li><strong>Cursor spam reduction.</strong> 200 users * cursor updates every 100ms = 2000 cursor msgs/sec, each broadcast to 199 others = 400K msgs/sec. Mitigation: (a) Only broadcast cursor for users currently visible in the viewport of each recipient. (b) Throttle to 500ms for non-nearby cursors. (c) Show only ~8 cursors max (closest to your viewport position), others collapsed into "and 192 others..."</li>
-            <li><strong>Document partitioning for extreme scale.</strong> If a doc has structured sections (like Google Slides or Sheets), partition OT by section/slide/sheet. Each partition has its own op log and can be handled by different servers. Text docs don't partition as cleanly, but paragraph-level partitioning is possible for 500+ user scenarios.</li>
+            <li><strong>Persistent sync queue in local SQLite.</strong> Every pending sync operation is durably written to a local queue with status (PENDING, UPLOADING, CONFIRMED). On reopen, the sync engine reads the queue and resumes from where it left off. No state is lost on app crash or laptop close.</li>
+            <li><strong>Resumable uploads survive days-long gaps.</strong> Each upload session has a server-side upload_id with 7-day TTL. Client stores (file_path, upload_id, last_chunk_uploaded) locally. On resume: query server for upload progress, continue from the next chunk. If upload_id expired: start new session but skip chunks whose SHA-256 already exists (dedup).</li>
+            <li><strong>Bandwidth-adaptive upload on slow WiFi.</strong> Sync engine measures throughput per chunk. If throughput &lt; 100KB/s: reduce parallel uploads from 4 to 1, reduce chunk size from 8MB to 2MB. If connection drops: exponential backoff (1s, 2s, 4s... max 5min). Prioritize small files first for user-visible progress.</li>
+            <li><strong>Server-side cursor hasn't moved.</strong> The user's sync cursor is still at the 3-day-old position. Delta sync returns all server-side changes since then. Client merges: local changes (from the queue) + server changes (from delta). Conflicts resolved per standard policy (last-writer-wins for metadata, conflict copies for content).</li>
           </ul>
         </div>
       </div>
@@ -2462,7 +2057,7 @@ const panels = {
   webclient: {
     icon: '\u{1F310}', title: 'Mobile / Web Client', subtitle: 'Chunked uploader + local sync engine + offline access',
     sections: [
-      { title: 'Chunked Upload Engine', items: ['Split files into 4-8MB chunks client-side before upload', 'Compute SHA-256 per chunk for integrity verification on server', 'Resumable: track which chunks uploaded in local SQLite. On failure: resume from last successful chunk', 'Bandwidth throttling: limit upload speed to avoid saturating user connection', 'Parallel upload: 3-4 chunks concurrently for throughput on fast connections'] },
+      { title: 'Chunked Upload Engine + Client-Side Dedup', items: ['Split files into 4-8MB chunks client-side before upload', 'Compute SHA-256 per chunk for dedup check + integrity verification', 'Before uploading each chunk: send hash to server. If chunk exists (dedup hit), skip upload entirely — saves bandwidth', 'Resumable: track which chunks uploaded/skipped in local SQLite. On failure: resume from last successful chunk', 'Parallel upload: 3-4 chunks concurrently for throughput on fast connections'] },
       { title: 'Local Sync Engine', items: ['SQLite database mirrors server file metadata locally', 'File system watcher (inotify/FSEvents) detects local changes', 'Change queue: debounce rapid edits (1s delay before syncing)', 'Offline mode: queue all changes locally, sync when connection restored', 'Conflict detection: compare local version vs server version on reconnect'] },
       { title: 'Smart Sync / On-Demand', items: ['Not all files downloaded by default (saves disk space)', 'Placeholder files shown in file browser with cloud icon', 'File accessed -> triggers download on demand', 'Pinned files: always available offline (user selects)', 'LRU eviction: auto-remove least-recently-used local copies when disk is low'] }
     ]
@@ -2472,14 +2067,14 @@ const panels = {
     sections: [
       { title: 'Authentication', items: ['OAuth2 bearer tokens (JWT) for API access', 'Token validation at edge: RSA public key verification, no DB lookup', 'Refresh token rotation: old refresh token invalidated on use', 'Service-to-service: mTLS with certificate pinning'] },
       { title: 'Rate Limiting', items: ['Per-user: 1000 req/min for metadata, 100 req/min for uploads', 'Per-IP: 5000 req/min as DDoS protection', 'Sliding window in Redis: ZADD + ZREMRANGEBYSCORE + ZCARD', 'HTTP 429 with Retry-After header on limit exceeded', 'Different limits by plan tier: Free (strict) vs Enterprise (generous)'] },
-      { title: 'Request Routing', items: ['/api/v1/files/* -> File Metadata Service', '/api/v1/uploads/* -> Blob Storage Service', '/api/v1/search/* -> Search Service', '/api/v1/sync/* -> Sync Service', 'WebSocket /ws/collab/* -> Collaboration Service'] }
+      { title: 'Request Routing', items: ['/api/v1/files/* -> File Metadata Service', '/api/v1/uploads/* -> Blob Storage Service', '/api/v1/search/* -> Search Service', '/api/v1/sync/* -> Sync Service'] }
     ]
   },
   cdn: {
     icon: '\u{26A1}', title: 'CDN (CloudFront/Akamai)', subtitle: 'Download acceleration + edge caching',
     sections: [
       { title: 'Caching Strategy', items: ['Shared files with 100+ views cached at edge automatically', 'Pre-signed URLs: include token + expiry in URL, CDN validates', 'Cache invalidation on file update: API call to CDN purge endpoint', 'Cache key: file_id + version ensures new version = new cache key (no stale content)', 'Geographic routing: user -> nearest edge PoP -> origin if cache miss'] },
-      { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key ({file_id}/{chunk_index}/{version}), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs.' }
+      { title: 'Pre-signed URL Generation', text: 'Blob Service generates S3 pre-signed URL with 1h TTL. URL includes: bucket, key (content_hash), expiry, signature. CDN respects the signature. After expiry: 403 Forbidden. This means app servers never proxy file bytes - only generate redirect URLs. Content-addressable keys mean identical chunks share CDN cache entries across users.' }
     ]
   },
   metadata: {
@@ -2487,16 +2082,16 @@ const panels = {
     sections: [
       { title: 'Core Responsibilities', text: 'Manages the file/folder hierarchy. Every file and folder is a row in the files table. parent_id creates the tree structure. Owner is the user who created the file. Versions tracked via version column + file_versions table for history.' },
       { title: 'Optimistic Concurrency', items: ['Every metadata update requires If-Match: ETag header', 'ETag = hash of (id + version + modified_at)', 'PUT /files/{id} with stale ETag -> 412 Precondition Failed', 'Client must refetch, show diff to user, retry with new ETag', 'No pessimistic locks: read-heavy workload (100:1 read:write ratio)'] },
-      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy binary file: deep copy metadata + copy chunk records with new file_id', 'Copy collaborative doc: deep copy metadata + copy latest doc snapshot with new doc_id'] }
+      { title: 'Tree Operations', items: ['Create folder: INSERT with parent_id = target folder', 'Move file: UPDATE parent_id (O(1), no path rewrite needed)', 'Rename: UPDATE name (O(1))', 'Delete: UPDATE status=TRASHED, set trashed_at=now()', 'Copy file: deep copy metadata + duplicate file_chunk_map entries pointing to same content_hashes (instant, no data copying). ref_count incremented for each chunk'] }
     ]
   },
   blob: {
-    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Binary file chunked upload/download + per-file versioning',
+    icon: '\u{1F4E6}', title: 'Blob Storage Service', subtitle: 'Chunked upload/download + content-addressable dedup + versioning',
     sections: [
-      { title: 'Scope: Binary Files Only', text: 'This service handles PDFs, images, videos, ZIPs, and other binary files. Collaborative documents (Docs, Sheets, Slides) are NOT handled here — they go through the Collaboration Service, which manages a structured document model with OT and checkpoints.' },
-      { title: 'Resumable Upload Protocol', items: ['POST /uploads/resumable: initiate session, get upload_id (24h TTL)', 'PUT /uploads/{id} with Content-Range header for each chunk', 'Server tracks received chunks. Client can query progress.', 'Final chunk: server verifies full-file SHA-256 checksum', 'On failure: client resumes from last acknowledged chunk offset'] },
-      { title: 'Per-file Chunk Storage', items: ['Chunks keyed by {file_id}/{chunk_index}/{version} in S3', 'Each chunk belongs to exactly one file — simple ownership', 'SHA-256 used for integrity verification, not dedup', 'On edit: only modified chunks get a new version, unchanged chunks untouched', 'Delete file: delete all chunks for that file_id from S3 + DB'] },
-      { title: 'Download Path', items: ['Generate pre-signed S3 URL (1h TTL)', 'Redirect client to CDN/S3 directly (302 redirect)', 'Range request support for partial downloads and video streaming', 'Chunks reassembled in order by chunk_index from file_chunks table', 'Large files: parallel chunk download on client for speed'] }
+      { title: 'Content-Addressable Dedup', text: 'Every chunk is keyed by its SHA-256 hash. On upload, the service checks if a chunk with the same hash already exists. If yes: skip the S3 write, increment ref_count, and map the file to the existing chunk. Cross-user dedup: if User A and User B upload the same file, chunks are stored once. Saves 20-30% storage at scale.' },
+      { title: 'Resumable Upload Protocol', items: ['POST /uploads/resumable: initiate session, get upload_id (24h TTL)', 'PUT /uploads/{id} with Content-Range header for each chunk', 'Server computes SHA-256 per chunk, checks existence before writing to S3', 'Dedup hit: skip S3 write, increment ref_count, return success immediately', 'On failure: client resumes from last acknowledged chunk offset'] },
+      { title: 'Chunk Storage Model', items: ['chunks table: PK = content_hash (SHA-256), stores S3 location + ref_count', 'file_chunk_map table: maps (file_id, version, chunk_index) -> content_hash', 'On edit: only modified chunks produce new hashes, unchanged chunks reuse existing', 'Delete file: decrement ref_count for each chunk. GC purges chunks at ref_count=0', 'Version rollback: point file_chunk_map entries to previous version\'s chunk hashes'] },
+      { title: 'Download Path', items: ['Generate pre-signed S3 URL per chunk (1h TTL)', 'Redirect client to CDN/S3 directly (302 redirect)', 'Range request support for partial downloads and video streaming', 'Chunks reassembled in order by chunk_index from file_chunk_map', 'Large files: parallel chunk download on client for speed'] }
     ]
   },
   sharing: {
@@ -2522,22 +2117,11 @@ const panels = {
       { title: 'Permission-Filtered Search', items: ['User searches: query must be filtered to only files user can access', 'Approach 1: post-filter (search all, filter by ACL) - poor for users with few files', 'Approach 2: pre-filter (include user access list in query) - used at scale', 'ES document includes field: accessible_by = [user_ids, group_ids]', 'On permission change: update ES document accessible_by field'] }
     ]
   },
-  collab: {
-    icon: '\u{1F4DD}', title: 'Collaboration Service', subtitle: 'Real-time co-editing on structured document model via OT',
-    sections: [
-      { title: 'Document Model (NOT Chunks)', text: 'Collaborative documents (Docs, Sheets, Slides) use a structured document model — a JSON/protobuf tree representing paragraphs, styles, tables, cells, etc. OT operates on this semantic model, NOT on binary file chunks. A 100-page Google Doc is one in-memory model (~1-5MB), not a collection of 4-8MB binary chunks. Binary files (PDFs, videos) use the separate Blob Storage Service with chunked uploads.' },
-      { title: 'What Clients Send', text: 'Every keystroke or edit produces an operation: insert(position, text) or delete(position, length). The client applies ops locally immediately (optimistic update), then sends to server with the last known server_rev. Rule: only 1 unacknowledged op in flight at a time. Additional keystrokes are buffered and composed into a single op, sent after ACK.' },
-      { title: 'Server-side OT Pipeline', items: ['1. Receive op from client with its server_rev reference', '2. Acquire per-document in-memory mutex (microseconds, no I/O)', '3. Fetch all ops between client\'s server_rev and current rev from ops log', '4. Transform client op against each intervening op (adjust positions)', '5. Write transformed op to WAL (Kafka) for crash durability', '6. Apply to in-memory canonical document model, increment revision', '7. ACK originating client, broadcast transformed op to all others'] },
-      { title: 'Persistence & Recovery', items: ['Checkpoint: serialize entire document model to blob storage (S3) every 30s or 100 ops', 'doc_snapshots table: tracks {doc_id, revision, blob_url} for each checkpoint', 'WAL (Kafka): every op written durably before applying to memory', 'On server crash: load last snapshot + replay ops from WAL since that revision', 'Recovery time: <2s. Clients auto-reconnect with exponential backoff', 'Session end: final checkpoint + evict from memory + publish FILE_MODIFIED'] },
-      { title: 'Architecture & Scaling', items: ['Consistent hash(doc_id) -> server: one doc pinned to one server', 'WebSocket connection per active editor per document', 'In-memory state: ~1-5MB per doc (document model + ops log + sessions)', 'Single 64GB server handles ~15K concurrent docs', 'Cross-region: ops forwarded to primary region for OT, ~100-200ms latency', 'Graceful degradation: if collab server down, fall back to file-level locking'] },
-      { title: 'Presence & Cursors', items: ['Cursor position broadcast via WebSocket every 100ms (throttled)', 'Cursor updates are fire-and-forget (no persistence, no OT)', 'User presence: "Alice is viewing", "Bob is editing at line 42"', 'Heartbeat every 30s to detect stale sessions', 'Idle timeout: 5min without activity -> remove from active editors'] }
-    ]
-  },
   objectstore: {
-    icon: '\u{1F5C4}', title: 'Object Store (S3/GCS)', subtitle: 'Blob storage + 11 nines durability + lifecycle',
+    icon: '\u{1F5C4}', title: 'Object Store (S3/GCS)', subtitle: 'Content-addressable blob storage + 11 nines durability + lifecycle',
     sections: [
-      { title: 'Dual Storage in Object Store', text: 'Two types of objects: (1) Binary file chunks keyed by {file_id}/{chunk_index}/{version} in s3://drive-chunks-{region}/. (2) Collaborative document snapshots keyed by {doc_id}/{revision} in s3://drive-docs-{region}/. Separate buckets for different lifecycle policies. Prefix partitioning prevents S3 request throttling. Cross-region replication for disaster recovery.' },
-      { title: 'Lifecycle Policies', items: ['Binary chunks: Hot (Standard) -> Warm (IA, 30d) -> Cold (Glacier, 90d)', 'Doc snapshots: Hot only (always need fast recovery). Old snapshots GC\'d after N retained.', 'Auto-transition based on created_at timestamp', 'User-triggered restore from cold: async, notify when ready'] }
+      { title: 'Content-Addressable Storage', text: 'Chunks keyed by SHA-256 content_hash in s3://drive-chunks-{region}/{hash_prefix}/{content_hash}. Hash prefix (first 2 chars) provides even distribution across S3 partitions, preventing request throttling. Cross-region replication for disaster recovery. Because chunks are immutable and content-addressed, replication is simple: same hash = same content everywhere.' },
+      { title: 'Lifecycle Policies', items: ['Hot (Standard): chunks with recent access or high ref_count', 'Warm (IA, 30d): chunks not accessed in 30 days', 'Cold (Glacier, 90d): chunks not accessed in 90 days, low ref_count', 'Auto-transition based on last_accessed timestamp', 'User-triggered restore from cold: async, notify when ready', 'Dedup amplifies savings: one cold-tiered chunk serves all referencing files'] }
     ]
   },
   metadb: {
@@ -2585,7 +2169,7 @@ const panels = {
   quota: {
     icon: '\u{1F4CA}', title: 'Quota Enforcement', subtitle: 'Storage limits + billing integration',
     sections: [
-      { title: 'Enforcement Points', items: ['Pre-check on upload initiation: reject if would exceed quota', 'Atomic Redis INCRBY: prevents race condition on concurrent uploads', 'Quota incremented on upload, decremented on file delete', 'Quota = SUM(file sizes) for user — straightforward accounting'] },
+      { title: 'Enforcement Points', items: ['Pre-check on upload initiation: reject if would exceed quota', 'Atomic Redis INCRBY: prevents race condition on concurrent uploads', 'Quota incremented on upload, decremented on file delete', 'Quota = SUM(file sizes) for user. Note: quota charges full file size even if chunks are dedup\'d (fair billing — dedup is a system optimization, not a user discount)'] },
       { title: 'Reconciliation', items: ['Hourly job: compare Redis counter vs SUM(files.size) from DB', 'Drift detected: adjust Redis counter to match DB (source of truth)', 'Common drift causes: failed uploads not properly decrementing, race conditions', 'Alert if drift exceeds 1GB for any user (potential bug)'] }
     ]
   },

@@ -695,7 +695,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
               <div class="comp-role">Auth + Rate limit + WebSocket upgrade</div>
               <div class="comp-detail">OAuth2/JWT validation. WebSocket upgrade for collab sessions. HTTP for doc metadata. Routes to Collaboration Service based on doc_id hash.</div>
             </div>
-            <div class="comp" onclick="openPanel('cdn')">
+            <div class="comp">
               <div class="comp-top"><span class="comp-icon">&#x26A1;</span><span class="comp-name">CDN</span></div>
               <div class="comp-role">Static assets + initial doc snapshot delivery</div>
               <div class="comp-detail">Serves editor JS/CSS bundles. Caches initial document snapshots for fast first load. Geographic distribution reduces TTFB.</div>
@@ -790,3 +790,1013 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
     </div>
   </section>
+
+  <!-- ───────── 03 API CONTRACTS ───────── -->
+  <section class="section" id="s-api">
+    <div class="section-inner">
+      <div class="section-label">03</div>
+      <h2 class="section-title">API Contracts</h2>
+
+      <!-- API Group: Collaboration Ticket -->
+      <div class="api-block" id="api-collab">
+        <h3 class="api-block-title">Collaboration — Session Ticket</h3>
+        <div class="endpoint">
+          <div class="method post">POST</div>
+          <div class="path">/api/collab/ticket</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Request</b></td><td></td><td></td></tr>
+              <tr><td>doc_id</td><td>string</td><td>Document to open for editing</td></tr>
+              <tr><td>client_rev</td><td>int</td><td>Last revision the client has seen (0 for fresh open)</td></tr>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>ticket</td><td>string</td><td>One-time-use JWT, 30 s TTL, binds (user, doc, shard)</td></tr>
+              <tr><td>ws_url</td><td>string</td><td>wss://collab-{shard}.docs.example.com/ws</td></tr>
+              <tr><td>snapshot</td><td>object</td><td>Latest checkpoint of the document model</td></tr>
+              <tr><td>ops_since</td><td>array</td><td>Ops between checkpoint and head — client replays these</td></tr>
+              <tr><td>head_rev</td><td>int</td><td>Current server revision number</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-card">
+          <b>Why a ticket?</b> — The HTTP request validates auth + ACL. The WebSocket handshake only checks the short-lived ticket, keeping the hot path fast. Ticket is single-use and bound to a specific collab shard.
+        </div>
+
+        <h3 class="api-block-title" style="margin-top:2.4rem;">WebSocket Protocol</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.2rem;">After obtaining a ticket, the client opens a WebSocket to <code>ws_url</code> and exchanges typed JSON frames:</p>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Frame</th><th>Direction</th><th>Payload</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>join</code></td><td>C → S</td><td>ticket, client_rev</td><td>Authenticate & subscribe to doc channel</td></tr>
+              <tr><td><code>joined</code></td><td>S → C</td><td>session_id, active_users[]</td><td>Confirm session, list current editors</td></tr>
+              <tr><td><code>op</code></td><td>C → S</td><td>client_id, rev, ops[]</td><td>Send local operation (1-in-flight rule)</td></tr>
+              <tr><td><code>ack</code></td><td>S → C</td><td>server_rev</td><td>Server accepted & applied the op</td></tr>
+              <tr><td><code>remote_op</code></td><td>S → C</td><td>user_id, server_rev, ops[]</td><td>Broadcast transformed op from another user</td></tr>
+              <tr><td><code>cursor</code></td><td>C → S</td><td>position, selection_range</td><td>Ephemeral cursor position (not persisted)</td></tr>
+              <tr><td><code>cursor_update</code></td><td>S → C</td><td>user_id, position, color</td><td>Broadcast other user's cursor to all peers</td></tr>
+              <tr><td><code>presence</code></td><td>S → C</td><td>user_id, event(join|leave)</td><td>User joined/left the document session</td></tr>
+              <tr><td><code>snapshot</code></td><td>S → C</td><td>snapshot, head_rev</td><td>Full re-sync after gap > 1000 ops</td></tr>
+              <tr><td><code>error</code></td><td>S → C</td><td>code, message</td><td>Fatal errors: INVALID_OP, STALE_REV, DOC_LOCKED</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note-card" style="margin-top:1.2rem;">
+          <b>1-Op-In-Flight Rule</b> — Client sends exactly one <code>op</code> and waits for <code>ack</code> before sending the next. While waiting, new local edits are buffered and composed into a single pending op. This simplifies OT: the server only ever transforms against one client op at a time.
+        </div>
+      </div>
+
+      <!-- API Group: Document Management -->
+      <div class="api-block" id="api-doc">
+        <h3 class="api-block-title">Document Management</h3>
+        <div class="endpoint">
+          <div class="method post">POST</div>
+          <div class="path">/api/docs</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Request</b></td><td></td><td></td></tr>
+              <tr><td>title</td><td>string</td><td>Document title</td></tr>
+              <tr><td>template_id</td><td>string?</td><td>Optional template to clone</td></tr>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>doc_id</td><td>string</td><td>UUID of the new document</td></tr>
+              <tr><td>created_at</td><td>timestamp</td><td>ISO 8601 creation time</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="endpoint" style="margin-top:1.6rem;">
+          <div class="method get">GET</div>
+          <div class="path">/api/docs/{doc_id}</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>doc_id</td><td>string</td><td>Document identifier</td></tr>
+              <tr><td>title</td><td>string</td><td>Current title</td></tr>
+              <tr><td>owner_id</td><td>string</td><td>Creator user ID</td></tr>
+              <tr><td>last_edited_by</td><td>string</td><td>User who made last edit</td></tr>
+              <tr><td>last_edited_at</td><td>timestamp</td><td>Time of last edit</td></tr>
+              <tr><td>word_count</td><td>int</td><td>Approximate word count</td></tr>
+              <tr><td>active_editors</td><td>int</td><td>Number of users currently editing</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- API Group: Sharing & Permissions -->
+      <div class="api-block" id="api-share">
+        <h3 class="api-block-title">Sharing &amp; Permissions</h3>
+        <div class="endpoint">
+          <div class="method post">POST</div>
+          <div class="path">/api/docs/{doc_id}/share</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Request</b></td><td></td><td></td></tr>
+              <tr><td>grants[]</td><td>array</td><td>List of {principal, role} pairs</td></tr>
+              <tr><td>grants[].principal</td><td>string</td><td>user:{id}, group:{id}, or domain:{name}</td></tr>
+              <tr><td>grants[].role</td><td>enum</td><td>VIEWER | COMMENTER | EDITOR | OWNER</td></tr>
+              <tr><td>notify</td><td>bool</td><td>Send email notification to grantees</td></tr>
+              <tr><td>message</td><td>string?</td><td>Custom message in notification email</td></tr>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>acl[]</td><td>array</td><td>Updated full ACL of the document</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="endpoint" style="margin-top:1.6rem;">
+          <div class="method put">PUT</div>
+          <div class="path">/api/docs/{doc_id}/link-sharing</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Request</b></td><td></td><td></td></tr>
+              <tr><td>access</td><td>enum</td><td>RESTRICTED | ANYONE_WITH_LINK | DOMAIN_ONLY</td></tr>
+              <tr><td>role</td><td>enum</td><td>Default role for link access: VIEWER | COMMENTER | EDITOR</td></tr>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>share_link</td><td>string</td><td>https://docs.example.com/d/{doc_id}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- API Group: Comments -->
+      <div class="api-block" id="api-comments">
+        <h3 class="api-block-title">Comments &amp; Suggestions</h3>
+        <div class="endpoint">
+          <div class="method post">POST</div>
+          <div class="path">/api/docs/{doc_id}/comments</div>
+        </div>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><b>Request</b></td><td></td><td></td></tr>
+              <tr><td>anchor</td><td>object</td><td>{start_offset, end_offset} in document model</td></tr>
+              <tr><td>content</td><td>string</td><td>Comment text (supports @mentions)</td></tr>
+              <tr><td>type</td><td>enum</td><td>COMMENT | SUGGESTION (suggestion includes replacement text)</td></tr>
+              <tr><td>suggestion_ops</td><td>array?</td><td>For SUGGESTION: ops that would apply the suggested edit</td></tr>
+              <tr><td><b>Response</b></td><td></td><td></td></tr>
+              <tr><td>comment_id</td><td>string</td><td>UUID of the new comment</td></tr>
+              <tr><td>thread_id</td><td>string</td><td>Discussion thread ID</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 04 STATE MACHINE ───────── -->
+  <section class="section" id="s-state">
+    <div class="section-inner">
+      <div class="section-label">04</div>
+      <h2 class="section-title">State Machines</h2>
+
+      <!-- Client OT State Machine -->
+      <h3 style="color:var(--teal);margin-bottom:1.2rem;">Client OT State Machine</h3>
+      <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+        Each client maintains a local OT state machine that governs when operations can be sent to the server.
+        The <b>1-op-in-flight</b> rule ensures the server only transforms against one client op at a time.
+      </p>
+
+      <div class="flow-step">
+        <div class="flow-badge">S1</div>
+        <div class="flow-body">
+          <b>SYNCHRONIZED</b> — Client and server are in sync. Local document matches server state at revision <code>r</code>. Any new local edit transitions immediately to S2.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">S2</div>
+        <div class="flow-body">
+          <b>AWAITING_ACK</b> — Client has sent one <code>op</code> to the server and is waiting for <code>ack</code>. During this state:
+          <ul style="margin-top:.6rem;">
+            <li><b>Receive <code>ack</code></b> → The server accepted our op. Update local server_rev. Transition → S1 (SYNCHRONIZED).</li>
+            <li><b>Receive <code>remote_op</code></b> → Another user's edit arrived. Transform our in-flight op against the remote op using OT. Stay in S2.</li>
+            <li><b>Local edit</b> → User types more. Cannot send yet (1-op-in-flight). Buffer edits locally, compose into a pending op. Transition → S3.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">S3</div>
+        <div class="flow-body">
+          <b>AWAITING_ACK + BUFFER</b> — Client has one in-flight op AND a buffered pending op. During this state:
+          <ul style="margin-top:.6rem;">
+            <li><b>Receive <code>ack</code></b> → In-flight op accepted. Immediately send the buffered op as the new in-flight. Transition → S2.</li>
+            <li><b>Receive <code>remote_op</code></b> → Transform BOTH in-flight and buffered ops against remote op. Stay in S3.</li>
+            <li><b>Local edit</b> → Compose new edit into the existing buffer. Stay in S3.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note-card" style="margin-top:1.6rem;">
+        <b>Why compose the buffer?</b> — If the user types "abc" while awaiting ack, we don't queue three ops. We compose insert("a"), insert("b"), insert("c") into a single insert("abc"). This minimizes network round-trips and transform complexity.
+      </div>
+
+      <!-- Document Session Lifecycle -->
+      <h3 style="color:var(--teal);margin:2.4rem 0 1.2rem;">Document Session Lifecycle</h3>
+      <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+        Each document in memory on the Collaboration Service goes through these states. This manages resource allocation and ensures graceful cleanup.
+      </p>
+
+      <div class="flow-step">
+        <div class="flow-badge" style="background:var(--teal);">L1</div>
+        <div class="flow-body">
+          <b>LOADING</b> — First user opens the doc. Service loads latest snapshot from S3, replays any ops from PostgreSQL since that snapshot, and reconstructs the in-memory document model. Timeout: 5 s → fail with DOC_LOAD_TIMEOUT.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge" style="background:var(--teal);">L2</div>
+        <div class="flow-body">
+          <b>ACTIVE</b> — One or more users are editing. The service holds the document model in memory, accepts ops via WebSocket, transforms and broadcasts them. Checkpoint triggers: every 30 seconds OR every 100 ops, whichever comes first.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge" style="background:var(--teal);">L3</div>
+        <div class="flow-body">
+          <b>CHECKPOINTING</b> — Serialize the in-memory model to S3, record the checkpoint in <code>doc_snapshots</code>, and truncate applied ops. Ops continue to be accepted during checkpoint (they queue). If checkpoint fails, retry up to 3 times, then force-evict with error.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge" style="background:var(--teal);">L4</div>
+        <div class="flow-body">
+          <b>IDLE</b> — All users disconnected but document is still in memory. Grace period: 5 minutes. If a user reconnects within this window, transition back to ACTIVE instantly (no S3 reload). After timeout → L5.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge" style="background:var(--teal);">L5</div>
+        <div class="flow-body">
+          <b>CLOSED</b> — Final checkpoint written, in-memory state evicted, WebSocket connections closed. Next access starts fresh from L1. The document's shard assignment is released for rebalancing.
+        </div>
+      </div>
+
+      <div class="note-card" style="margin-top:1.6rem;">
+        <b>Crash mid-ACTIVE</b> — If the Collaboration Service crashes, the Kafka WAL has all ops since the last checkpoint. A standby node loads the snapshot + replays WAL ops to recover the document in &lt;2 s. Connected clients receive a <code>snapshot</code> frame to re-sync.
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 05 DATA FLOWS ───────── -->
+  <section class="section" id="s-flows">
+    <div class="section-inner">
+      <div class="section-label">05</div>
+      <h2 class="section-title">Data Flows</h2>
+
+      <!-- F-01: Real-Time Collaboration -->
+      <div class="flow-block" id="flow-collab">
+        <h3 class="flow-title">F-01 &nbsp;Real-Time Collaborative Editing</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+          End-to-end path of a single keystroke from one user to all collaborators. This is the critical hot path — every millisecond matters.
+        </p>
+        <div class="flow-step">
+          <div class="flow-badge">1</div>
+          <div class="flow-body">
+            <b>Local Apply</b> — User types a character. The editor immediately applies the op to the local document model (optimistic update). UI reflects the change with zero latency.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">2</div>
+          <div class="flow-body">
+            <b>Send Op</b> — If in SYNCHRONIZED state, client sends <code>{type: "op", rev: 42, ops: [insert("H", pos:7)]}</code> over WebSocket. Transitions to AWAITING_ACK. If already in AWAITING_ACK, the op is composed into the buffer.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">3</div>
+          <div class="flow-body">
+            <b>WAL Write</b> — Collaboration Service receives the op and appends it to Kafka (WAL) before processing. This ensures durability — if the server crashes after this point, the op is recoverable.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">4</div>
+          <div class="flow-body">
+            <b>Mutex Acquire</b> — Per-document mutex acquired. Only one op is processed at a time for a given document. This serialization point is what makes server-authoritative OT work.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">5</div>
+          <div class="flow-body">
+            <b>Transform</b> — If the client's <code>rev</code> is behind the server's head, fetch all ops between client_rev and server_head from the ops log. Transform the incoming op against each one (OT). This produces the op that can be applied to the current server state.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">6</div>
+          <div class="flow-body">
+            <b>Apply &amp; Persist</b> — Apply the transformed op to the in-memory document model. Write to <code>doc_ops</code> table with the new server_rev. Increment the server revision counter. Release mutex.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">7</div>
+          <div class="flow-body">
+            <b>ACK Sender</b> — Send <code>ack</code> with new <code>server_rev</code> back to the originating client. Client transitions from AWAITING_ACK → SYNCHRONIZED (or sends buffered op if in AWAITING_ACK+BUFFER).
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">8</div>
+          <div class="flow-body">
+            <b>Broadcast</b> — Send <code>remote_op</code> to all OTHER connected clients on the same document. Each receiving client transforms the remote op against any local pending ops and applies it.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">9</div>
+          <div class="flow-body">
+            <b>Checkpoint Check</b> — If ops_since_snapshot ≥ 100 or last_checkpoint > 30 s ago, trigger an async checkpoint: serialize document model → S3, record in <code>doc_snapshots</code>, truncate old ops.
+          </div>
+        </div>
+
+        <div class="note-card" style="margin-top:1.6rem;">
+          <b>Latency budget</b> — Steps 3-8 target &lt;50 ms p99. WAL write (3) ~5 ms, mutex + transform (4-5) ~10 ms, persist (6) ~15 ms, network broadcast (7-8) ~10 ms. Total: ~40 ms typical.
+        </div>
+      </div>
+
+      <!-- F-02: Crash Recovery -->
+      <div class="flow-block" id="flow-recovery">
+        <h3 class="flow-title">F-02 &nbsp;Crash Recovery</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+          When a Collaboration Service node crashes, connected clients lose their WebSocket. The system must recover the document state and reconnect clients within the 2 s SLA.
+        </p>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">1</div>
+          <div class="flow-body">
+            <b>Failure Detection</b> — Health checker detects the crashed node within 500 ms (missed 3 heartbeats at 150 ms interval). Marks the node as dead in the service registry.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">2</div>
+          <div class="flow-body">
+            <b>Shard Reassignment</b> — The document's shard is reassigned to a standby node. The standby node begins recovery for all documents that were active on the crashed node.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">3</div>
+          <div class="flow-body">
+            <b>Snapshot Load</b> — Load the latest checkpoint from S3 for each affected document. This gives us the document state as of the last checkpoint.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">4</div>
+          <div class="flow-body">
+            <b>WAL Replay</b> — Read all ops from Kafka (WAL) since the last checkpoint. Replay them in order against the loaded snapshot to reconstruct the exact server state at the time of crash.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">5</div>
+          <div class="flow-body">
+            <b>State Verified</b> — Validate the reconstructed document model (hash check against last known hash in ops log). Document is now ready to accept new connections.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">6</div>
+          <div class="flow-body">
+            <b>Client Reconnect</b> — Clients detect WebSocket disconnection and request a new ticket via <code>POST /api/collab/ticket</code>. Gateway routes to the new shard. Client receives a <code>snapshot</code> frame if needed.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:#ef4444;">7</div>
+          <div class="flow-body">
+            <b>Catch-Up</b> — If the client has local unacknowledged ops (was in AWAITING_ACK or AWAITING_ACK+BUFFER), it re-sends them after connecting. The server transforms and applies as normal.
+          </div>
+        </div>
+
+        <div class="note-card" style="margin-top:1.6rem;">
+          <b>Recovery time budget</b> — Detection: 500 ms + Shard reassignment: 200 ms + Snapshot load: 500 ms + WAL replay: 300 ms + Client reconnect: 500 ms = ~2 s total. Kafka retention for WAL: 24 hours (covers long outages). Checkpoint every 30 s ensures WAL replay is at most ~30 s of ops.
+        </div>
+      </div>
+
+      <!-- F-03: Version History -->
+      <div class="flow-block" id="flow-history">
+        <h3 class="flow-title">F-03 &nbsp;Version History &amp; Restore</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+          Users can view the edit history of a document and restore to any previous version.
+        </p>
+        <div class="flow-step">
+          <div class="flow-badge">1</div>
+          <div class="flow-body">
+            <b>Request History</b> — Client calls <code>GET /api/docs/{id}/history?granularity=auto</code>. The server groups checkpoints into meaningful versions (auto-coalesces rapid edits into sessions).
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">2</div>
+          <div class="flow-body">
+            <b>Load Snapshot</b> — When user selects a version, load that checkpoint from S3. Render as read-only preview with diff highlighting against the current version.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">3</div>
+          <div class="flow-body">
+            <b>Restore</b> — "Restore this version" creates a NEW set of ops that transform the current document into the target version. Active collaborators see the restore as normal incoming edits — no disruption.
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-badge">4</div>
+          <div class="flow-body">
+            <b>Audit</b> — Restore event logged to audit trail with who restored, from which version, and when. The previous state is still recoverable from the ops log.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 06 DATABASE DESIGN ───────── -->
+  <section class="section" id="s-db">
+    <div class="section-inner">
+      <div class="section-label">06</div>
+      <h2 class="section-title">Database Design</h2>
+
+      <!-- DB1: Document Metadata -->
+      <div class="db-block" id="db1">
+        <h3 class="db-title">DB-1 &nbsp;Document Metadata — PostgreSQL</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+          Core document information. Separated from the collaborative data to allow fast listing and search without touching the ops log.
+        </p>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>doc_id</td><td>UUID PK</td><td>Immutable document identifier</td></tr>
+              <tr><td>title</td><td>TEXT</td><td>Document title (denormalized for listing)</td></tr>
+              <tr><td>owner_id</td><td>UUID FK</td><td>Creator of the document</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>Creation time</td></tr>
+              <tr><td>updated_at</td><td>TIMESTAMPTZ</td><td>Last modification (updated on each op)</td></tr>
+              <tr><td>word_count</td><td>INT</td><td>Approximate, updated on checkpoint</td></tr>
+              <tr><td>is_deleted</td><td>BOOL</td><td>Soft delete (trash), hard delete after 30 days</td></tr>
+              <tr><td>current_rev</td><td>BIGINT</td><td>Current server revision number</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-card" style="margin-top:1rem;">
+          <b>Indexes</b>: (owner_id, updated_at DESC) for "My Documents" listing, (is_deleted, updated_at) for trash cleanup job.
+        </div>
+      </div>
+
+      <!-- DB2: Document Snapshots -->
+      <div class="db-block" id="db2">
+        <h3 class="db-title">DB-2 &nbsp;Document Snapshots — S3 + PostgreSQL index</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+          Periodic checkpoints of the full document model. Stored as compressed protobuf in S3 with metadata tracked in PostgreSQL.
+        </p>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>doc_id</td><td>UUID</td><td>FK to documents</td></tr>
+              <tr><td>version</td><td>BIGINT</td><td>Server revision at time of snapshot</td></tr>
+              <tr><td>snapshot_url</td><td>TEXT</td><td>S3 path: s3://docs-snapshots/{doc_id}/{version}.pb.zst</td></tr>
+              <tr><td>snapshot_hash</td><td>CHAR(64)</td><td>SHA-256 of serialized model (integrity check)</td></tr>
+              <tr><td>ops_since</td><td>INT</td><td>Number of ops applied since previous snapshot</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>When checkpoint was created</td></tr>
+              <tr><td colspan="3" style="text-align:center;color:var(--text-secondary);">PK: (doc_id, version)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-card" style="margin-top:1rem;">
+          <b>Retention</b>: Keep all snapshots for 30 days (version history). After 30 days, keep daily snapshots only. After 1 year, keep monthly snapshots. This enables "See version history" while bounding storage.
+        </div>
+      </div>
+
+      <!-- DB3: Operations Log -->
+      <div class="db-block" id="db3">
+        <h3 class="db-title">DB-3 &nbsp;Operations Log — PostgreSQL (partitioned)</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+          Every operation applied to a document. This is the source of truth for OT — the ops log IS the document history. Partitioned by doc_id hash for scalability.
+        </p>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>doc_id</td><td>UUID</td><td>FK to documents</td></tr>
+              <tr><td>seq_num</td><td>BIGINT</td><td>Monotonically increasing per document (= server_rev)</td></tr>
+              <tr><td>user_id</td><td>UUID</td><td>Who submitted this op</td></tr>
+              <tr><td>op_type</td><td>ENUM</td><td>INSERT, DELETE, RETAIN, FORMAT, SPLIT, MERGE</td></tr>
+              <tr><td>op_data</td><td>JSONB</td><td>Full operation payload: {pos, text, attrs, ...}</td></tr>
+              <tr><td>client_rev</td><td>BIGINT</td><td>Client's revision when op was sent (for transform audit)</td></tr>
+              <tr><td>server_ts</td><td>TIMESTAMPTZ</td><td>When server applied this op</td></tr>
+              <tr><td colspan="3" style="text-align:center;color:var(--text-secondary);">PK: (doc_id, seq_num) · Partitioned by hash(doc_id)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-card" style="margin-top:1rem;">
+          <b>Truncation</b>: After a snapshot is verified, ops with seq_num &lt; snapshot.version can be moved to cold storage (S3 Glacier) for long-term audit. Active ops table only holds ops since last checkpoint. This keeps the hot table small and fast.
+        </div>
+      </div>
+
+      <!-- DB4: ACL -->
+      <div class="db-block" id="db4">
+        <h3 class="db-title">DB-4 &nbsp;Access Control — PostgreSQL</h3>
+        <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+          Document-level ACL. Evaluated on ticket request and cached in the collab ticket JWT.
+        </p>
+        <div class="param-table">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>doc_id</td><td>UUID</td><td>FK to documents</td></tr>
+              <tr><td>principal</td><td>TEXT</td><td>user:{id}, group:{id}, domain:{name}, or ANYONE</td></tr>
+              <tr><td>role</td><td>ENUM</td><td>OWNER, EDITOR, COMMENTER, VIEWER</td></tr>
+              <tr><td>granted_by</td><td>UUID</td><td>Who granted this access</td></tr>
+              <tr><td>granted_at</td><td>TIMESTAMPTZ</td><td>When access was granted</td></tr>
+              <tr><td>expires_at</td><td>TIMESTAMPTZ?</td><td>Optional expiration for temporary access</td></tr>
+              <tr><td colspan="3" style="text-align:center;color:var(--text-secondary);">PK: (doc_id, principal)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note-card" style="margin-top:1rem;">
+          <b>Link sharing</b>: Represented as principal=ANYONE with role=VIEWER/COMMENTER/EDITOR. Domain restriction uses principal=domain:example.com. ACL evaluation order: explicit user grant > group grant > domain grant > ANYONE.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 07 OT DEEP DIVE ───────── -->
+  <section class="section" id="s-ot">
+    <div class="section-inner">
+      <div class="section-label">07</div>
+      <h2 class="section-title">Operational Transform Deep Dive</h2>
+
+      <!-- OT Walkthrough -->
+      <h3 style="color:var(--teal);margin-bottom:1.2rem;">Walkthrough: Two Concurrent Edits</h3>
+      <p style="color:var(--text-secondary);margin-bottom:1.6rem;">
+        Alice and Bob are editing the document "ABCD" simultaneously. Alice inserts "X" at position 1, Bob deletes character at position 3. Both start from revision 5.
+      </p>
+
+      <div class="flow-step">
+        <div class="flow-badge">1</div>
+        <div class="flow-body">
+          <b>Initial State (rev 5)</b>: Document = "ABCD". Alice sees "ABCD", Bob sees "ABCD".
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">2</div>
+        <div class="flow-body">
+          <b>Alice types</b>: insert("X", pos:1) → local doc becomes "A<b>X</b>BCD". Sends op to server with rev:5.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">3</div>
+        <div class="flow-body">
+          <b>Bob deletes</b>: delete(pos:3) → local doc becomes "ABC" (removed "D"). Sends op to server with rev:5. But Alice's op arrives first.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">4</div>
+        <div class="flow-body">
+          <b>Server processes Alice's op</b>: rev 5 matches server head → no transform needed. Apply insert("X", pos:1). Server doc = "AXBCD", rev → 6. ACK Alice, broadcast to Bob.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">5</div>
+        <div class="flow-body">
+          <b>Server processes Bob's op</b>: Bob's rev=5 but server is at rev=6. Need to transform Bob's op against Alice's op (rev 5→6).
+          <br><br>
+          <b>Transform</b>: Bob's delete(pos:3) vs Alice's insert(pos:1). Since Alice inserted BEFORE Bob's delete position, shift Bob's position right by 1. Transformed: delete(pos:<b>4</b>). Apply to "AXBCD" → "AXBC". Server rev → 7.
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-badge">6</div>
+        <div class="flow-body">
+          <b>Both converge</b>: Alice receives Bob's transformed delete(pos:4), applies to "AXBCD" → "AXBC". Bob receives Alice's insert("X", pos:1), transforms his pending ops, applies → "AXBC". Both see "AXBC" at rev 7. ✓ Convergence achieved.
+        </div>
+      </div>
+
+      <!-- Server Write Path -->
+      <h3 style="color:var(--teal);margin:2.4rem 0 1.2rem;">Server Write Path (Pseudocode)</h3>
+      <div style="background:var(--bg-secondary);border-radius:12px;padding:1.6rem;font-family:monospace;font-size:.85rem;line-height:1.7;overflow-x:auto;color:var(--text-primary);">
+        <pre style="margin:0;white-space:pre-wrap;"><code>function handleOp(docId, clientOp, clientRev):
+    mutex.acquire(docId)
+    try:
+        serverHead = getServerRev(docId)
+
+        // Transform against all ops the client hasn't seen
+        if clientRev < serverHead:
+            missedOps = getOps(docId, from=clientRev, to=serverHead)
+            for each serverOp in missedOps:
+                clientOp = transform(clientOp, serverOp)
+
+        // Apply to server document model
+        doc = getDocModel(docId)
+        doc.apply(clientOp)
+
+        // Persist
+        newRev = serverHead + 1
+        writeOp(docId, newRev, clientOp)
+        writeToKafka(docId, newRev, clientOp)  // WAL
+
+        // Respond
+        sendAck(clientId, newRev)
+        broadcast(docId, clientOp, excludeClient=clientId)
+
+        // Maybe checkpoint
+        if shouldCheckpoint(docId):
+            asyncCheckpoint(docId, doc, newRev)
+    finally:
+        mutex.release(docId)</code></pre>
+      </div>
+
+      <!-- Transform Rules -->
+      <h3 style="color:var(--teal);margin:2.4rem 0 1.2rem;">Transform Rules</h3>
+      <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+        The <code>transform(opA, opB)</code> function takes two concurrent ops and returns a transformed opA' that achieves the same intent when applied after opB.
+      </p>
+      <div class="param-table">
+        <table>
+          <thead><tr><th>Op A</th><th>Op B</th><th>Transform Rule</th></tr></thead>
+          <tbody>
+            <tr><td>insert(pos_a)</td><td>insert(pos_b)</td><td>If pos_a &le; pos_b: no change. If pos_a &gt; pos_b: pos_a' = pos_a + len(B)</td></tr>
+            <tr><td>insert(pos_a)</td><td>delete(pos_b)</td><td>If pos_a &le; pos_b: no change. If pos_a &gt; pos_b: pos_a' = pos_a - len(B)</td></tr>
+            <tr><td>delete(pos_a)</td><td>insert(pos_b)</td><td>If pos_a &lt; pos_b: no change. If pos_a &ge; pos_b: pos_a' = pos_a + len(B)</td></tr>
+            <tr><td>delete(pos_a)</td><td>delete(pos_b)</td><td>If ranges overlap: shrink A to non-overlapping portion. If pos_a &gt; pos_b: pos_a' = pos_a - len(B)</td></tr>
+            <tr><td>format(range_a)</td><td>insert(pos_b)</td><td>If insert inside range: expand range_a by len(B)</td></tr>
+            <tr><td>format(range_a)</td><td>delete(range_b)</td><td>If delete overlaps range: shrink range_a accordingly</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Convergence Guarantee -->
+      <h3 style="color:var(--teal);margin:2.4rem 0 1.2rem;">Convergence Guarantee — TP1</h3>
+      <p style="color:var(--text-secondary);margin-bottom:1.2rem;">
+        Transformation Property 1 (TP1) states: for any two concurrent operations A and B, applying A then B' (B transformed against A) must produce the same document state as applying B then A' (A transformed against B).
+      </p>
+      <div style="background:var(--bg-secondary);border-radius:12px;padding:1.6rem;font-family:monospace;font-size:.9rem;text-align:center;color:var(--text-primary);">
+        apply(apply(doc, A), transform(B, A)) = apply(apply(doc, B), transform(A, B))
+      </div>
+      <div class="note-card" style="margin-top:1.2rem;">
+        <b>Why server-authoritative OT is simpler</b> — TP1 is sufficient for correctness when there's a central server that serializes ops. Peer-to-peer OT requires the stronger TP2 property, which is much harder to satisfy. Google Docs uses server-authoritative OT precisely because TP1 alone is provably correct in this model.
+      </div>
+
+      <!-- Scaling OT -->
+      <h3 style="color:var(--teal);margin:2.4rem 0 1.2rem;">Scaling the OT Server</h3>
+      <div class="param-table">
+        <table>
+          <thead><tr><th>Approach</th><th>How</th><th>Limit</th></tr></thead>
+          <tbody>
+            <tr><td><b>Document sharding</b></td><td>Hash doc_id to assign each document to exactly one collab server. All ops for a doc go to the same server.</td><td>Scales linearly with servers. Hot documents still bottleneck on one server.</td></tr>
+            <tr><td><b>Paragraph-level OT</b></td><td>Split document into independently editable regions. Each paragraph has its own ops log and revision counter.</td><td>Concurrent edits to different paragraphs need no transform. Same-paragraph edits still serialize.</td></tr>
+            <tr><td><b>Connection offloading</b></td><td>Separate WebSocket termination (fan-out servers) from OT processing (transform servers). Fan-out servers handle 100K+ connections each.</td><td>Transform servers handle pure computation, no network I/O. Can scale independently.</td></tr>
+            <tr><td><b>Read replicas</b></td><td>Viewers and commenters connect to read-only replicas that receive the op stream. Only editors connect to the OT server.</td><td>Dramatically reduces load on OT servers since most users are viewers.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 08 SCALABILITY ───────── -->
+  <section class="section" id="s-scale">
+    <div class="section-inner">
+      <div class="section-label">08</div>
+      <h2 class="section-title">Scalability</h2>
+
+      <div class="param-table">
+        <table>
+          <thead><tr><th>Component</th><th>Bottleneck</th><th>Target</th><th>Strategy</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>WebSocket Connections</b></td>
+              <td>Memory per connection (~50 KB)</td>
+              <td>10M concurrent</td>
+              <td>Connection fan-out servers (100K conns each) separate from OT servers. Horizontal scaling behind L4 load balancer. Sticky sessions by doc_id.</td>
+            </tr>
+            <tr>
+              <td><b>OT Transform Servers</b></td>
+              <td>CPU (transform computation)</td>
+              <td>&lt;50 ms p99 per op</td>
+              <td>Document sharding (consistent hash). Each server handles ~50K active documents. Hot documents get dedicated instances. Paragraph-level OT for 200+ user docs.</td>
+            </tr>
+            <tr>
+              <td><b>doc_ops Table</b></td>
+              <td>Write throughput</td>
+              <td>500K ops/s globally</td>
+              <td>Partitioned by hash(doc_id). Aggressive truncation after checkpoint. Only active ops in hot table; historical ops in S3 Glacier. Per-partition: ~5K writes/s.</td>
+            </tr>
+            <tr>
+              <td><b>doc_snapshots (S3)</b></td>
+              <td>Checkpoint write rate</td>
+              <td>100K checkpoints/min</td>
+              <td>Compressed protobuf (~10 KB avg). Async writes don't block op processing. S3 handles throughput natively. Lifecycle rules manage retention tiers.</td>
+            </tr>
+            <tr>
+              <td><b>Kafka WAL</b></td>
+              <td>Partition throughput</td>
+              <td>1M ops/s</td>
+              <td>Partitioned by doc_id (same partition = ordered within doc). 256 partitions, 3x replication. Retention: 24 hours (checkpoint covers longer). Consumer groups for audit/analytics.</td>
+            </tr>
+            <tr>
+              <td><b>Redis (Sessions)</b></td>
+              <td>Memory for presence data</td>
+              <td>10M active sessions</td>
+              <td>~200 bytes per session (user_id, doc_id, cursor_pos, color). Cluster mode with 8 shards. TTL: 5 min (auto-cleanup on disconnect). Pub/sub for cursor broadcasts.</td>
+            </tr>
+            <tr>
+              <td><b>Document Metadata DB</b></td>
+              <td>Read throughput (listing)</td>
+              <td>100K reads/s</td>
+              <td>Read replicas (3 per region). Materialized views for "Recent Documents" and "Shared with Me". CDN caching for public docs metadata. Connection pooling (PgBouncer).</td>
+            </tr>
+            <tr>
+              <td><b>Cross-Region Latency</b></td>
+              <td>OT requires single authority</td>
+              <td>&lt;150 ms intercontinental</td>
+              <td>Documents homed to owner's region. Remote collaborators connect via regional edge proxies that batch and pipeline ops. Consider CRDT for latency-insensitive features (comments, presence).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note-card" style="margin-top:1.6rem;">
+        <b>Multi-region architecture</b> — Unlike file storage (which can use multi-master replication), real-time OT requires a single authoritative server per document. We solve cross-region latency with: (1) home the document in the owner's nearest region, (2) edge proxies in every region that terminate WebSockets locally, (3) batched op forwarding over dedicated inter-region links, (4) client-side prediction to hide network latency.
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 09 TRADEOFFS ───────── -->
+  <section class="section" id="s-tradeoffs">
+    <div class="section-inner">
+      <div class="section-label">09</div>
+      <h2 class="section-title">Tradeoffs</h2>
+
+      <div class="tradeoff-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.6rem;">
+
+        <!-- OT vs CRDT -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">OT vs CRDT</h4>
+          <p><b>OT (our choice)</b>: Server-authoritative, proven at Google's scale since 2006. Simpler client logic (TP1 sufficient). Smaller op payloads. Requires central server per document.</p>
+          <p style="margin-top:.8rem;"><b>CRDT</b>: No central authority needed — true peer-to-peer possible. Better offline support (merge without server). But: larger metadata overhead (tombstones, vector clocks), harder to implement rich text formatting, less mature for production document editors.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: OT. We already need a server for ACL, persistence, and presence. The "no server" advantage of CRDTs doesn't apply. OT's smaller wire format and proven track record in document editing wins.</p>
+        </div>
+
+        <!-- Checkpoint Frequency -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">Checkpoint Frequency vs Recovery Time</h4>
+          <p><b>Frequent checkpoints (every 30s / 100 ops)</b>: Fast recovery (&lt;2 s). Small WAL replay window. But: more S3 writes, more CPU for serialization, brief pauses during checkpoint.</p>
+          <p style="margin-top:.8rem;"><b>Infrequent checkpoints (every 5 min / 1000 ops)</b>: Less S3 cost. But: longer WAL replay on crash (up to 1000 ops), slower recovery, larger ops table.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: 30s / 100 ops. The 2s recovery SLA demands short WAL replay. S3 put cost is ~$0.005/1000 requests — negligible at scale. Checkpoint is async and doesn't block ops.</p>
+        </div>
+
+        <!-- Document-level vs Paragraph-level OT -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">Document-Level vs Paragraph-Level OT</h4>
+          <p><b>Document-level</b>: Single ops log per document. All edits serialize through one mutex. Simpler to reason about. Sufficient for &lt;50 concurrent editors.</p>
+          <p style="margin-top:.8rem;"><b>Paragraph-level</b>: Independent ops logs per paragraph. Concurrent edits to different paragraphs never conflict. Enables higher concurrency. But: structural ops (moving paragraphs, merging/splitting) require cross-paragraph coordination.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: Document-level by default. Paragraph-level for documents with &gt;50 active editors (auto-detected). The complexity of cross-paragraph structural ops isn't worth it for typical usage patterns.</p>
+        </div>
+
+        <!-- WebSocket vs SSE -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">WebSocket vs Server-Sent Events</h4>
+          <p><b>WebSocket (our choice)</b>: Full duplex — client sends ops and receives remote ops on the same connection. Lower latency for rapid back-and-forth. Native binary frame support.</p>
+          <p style="margin-top:.8rem;"><b>SSE + HTTP POST</b>: Simpler infrastructure (works through HTTP proxies). Better for read-heavy use cases. But: two connections per client (SSE for receive, POST for send), higher latency for ops, no binary frames.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: WebSocket. Real-time collaborative editing is fundamentally bidirectional with sub-50ms latency requirements. SSE would add unacceptable latency for the POST-based send path.</p>
+        </div>
+
+        <!-- In-Memory vs Persistent Document Model -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">In-Memory vs Persistent Document Model</h4>
+          <p><b>In-memory (our choice)</b>: Document model lives in RAM on the collab server. Transforms are instant. Checkpointed to S3 periodically. Risk: server crash loses in-memory state between checkpoints.</p>
+          <p style="margin-top:.8rem;"><b>Persistent (Redis/DB)</b>: Every op immediately persisted to shared state. Any server can pick up any document. But: adds 5-10 ms per op for the persistence round-trip, which violates our &lt;50 ms p99 target.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: In-memory with WAL. The Kafka WAL gives us durability without the per-op latency penalty. Recovery from crash replays WAL ops — at most 30 s of ops, taking &lt;500 ms to replay.</p>
+        </div>
+
+        <!-- Structured Doc Model vs Plain Text -->
+        <div class="note-card" style="border-left:4px solid var(--teal);">
+          <h4 style="color:var(--teal);margin-bottom:.8rem;">Structured Document Model vs Plain Text + Markup</h4>
+          <p><b>Structured model (our choice)</b>: Document is a tree of typed nodes (paragraph, heading, list, table). OT ops are semantic: insert_text, apply_format, split_node. Preserves document structure during transforms.</p>
+          <p style="margin-top:.8rem;"><b>Plain text + markup</b>: Document stored as flat text with embedded markup (like Markdown). Simpler OT (just text insert/delete). But: formatting ops can corrupt markup, structure-changing ops (indent, merge cells) are nearly impossible to handle correctly.</p>
+          <p style="margin-top:.8rem;color:var(--text-secondary);"><b>Decision</b>: Structured model. Rich text editing requires understanding document structure. Google Docs uses a similar tree-based model internally. The additional transform rules for structural ops are worth the correctness guarantee.</p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ───────── 10 PITFALLS ───────── -->
+  <section class="section" id="s-pitfalls">
+    <div class="section-inner">
+      <div class="section-label">10</div>
+      <h2 class="section-title">Pitfalls &amp; Interview Questions</h2>
+
+      <!-- Pitfall 1 -->
+      <div class="flow-block">
+        <h3 class="flow-title">Q1: Server crashes mid-edit with 50 active users. How do you recover without losing any edits?</h3>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:var(--teal);">A</div>
+          <div class="flow-body">
+            <b>WAL + Checkpoint recovery</b>. Every op is written to Kafka (WAL) before being applied. On crash: (1) standby node loads latest S3 snapshot, (2) replays all Kafka ops since that snapshot, (3) reconstructs exact server state. Clients reconnect and re-send any unacked ops. Zero data loss because WAL is durable before ACK. Recovery target: &lt;2 seconds.
+            <br><br>
+            <b>Key insight</b>: The WAL write happens BEFORE the ACK. Any op the client thinks was accepted is guaranteed to be in Kafka. Any op that wasn't ACKed will be re-sent by the client after reconnection.
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitfall 2 -->
+      <div class="flow-block">
+        <h3 class="flow-title">Q2: 200 users are editing the same document simultaneously. The OT server becomes a bottleneck. How do you scale?</h3>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:var(--teal);">A</div>
+          <div class="flow-body">
+            <b>Paragraph-level OT + connection offloading</b>. Three-pronged approach:
+            <br><br>
+            <b>1. Connection offloading</b>: Separate WebSocket termination (fan-out servers, 100K conns each) from OT processing. Fan-out servers handle presence/cursor broadcasts without touching the OT server.
+            <br><br>
+            <b>2. Paragraph-level OT</b>: When editor count exceeds threshold (e.g., 50), automatically switch to paragraph-level mode. Each paragraph gets its own revision counter and ops log. Concurrent edits to different paragraphs never need transformation.
+            <br><br>
+            <b>3. Read replica offloading</b>: Of the 200 users, likely 150+ are viewers. Route viewers to read-only replicas that receive the op stream. Only editors connect to the OT server.
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitfall 3 -->
+      <div class="flow-block">
+        <h3 class="flow-title">Q3: A user edits offline for 2 hours then reconnects. They have 500 unsynced operations. How do you merge without conflicts?</h3>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:var(--teal);">A</div>
+          <div class="flow-body">
+            <b>Transform chain + smart rebasing</b>. The client cached its base revision (rev at disconnect). On reconnect:
+            <br><br>
+            <b>1. Gap detection</b>: Client sends its base_rev. Server sees the gap (e.g., client at rev 100, server at rev 600 — 500 remote ops happened).
+            <br><br>
+            <b>2. If gap &lt; 1000 ops</b>: Server sends the 500 missed ops. Client transforms its 500 local ops against each of the 500 remote ops. This is O(n²) in the worst case but acceptable for &lt;1000 ops.
+            <br><br>
+            <b>3. If gap &gt; 1000 ops</b>: Server sends a fresh snapshot instead. Client must diff its local version against the snapshot and generate a minimal set of ops that represent the user's offline edits. These ops are then sent as a batch.
+            <br><br>
+            <b>4. Conflict resolution</b>: OT handles the merge mathematically. The user sees their offline edits applied cleanly alongside remote changes. If structural conflicts occur (e.g., both users deleted the same paragraph), the server's version wins and the client's edits are rebased.
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitfall 4 -->
+      <div class="flow-block">
+        <h3 class="flow-title">Q4: Collaborative undo/redo — User A types "hello", User B types "world", then User A presses Ctrl+Z. What happens?</h3>
+        <div class="flow-step">
+          <div class="flow-badge" style="background:var(--teal);">A</div>
+          <div class="flow-body">
+            <b>Selective undo, not global undo</b>. Each user maintains their own undo stack of operations THEY performed. Ctrl+Z undoes only the user's own most recent op, not the global most recent.
+            <br><br>
+            <b>Implementation</b>: When User A presses Ctrl+Z, the client computes the inverse of their last op (insert "hello" → delete "hello"). But this inverse must be transformed against all ops that happened after the original — including Bob's insert "world".
+            <br><br>
+            <b>Example</b>: A inserted "hello" at pos 0, B inserted "world" at pos 5. Document: "helloworld". A presses undo. Inverse of A's op: delete(pos:0, len:5). Transform against B's insert(pos:5): since B's insert is after the delete range, no transform needed. Result: delete "hello", document becomes "world".
+            <br><br>
+            <b>Edge case</b>: If B's edit was INSIDE A's text (e.g., B formatted part of "hello" as bold), A's undo must delete "hello" but preserve B's formatting intent. This requires tracking edit provenance and falls back to "undo removes A's text but keeps B's modifications visible as a new standalone edit."
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  </div><!-- close .page -->
+
+<script>
+const panels = {
+  docclient: {
+    icon: '\u{1F4DD}', title: 'Document Editor Client', subtitle: 'Rich-text editor + local OT engine + WebSocket transport',
+    sections: [
+      { title: 'Editor Engine', items: ['Tree-based document model: paragraphs, headings, lists, tables as typed nodes', 'Each node has attributes (font, size, color, alignment) and children', 'Cursor and selection tracked as (node_id, offset) pairs', 'Rendering via virtual DOM diff — only re-render changed nodes'] },
+      { title: 'Local OT State Machine', items: ['Three states: SYNCHRONIZED, AWAITING_ACK, AWAITING_ACK+BUFFER', '1-op-in-flight rule: send one op, wait for ACK before sending next', 'Buffer composes multiple local edits into single pending op', 'On remote_op: transform local pending ops against incoming remote ops'] },
+      { title: 'WebSocket Transport', items: ['Auto-reconnect with exponential backoff (1s, 2s, 4s, max 30s)', 'Heartbeat ping every 30s — server drops connection after 3 missed pongs', 'Binary frames for ops (protobuf), text frames for cursor/presence', 'Client stores unacked ops in IndexedDB for crash resilience'] },
+      { title: 'Offline Mode', items: ['Ops queued in IndexedDB when disconnected', 'Editor remains fully functional offline — local apply is instant', 'On reconnect: send base_rev + all queued ops for server-side transform', 'If gap > 1000 ops: request fresh snapshot, diff-and-rebase local changes'] }
+    ]
+  },
+  gateway: {
+    icon: '\u{1F6E1}\u{FE0F}', title: 'API Gateway', subtitle: 'Authentication + routing + rate limiting + WebSocket upgrade',
+    sections: [
+      { title: 'Auth Flow', items: ['JWT validation on every HTTP request (RS256, 1h expiry)', 'WebSocket upgrade: validate one-time ticket (not JWT) — ticket embeds user_id, doc_id, shard_id', 'Ticket minted by POST /api/collab/ticket after full auth + ACL check', 'OAuth2 integration for Google, Microsoft, SAML SSO for enterprise'] },
+      { title: 'Routing', items: ['HTTP requests: round-robin to any API server (stateless)', 'WebSocket upgrade: route to specific collab shard based on ticket.shard_id', 'Shard assignment: consistent hash of doc_id → shard → specific collab server', 'Service discovery via Consul — collab server registers its shard assignments'] },
+      { title: 'Rate Limiting', items: ['Token bucket per user: 100 HTTP requests/min, 1000 ops/min via WebSocket', 'Per-document limit: 10,000 ops/min (prevents runaway scripts)', 'Burst allowance: 2x rate for 10s window (handles paste operations)', 'Rate limit info in response headers: X-RateLimit-Remaining, X-RateLimit-Reset'] }
+    ]
+  },
+  collab: {
+    icon: '\u{1F504}', title: 'Collaboration Service', subtitle: 'Server-authoritative OT engine — the brain of real-time editing',
+    sections: [
+      { title: 'Document Lifecycle', items: ['LOADING: first user opens doc → load snapshot from S3, replay ops from PostgreSQL', 'ACTIVE: users editing → hold doc model in memory, accept ops, transform, broadcast', 'CHECKPOINTING: periodic → serialize model to S3, record in doc_snapshots, truncate ops', 'IDLE: all users left → grace period 5 min, then CLOSED → evict from memory'] },
+      { title: 'OT Processing Pipeline', items: ['1. Receive op from client via WebSocket', '2. Append to Kafka WAL (durability before processing)', '3. Acquire per-document mutex (serialization point)', '4. If client_rev < server_head: fetch missed ops, transform incoming op against each', '5. Apply transformed op to in-memory document model', '6. Persist to doc_ops table with new server_rev', '7. Release mutex', '8. ACK sender, broadcast remote_op to all other clients'] },
+      { title: 'Checkpoint Logic', items: ['Trigger: every 30s OR every 100 ops (whichever first)', 'Serialize: document model → compressed protobuf (zstd, typically 10-50 KB)', 'Write: S3 put with server_rev in path: s3://snapshots/{doc_id}/{rev}.pb.zst', 'Record: INSERT into doc_snapshots table (doc_id, version, snapshot_url, hash)', 'Truncate: ops with seq_num < snapshot.version moved to cold storage'] },
+      { title: 'Crash Recovery', items: ['Kafka WAL retains all ops for 24 hours', 'On crash: standby loads latest S3 snapshot + replays Kafka ops since snapshot', 'State reconstructed in <500ms (30s max of ops to replay)', 'Clients detect disconnect, request new ticket, gateway routes to standby', 'Total recovery: <2s including client reconnection'] }
+    ]
+  },
+  docmeta: {
+    icon: '\u{1F4C4}', title: 'Document Metadata Service', subtitle: 'CRUD for document info, listing, search',
+    sections: [
+      { title: 'Core Operations', items: ['Create document: allocate doc_id, initialize empty snapshot, set owner', 'Get document: return metadata (title, owner, word_count, active_editors)', 'List documents: "My Docs", "Shared with Me", "Recent" — all materialized views', 'Search: full-text search over title + content (Elasticsearch index, updated on checkpoint)'] },
+      { title: 'Denormalization', items: ['title and word_count denormalized from document model on each checkpoint', 'active_editors count: read from Redis session store (not from DB)', 'last_edited_by: updated on each checkpoint with the user who made most recent op', 'Materialized views refreshed every 5s for listing queries'] }
+    ]
+  },
+  sharing: {
+    icon: '\u{1F465}', title: 'Sharing & Permission Service', subtitle: 'ACL management + link sharing + permission evaluation',
+    sections: [
+      { title: 'ACL Model', items: ['Principal types: user:{id}, group:{id}, domain:{name}, ANYONE', 'Roles (ordered): OWNER > EDITOR > COMMENTER > VIEWER', 'Evaluation order: explicit user > group > domain > ANYONE (most permissive wins)', 'ACL cached in Redis with 5-min TTL — invalidated on share/unshare'] },
+      { title: 'Link Sharing', items: ['RESTRICTED: only explicitly listed users can access', 'ANYONE_WITH_LINK: anyone with the URL gets the specified role', 'DOMAIN_ONLY: only users in the owning organization\'s domain', 'Link includes doc_id in URL path — no secret token needed (ACL handles auth)'] },
+      { title: 'Permission Check Path', items: ['1. HTTP request → gateway extracts user_id from JWT', '2. Check Redis cache for (doc_id, user_id) → role', '3. Cache miss: query ACL table, evaluate all matching grants', '4. For collab ticket: embed role in ticket JWT — collab server trusts it', '5. Role downgrade: EDITOR → VIEWER takes effect on next ticket request'] }
+    ]
+  },
+  docstore: {
+    icon: '\u{1F4E6}', title: 'Object Store (S3)', subtitle: 'Document snapshots + checkpoint storage',
+    sections: [
+      { title: 'Storage Layout', items: ['Path: s3://docs-snapshots/{doc_id}/{version}.pb.zst', 'Format: compressed protobuf of the full document model (zstd compression)', 'Average size: 10-50 KB for typical documents, up to 5 MB for large docs', 'Immutable: snapshots are never updated — new checkpoint = new version'] },
+      { title: 'Lifecycle', items: ['Hot tier (S3 Standard): all snapshots < 30 days old', 'Warm tier (S3 IA): daily snapshots for 30 days - 1 year', 'Cold tier (S3 Glacier): monthly snapshots for 1-7 years', 'Cost optimization: ~$0.023/GB/month for hot, ~$0.004/GB/month for cold'] }
+    ]
+  },
+  metadb: {
+    icon: '\u{1F5C4}\u{FE0F}', title: 'PostgreSQL', subtitle: 'Document metadata + ops log + ACL + snapshots index',
+    sections: [
+      { title: 'Tables', items: ['documents: doc_id, title, owner_id, created_at, updated_at, current_rev', 'doc_snapshots: (doc_id, version) PK, snapshot_url, snapshot_hash, ops_since', 'doc_ops: (doc_id, seq_num) PK, user_id, op_type, op_data JSONB, server_ts — partitioned by hash(doc_id)', 'doc_acl: (doc_id, principal) PK, role, granted_by, granted_at, expires_at'] },
+      { title: 'Scaling', items: ['doc_ops partitioned by hash(doc_id) — 64 partitions', 'Read replicas (3 per region) for metadata queries', 'Connection pooling via PgBouncer (100 → 20 actual connections per replica)', 'Vacuum tuned for high-churn doc_ops table: autovacuum_naptime=30s'] }
+    ]
+  },
+  cache: {
+    icon: '\u{26A1}', title: 'Redis Cluster', subtitle: 'Session store + presence + cursor broadcast + ACL cache',
+    sections: [
+      { title: 'Data Structures', items: ['Session: HASH doc:{doc_id}:sessions → {user_id: {cursor_pos, color, last_seen}}', 'Presence: SET doc:{doc_id}:active_users → set of user_ids', 'ACL cache: STRING acl:{doc_id}:{user_id} → role (TTL 5 min)', 'Document lock: SET doc:{doc_id}:lock (for maintenance/migration)'] },
+      { title: 'Pub/Sub', items: ['Channel per document: cursor:{doc_id} for cursor position broadcasts', 'Cursor updates sent every 100ms (throttled) — not persisted to DB', 'Presence updates (join/leave) published to channel for real-time user list', 'Cluster mode: 8 shards, 3 replicas each. Hash slot by doc_id.'] }
+    ]
+  },
+  mq: {
+    icon: '\u{1F4E8}', title: 'Kafka', subtitle: 'Write-ahead log (WAL) + event streaming + audit pipeline',
+    sections: [
+      { title: 'WAL (Primary Use)', items: ['Topic: doc-ops, partitioned by doc_id (256 partitions)', 'Every op written to Kafka BEFORE being applied to in-memory model', 'Retention: 24 hours (checkpoints every 30s, so WAL is a safety net)', 'On crash recovery: consumer reads from last checkpoint offset → replays ops'] },
+      { title: 'Event Streaming', items: ['Topic: doc-events for downstream consumers', 'Events: DOC_CREATED, DOC_EDITED (debounced), DOC_SHARED, COMMENT_ADDED', 'Consumers: Notification Service (email/push), Audit Log Service (Cassandra)', 'Search indexer: consumes checkpoint events to update Elasticsearch', 'Analytics: consumes all events for usage metrics and billing'] }
+    ]
+  }
+};
+
+function openPanel(key) {
+  const data = panels[key];
+  if (!data) return;
+  document.getElementById('dp-icon').textContent = data.icon;
+  document.getElementById('dp-title').textContent = data.title;
+  document.getElementById('dp-subtitle').textContent = data.subtitle;
+  const body = document.getElementById('dp-body');
+  body.innerHTML = '';
+  data.sections.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'dp-section';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'dp-sec-title';
+    titleEl.textContent = sec.title;
+    div.appendChild(titleEl);
+    if (sec.text) {
+      const p = document.createElement('p');
+      p.className = 'dp-text';
+      p.textContent = sec.text;
+      div.appendChild(p);
+    }
+    if (sec.items) {
+      const ul = document.createElement('ul');
+      ul.className = 'dp-list';
+      sec.items.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = item;
+        ul.appendChild(li);
+      });
+      div.appendChild(ul);
+    }
+    body.appendChild(div);
+  });
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function closePanel() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function toggleLayer(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleFlow(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleDb(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function toggleApi(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function scrollToSection(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

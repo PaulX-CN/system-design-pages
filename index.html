@@ -340,7 +340,7 @@ footer{
   <div class="hero-title">System Design<br><span>Library</span></div>
   <div class="hero-sub">Production-grade reference designs covering architecture, APIs, data models, state machines, scalability, and tradeoffs. Built for Staff+ engineering interviews.</div>
   <div class="hero-stats">
-    <div class="hero-stat"><div class="stat-val">3</div><div class="stat-label">Complete Designs</div></div>
+    <div class="hero-stat"><div class="stat-val">4</div><div class="stat-label">Complete Designs</div></div>
     <div class="hero-stat"><div class="stat-val">20+</div><div class="stat-label">Sections / Design</div></div>
     <div class="hero-stat"><div class="stat-val">Staff+</div><div class="stat-label">Target Level</div></div>
     <div class="hero-stat"><div class="stat-val">2</div><div class="stat-label">Interview Answers</div></div>
@@ -423,17 +423,17 @@ footer{
         <div class="card-body">
           <div class="card-top">
             <div class="card-icon">&#x1F4C1;</div>
-            <div class="card-badge">Staff Reference · v1</div>
+            <div class="card-badge">Staff Reference · v2</div>
           </div>
           <div class="card-title">Google Drive</div>
-          <div class="card-sub">Cloud file storage · Chunked resumable uploads · Content-addressable dedup · Hierarchical ACL · Delta sync · Real-time collaboration</div>
+          <div class="card-sub">Cloud file storage · Chunked resumable uploads · SHA-256 dedup · Hierarchical ACL · Multi-device delta sync</div>
           <div class="card-chips">
-            <span class="chip hi">API Contracts</span>
             <span class="chip hi">SHA-256 Dedup</span>
             <span class="chip hi">Hierarchical ACL</span>
-            <span class="chip">Delta Sync</span>
-            <span class="chip">OT/CRDT Collab</span>
+            <span class="chip hi">Multi-Device Sync</span>
             <span class="chip">Resumable Upload</span>
+            <span class="chip">Selective Sync</span>
+            <span class="chip">Content-Addressable</span>
           </div>
           <div class="card-metrics">
             <div class="card-metric"><div class="cm-val" style="color:var(--blue)">2B+</div><div class="cm-label">Files Stored</div></div>
@@ -443,7 +443,37 @@ footer{
         </div>
         <div class="card-footer">
           <span class="card-link" style="color:var(--blue)">Open Design &#x2192;</span>
-          <span class="card-sections">9 sections · 5 API groups · 5 data flows · Full DB schema</span>
+          <span class="card-sections">9 sections · 4 API groups · 4 data flows · Full DB schema</span>
+        </div>
+      </a>
+
+      <!-- Google Docs -->
+      <a class="design-card" href="google-docs-system-design.html">
+        <div class="card-accent" style="background:linear-gradient(90deg,#009688,var(--blue))"></div>
+        <div class="card-body">
+          <div class="card-top">
+            <div class="card-icon">&#x1F4DD;</div>
+            <div class="card-badge">Staff Reference · v1</div>
+          </div>
+          <div class="card-title">Google Docs</div>
+          <div class="card-sub">Real-time collaborative editing · Server-authoritative OT · WebSocket protocol · Document model · Crash recovery</div>
+          <div class="card-chips">
+            <span class="chip hi">Operational Transform</span>
+            <span class="chip hi">WebSocket Protocol</span>
+            <span class="chip hi">WAL + Checkpoint</span>
+            <span class="chip">OT vs CRDT</span>
+            <span class="chip">Document Model</span>
+            <span class="chip">Convergence (TP1)</span>
+          </div>
+          <div class="card-metrics">
+            <div class="card-metric"><div class="cm-val" style="color:#009688">500M+</div><div class="cm-label">Documents</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--blue)">10M</div><div class="cm-label">DAU</div></div>
+            <div class="card-metric"><div class="cm-val" style="color:var(--gold)">&lt;50ms</div><div class="cm-label">OT p99</div></div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-link" style="color:#009688">Open Design &#x2192;</span>
+          <span class="card-sections">10 sections · WebSocket protocol · 2 data flows · OT deep dive</span>
         </div>
       </a>
 
