@@ -583,7 +583,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
 <nav>
   <div class="nav-logo">GOOGLE DRIVE</div>
-  <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
+  <div class="nav-item active" onclick="scrollToSection('features')">Features</div>
+  <div class="nav-item" onclick="scrollToSection('overview')">Overview</div>
   <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
   <div class="nav-item" onclick="scrollToSection('api')">API Contracts</div>
   <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
@@ -622,6 +623,49 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <span class="pill">Append-only Audit Trail</span>
     </div>
   </div>
+
+  <!-- FEATURES COVERED -->
+  <section id="features">
+    <div class="sec-head">
+      <span class="sec-num">00</span>
+      <span class="sec-title">Features Covered</span>
+      <span class="sec-tag">What this design addresses</span>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Chunked Resumable Upload</div>
+        <div class="principle-desc">Large file uploads split into chunks with resumption support, server-side reassembly, and progress tracking across network interruptions.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">File Download & CDN Delivery</div>
+        <div class="principle-desc">Pre-signed URL generation, chunk reassembly for download, and CDN caching with geo-distributed edge nodes for low-latency access.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Content-Addressable Deduplication</div>
+        <div class="principle-desc">SHA-256 content hashing at the chunk level, reference counting, and shared storage across users for identical file content.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Delta Sync</div>
+        <div class="principle-desc">Long-poll based change detection, server-side sync cursor, and per-chunk delta transfer to minimize bandwidth for file updates.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Sharing & Hierarchical ACL</div>
+        <div class="principle-desc">Role-based permissions (owner/editor/viewer) with folder inheritance, shareable links with expiry, and domain-scoped access controls.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">File Versioning</div>
+        <div class="principle-desc">Per-file version history with chunk-level tracking, version restore, and optimistic concurrency via ETags to handle concurrent edits.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Search</div>
+        <div class="principle-desc">Full-text search across file names, content, and metadata with Elasticsearch indexing and async content extraction pipelines.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Quota & Storage Management</div>
+        <div class="principle-desc">Per-user storage quota enforcement, tiered storage classes (hot/warm/cold), and lifecycle policies for cost optimization.</div>
+      </div>
+    </div>
+  </section>
 
   <!-- 01 OVERVIEW -->
   <section id="overview">

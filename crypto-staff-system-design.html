@@ -140,6 +140,25 @@ nav{
 
 section{margin-bottom:64px;scroll-margin-top:60px;}
 
+/* feature cards */
+.principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:8px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--gold);
+}
+.principle-title{
+  font-size:13px;font-weight:600;color:var(--gold);
+  margin-bottom:6px;
+}
+.principle-desc{font-size:12px;color:var(--muted2);line-height:1.6;}
+
 /* arch diagram */
 .arch-wrap{
   display:flex;flex-direction:column;gap:3px;
@@ -568,7 +587,8 @@ section{animation:fadeSlide 0.5s ease 0.1s both;}
 
 <nav>
   <div class="nav-logo">CRYPTO SYS DESIGN</div>
-  <div class="nav-item active" onclick="scrollToSection('architecture')">Architecture</div>
+  <div class="nav-item active" onclick="scrollToSection('features')">Features</div>
+  <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
   <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
   <div class="nav-item" onclick="scrollToSection('edgecases')">Edge Cases</div>
   <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
@@ -616,6 +636,49 @@ section{animation:fadeSlide 0.5s ease 0.1s both;}
     <div class="num-card"><div class="num-val">M-of-N</div><div class="num-label">Multi-sig cold wallet ops</div></div>
     <div class="num-card"><div class="num-val">&lt;15s</div><div class="num-label">Quote TTL before expiry</div></div>
   </div>
+
+  <!-- FEATURES COVERED -->
+  <section id="features">
+    <div class="sec-head">
+      <span class="sec-num">00</span>
+      <span class="sec-title">Features Covered</span>
+      <span class="sec-tag">What this design addresses</span>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Buy / Sell Crypto</div>
+        <div class="principle-desc">Full order lifecycle: price quoting with TTL, fiat debit, liquidity routing across OTC desks and exchanges, and ledger settlement.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Crypto Withdrawal</div>
+        <div class="principle-desc">On-chain withdrawal with address validation, sanctions screening, Travel Rule compliance, UTXO selection, HSM signing, and confirmation tracking.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Crypto Deposit</div>
+        <div class="principle-desc">HD wallet address derivation, mempool monitoring, risk-tiered confirmations, AML source screening, and auto-sweep to cold storage.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Custody & Key Management</div>
+        <div class="principle-desc">Hot/warm/cold wallet tiering with M-of-N multi-sig, HSM-backed signing, and automatic sweep/consolidation strategies.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">KYC & Compliance</div>
+        <div class="principle-desc">Tiered KYC verification, AML transaction monitoring via blockchain analytics, FATF Travel Rule enforcement, and 7-year audit trail retention.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Fraud Detection</div>
+        <div class="principle-desc">Real-time fraud scoring (&lt;50ms p99), device fingerprinting, velocity checks, and step-up authentication for high-risk transactions.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Double-Entry Ledger</div>
+        <div class="principle-desc">Append-only event-sourced ledger with CREDIT/DEBIT entries, balance snapshots, and idempotency keys for exactly-once guarantee.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">ACH Failure & Saga Rollback</div>
+        <div class="principle-desc">Compensating transactions for failed ACH pulls after instant-buy credit extension, including debt recovery and account suspension flows.</div>
+      </div>
+    </div>
+  </section>
 
   <!-- ARCHITECTURE -->
   <section id="architecture">

@@ -686,7 +686,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
 <nav>
   <div class="nav-logo" style="color:var(--teal)">GOOGLE DOCS</div>
-  <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
+  <div class="nav-item active" onclick="scrollToSection('features')">Features</div>
+  <div class="nav-item" onclick="scrollToSection('overview')">Overview</div>
   <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
   <div class="nav-item" onclick="scrollToSection('s-api')">API Contracts</div>
   <div class="nav-item" onclick="scrollToSection('s-state')">State Machine</div>
@@ -726,6 +727,49 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <span class="pill">&lt;50ms OT p99 Latency</span>
     </div>
   </div>
+
+  <!-- FEATURES COVERED -->
+  <section id="features">
+    <div class="sec-head">
+      <span class="sec-num">00</span>
+      <span class="sec-title">Features Covered</span>
+      <span class="sec-tag">What this design addresses</span>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Real-Time Collaborative Editing</div>
+        <div class="principle-desc">Server-authoritative Operational Transform (OT) enabling multiple users to edit the same document simultaneously with guaranteed convergence.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Cursor & Presence Awareness</div>
+        <div class="principle-desc">Ephemeral presence tracking via Redis pub/sub showing live cursor positions, selections, and active user indicators in real time.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Crash Recovery</div>
+        <div class="principle-desc">WAL + checkpoint-based recovery ensuring zero data loss when the OT server crashes mid-edit, with &lt;2s recovery time.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Version History & Restore</div>
+        <div class="principle-desc">Periodic snapshot checkpoints with append-only operations log, enabling point-in-time document restoration and full edit history.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Comments & Suggestions</div>
+        <div class="principle-desc">Anchored inline comments and suggestion mode with accept/reject workflows, tied to document positions that survive concurrent edits.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Sharing & Permissions</div>
+        <div class="principle-desc">Role-based access control (owner/editor/commenter/viewer) with shareable links, domain restrictions, and granular permission management.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Offline Editing & Sync</div>
+        <div class="principle-desc">Client-side operation buffering during disconnection with bulk OT reconciliation upon reconnect, handling hundreds of unsynced operations.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">OT Server Scaling</div>
+        <div class="principle-desc">Document-sharded OT processing with consistent hashing, partition splitting for hot documents, and horizontal scaling strategies.</div>
+      </div>
+    </div>
+  </section>
 
   <!-- 01 OVERVIEW -->
   <section id="overview">

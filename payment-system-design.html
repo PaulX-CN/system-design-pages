@@ -551,7 +551,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
 <nav>
   <div class="nav-logo">💳 PAYMENT SYSTEM</div>
-  <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
+  <div class="nav-item active" onclick="scrollToSection('features')">Features</div>
+  <div class="nav-item" onclick="scrollToSection('overview')">Overview</div>
   <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
   <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
   <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
@@ -593,6 +594,49 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <span class="pill">PCI-DSS</span>
     </div>
   </div>
+
+  <!-- FEATURES COVERED -->
+  <section id="features">
+    <div class="sec-head">
+      <span class="sec-num">00</span>
+      <span class="sec-title">Features Covered</span>
+      <span class="sec-tag">What this design addresses</span>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Payment Processing</div>
+        <div class="principle-desc">End-to-end payment initiation, authorization, capture, and settlement via PSP integration with full state machine lifecycle.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Double-Entry Ledger</div>
+        <div class="principle-desc">Immutable append-only ledger with DEBIT/CREDIT entries ensuring financial consistency and real-time balance queries.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Idempotency at Every Layer</div>
+        <div class="principle-desc">Client-generated idempotency keys propagated through gateway, service, and PSP layers to guarantee exactly-once semantics.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Chargeback & Dispute Handling</div>
+        <div class="principle-desc">Full chargeback lifecycle: notification ingestion, evidence submission, representment, and arbitration flows.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Refund Processing</div>
+        <div class="principle-desc">Full and partial refunds with PSP coordination, ledger reversal entries, and state machine transitions.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Settlement & Reconciliation</div>
+        <div class="principle-desc">Daily batch settlement with PSP, T+1/T+2 reconciliation, and automatic discrepancy detection.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Risk & Fraud Detection</div>
+        <div class="principle-desc">Synchronous fraud scoring with ML models, velocity checks, and device fingerprinting before authorization.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Transactional Outbox</div>
+        <div class="principle-desc">CDC-based outbox pattern ensuring atomic DB writes and event publishing without dual-write inconsistency.</div>
+      </div>
+    </div>
+  </section>
 
   <!-- OVERVIEW -->
   <section id="overview">
