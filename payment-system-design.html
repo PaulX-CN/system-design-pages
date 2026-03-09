@@ -615,36 +615,36 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="principles">
       <div class="principle">
-        <div class="principle-title">Payment Processing</div>
-        <div class="principle-desc">End-to-end payment initiation, authorization, capture, and settlement via PSP integration with full state machine lifecycle.</div>
+        <div class="principle-title">Pay for Goods & Services</div>
+        <div class="principle-desc">Customers can make purchases using credit cards, debit cards, or bank accounts. Merchants receive confirmation once payment is authorized.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Double-Entry Ledger</div>
-        <div class="principle-desc">Immutable append-only ledger with DEBIT/CREDIT entries ensuring financial consistency and real-time balance queries.</div>
+        <div class="principle-title">Refund a Payment</div>
+        <div class="principle-desc">Merchants can issue full or partial refunds to customers. Customers see the refunded amount returned to their original payment method.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Idempotency at Every Layer</div>
-        <div class="principle-desc">Client-generated idempotency keys propagated through gateway, service, and PSP layers to guarantee exactly-once semantics.</div>
+        <div class="principle-title">Dispute a Charge</div>
+        <div class="principle-desc">Customers can dispute a charge through their bank. Merchants can submit evidence to contest the chargeback and resolve the dispute.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Chargeback & Dispute Handling</div>
-        <div class="principle-desc">Full chargeback lifecycle: notification ingestion, evidence submission, representment, and arbitration flows.</div>
+        <div class="principle-title">View Transaction History</div>
+        <div class="principle-desc">Merchants can view all past payments, refunds, and chargebacks with filtering by date, status, and amount.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Refund Processing</div>
-        <div class="principle-desc">Full and partial refunds with PSP coordination, ledger reversal entries, and state machine transitions.</div>
+        <div class="principle-title">Receive Settlement Payouts</div>
+        <div class="principle-desc">Merchants receive daily payouts of their captured funds, with a clear breakdown of fees, refunds, and net settlement amounts.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Settlement & Reconciliation</div>
-        <div class="principle-desc">Daily batch settlement with PSP, T+1/T+2 reconciliation, and automatic discrepancy detection.</div>
+        <div class="principle-title">Manage Payment Methods</div>
+        <div class="principle-desc">Customers can save, update, and remove payment methods. Card details are securely stored so customers don't need to re-enter them.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Risk & Fraud Detection</div>
-        <div class="principle-desc">Synchronous fraud scoring with ML models, velocity checks, and device fingerprinting before authorization.</div>
+        <div class="principle-title">Retry Failed Payments</div>
+        <div class="principle-desc">When a payment fails or times out, the system safely retries without charging the customer twice, even across network interruptions.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Transactional Outbox</div>
-        <div class="principle-desc">CDC-based outbox pattern ensuring atomic DB writes and event publishing without dual-write inconsistency.</div>
+        <div class="principle-title">Real-Time Notifications</div>
+        <div class="principle-desc">Merchants and customers receive instant notifications on payment status changes — authorized, captured, refunded, or disputed.</div>
       </div>
     </div>
   </section>

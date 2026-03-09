@@ -748,36 +748,36 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     </div>
     <div class="principles">
       <div class="principle">
-        <div class="principle-title">Real-Time Collaborative Editing</div>
-        <div class="principle-desc">Server-authoritative Operational Transform (OT) enabling multiple users to edit the same document simultaneously with guaranteed convergence.</div>
+        <div class="principle-title">Edit Documents Together</div>
+        <div class="principle-desc">Multiple users can type in the same document at the same time. Everyone's changes appear instantly without overwriting each other.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Cursor & Presence Awareness</div>
-        <div class="principle-desc">Ephemeral presence tracking via Redis pub/sub showing live cursor positions, selections, and active user indicators in real time.</div>
+        <div class="principle-title">See Who's Editing</div>
+        <div class="principle-desc">Users can see other collaborators' cursors and selections in real time, with each person shown in a distinct color.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Crash Recovery</div>
-        <div class="principle-desc">WAL + checkpoint-based recovery ensuring zero data loss when the OT server crashes mid-edit, with &lt;2s recovery time.</div>
+        <div class="principle-title">Comment & Suggest</div>
+        <div class="principle-desc">Users can leave inline comments on specific text and propose edits in suggestion mode that the document owner can accept or reject.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Version History & Restore</div>
-        <div class="principle-desc">Periodic snapshot checkpoints with append-only operations log, enabling point-in-time document restoration and full edit history.</div>
+        <div class="principle-title">Share Documents</div>
+        <div class="principle-desc">Users can invite others as viewers, commenters, or editors. Documents can also be shared via a link with configurable access levels.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Comments & Suggestions</div>
-        <div class="principle-desc">Anchored inline comments and suggestion mode with accept/reject workflows, tied to document positions that survive concurrent edits.</div>
+        <div class="principle-title">View Version History</div>
+        <div class="principle-desc">Users can browse the full edit history of a document, see who made each change, and restore any previous version.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Sharing & Permissions</div>
-        <div class="principle-desc">Role-based access control (owner/editor/commenter/viewer) with shareable links, domain restrictions, and granular permission management.</div>
+        <div class="principle-title">Edit Offline</div>
+        <div class="principle-desc">Users can continue editing when they lose internet connectivity. Changes are automatically synced when the connection is restored.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">Offline Editing & Sync</div>
-        <div class="principle-desc">Client-side operation buffering during disconnection with bulk OT reconciliation upon reconnect, handling hundreds of unsynced operations.</div>
+        <div class="principle-title">Create & Manage Documents</div>
+        <div class="principle-desc">Users can create new documents, rename them, organize them in folders, and delete documents they own.</div>
       </div>
       <div class="principle">
-        <div class="principle-title">OT Server Scaling</div>
-        <div class="principle-desc">Document-sharded OT processing with consistent hashing, partition splitting for hot documents, and horizontal scaling strategies.</div>
+        <div class="principle-title">No Data Loss on Failure</div>
+        <div class="principle-desc">If the server crashes while users are editing, all in-flight changes are preserved and editing resumes seamlessly within seconds.</div>
       </div>
     </div>
   </section>
