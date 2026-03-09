@@ -51,6 +51,16 @@ nav{
   display:flex;align-items:center;gap:0;
   overflow-x:auto;
 }
+.nav-home{
+  padding:14px 16px 14px 0;
+  font-size:13px;
+  color:var(--muted2);
+  text-decoration:none;
+  flex-shrink:0;
+  transition:color 0.15s;
+  display:flex;align-items:center;gap:6px;
+}
+.nav-home:hover{color:var(--gold);}
 .nav-logo{
   font-family:'Syne',sans-serif;
   font-size:14px;font-weight:800;
@@ -586,6 +596,7 @@ section{animation:fadeSlide 0.5s ease 0.1s both;}
 <body>
 
 <nav>
+  <a class="nav-home" href="index.html">⬡</a>
   <div class="nav-logo">CRYPTO SYS DESIGN</div>
   <div class="nav-item active" onclick="scrollToSection('features')">Features</div>
   <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
