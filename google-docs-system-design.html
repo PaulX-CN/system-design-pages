@@ -574,6 +574,109 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 .api-rr{display:grid;grid-template-columns:1fr 1fr;gap:2px;}
 @media(max-width:900px){.api-rr{grid-template-columns:1fr;}}
 
+/* section wrapper (sections 03–10) */
+.section-inner{padding:0;}
+.section-label{
+  font-family:'Syne',sans-serif;font-size:32px;font-weight:800;
+  color:var(--border2);
+}
+.section-title{
+  font-family:'Syne',sans-serif;font-size:20px;font-weight:700;
+  color:#fff;margin-bottom:24px;padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+
+/* api blocks */
+.api-block{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;padding:20px 18px;
+  margin-bottom:3px;
+}
+.api-block-title{
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:700;
+  color:var(--teal);margin-bottom:14px;
+}
+.endpoint{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:10px;
+}
+.method{
+  font-size:11px;font-weight:700;padding:2px 8px;border-radius:2px;
+  letter-spacing:0.05em;flex-shrink:0;
+}
+.method.get{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);}
+.method.post{background:rgba(0,150,136,0.15);color:var(--teal);border:1px solid rgba(0,150,136,0.3);}
+.method.put{background:rgba(249,115,22,0.15);color:var(--orange);border:1px solid rgba(249,115,22,0.3);}
+.method.delete{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+.path{font-size:12px;color:var(--text);font-weight:600;}
+
+/* param tables */
+.param-table{margin-bottom:12px;overflow-x:auto;}
+.param-table table{
+  width:100%;border-collapse:collapse;
+}
+.param-table th{
+  background:var(--s2);padding:8px 14px;
+  text-align:left;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:2px solid var(--border);
+}
+.param-table td{
+  padding:8px 14px;font-size:12px;
+  border-bottom:1px solid var(--border);vertical-align:top;
+}
+.param-table td:first-child{color:var(--gold2);font-weight:600;}
+.param-table td:nth-child(2){color:var(--teal);}
+.param-table tr:last-child td{border-bottom:none;}
+.param-table tr:hover td{background:var(--s2);}
+
+/* note cards */
+.note-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;padding:14px 18px;
+  font-size:12px;color:var(--muted2);line-height:1.7;
+  margin-bottom:12px;
+}
+.note-card b{color:var(--text);}
+.note-card code{color:var(--teal);font-size:12px;}
+
+/* flow step: badge + body pattern */
+.flow-step{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:12px 0;border-bottom:1px solid var(--border);
+}
+.flow-step:last-child{border-bottom:none;}
+.flow-badge{
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:800;
+  color:var(--gold);
+  background:rgba(240,180,41,0.1);
+  border:1px solid rgba(240,180,41,0.2);
+  padding:3px 10px;border-radius:2px;
+  flex-shrink:0;min-width:32px;text-align:center;
+}
+.flow-body{
+  font-size:12px;color:var(--muted2);line-height:1.7;flex:1;
+}
+.flow-body b{color:var(--text);}
+.flow-body code{color:var(--teal);font-size:12px;}
+
+/* db blocks */
+.db-block{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;padding:20px 18px;
+  margin-bottom:3px;
+}
+.db-title{
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:700;
+  color:var(--teal);margin-bottom:10px;
+}
+
+/* tradeoff grid */
+.tradeoff-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+  gap:3px;
+}
+
 /* animations */
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .hero,.metrics-grid,.principles{animation:fadeUp 0.4s ease both;}
@@ -585,14 +688,14 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="nav-logo" style="color:var(--teal)">GOOGLE DOCS</div>
   <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
   <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
-  <div class="nav-item" onclick="scrollToSection('api')">API Contracts</div>
-  <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
-  <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
-  <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
-  <div class="nav-item" onclick="scrollToSection('otdeep')">OT Deep Dive</div>
-  <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
-  <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
-  <div class="nav-item" onclick="scrollToSection('pitfalls')">Pitfalls</div>
+  <div class="nav-item" onclick="scrollToSection('s-api')">API Contracts</div>
+  <div class="nav-item" onclick="scrollToSection('s-state')">State Machine</div>
+  <div class="nav-item" onclick="scrollToSection('s-flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollToSection('s-db')">Database Design</div>
+  <div class="nav-item" onclick="scrollToSection('s-ot')">OT Deep Dive</div>
+  <div class="nav-item" onclick="scrollToSection('s-scale')">Scalability</div>
+  <div class="nav-item" onclick="scrollToSection('s-tradeoffs')">Tradeoffs</div>
+  <div class="nav-item" onclick="scrollToSection('s-pitfalls')">Pitfalls</div>
 </nav>
 
 <div class="overlay" id="overlay" onclick="closePanel()"></div>
