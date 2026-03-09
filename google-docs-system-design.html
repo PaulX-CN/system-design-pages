@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Docs System Design — Staff Engineer Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #06080b;
+  --s1: #0d1117;
+  --s2: #111820;
+  --border: #1c2535;
+  --border2: #243040;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --teal: #009688;
+  --blue: #3b82f6;
+  --blue2: #60a5fa;
+  --red: #ef4444;
+  --purple: #8b5cf6;
+  --orange: #f97316;
+  --green: #22c55e;
+  --text: #d1dce8;
+  --muted: #4a5a6a;
+  --muted2: #6a7a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px;
+  line-height:1.6;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+  pointer-events:none;z-index:9999;
+}
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;
+}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:14px;font-weight:800;
+  color:var(--teal);
+  letter-spacing:0.05em;
+  padding:14px 24px 14px 0;
+  border-right:1px solid var(--border);
+  margin-right:8px;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-item{
+  padding:14px 16px;
+  font-size:12px;
+  color:var(--muted2);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color 0.15s;
+  border-bottom:2px solid transparent;
+  flex-shrink:0;
+}
+.nav-item:hover,.nav-item.active{color:var(--teal);border-bottom-color:var(--teal);}
+.page{max-width:1320px;margin:0 auto;padding:48px 28px 80px;}
+
+/* hero */
+.hero{
+  padding:64px 0 48px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:48px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-60px;right:-80px;
+  width:480px;height:480px;
+  background:radial-gradient(circle,rgba(0,150,136,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-tag{
+  font-size:11px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-tag::before{content:'';width:32px;height:1px;background:var(--teal);}
+.hero-title{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(28px,4vw,44px);
+  font-weight:800;
+  line-height:1.1;
+  color:#fff;
+  margin-bottom:10px;
+}
+.hero-title span{color:var(--teal);}
+.hero-sub{
+  font-size:13px;color:var(--muted2);
+  margin-bottom:32px;
+}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.pill{
+  font-size:11px;padding:4px 12px;
+  border:1px solid var(--border2);
+  border-radius:2px;
+  color:var(--muted);
+}
+.pill.hi{border-color:rgba(0,150,136,0.4);color:var(--teal);}
+
+/* section headers */
+.sec-head{
+  display:flex;align-items:baseline;gap:16px;
+  margin-bottom:24px;padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.sec-num{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--border2);}
+.sec-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;}
+.sec-tag{font-size:11px;color:var(--muted);letter-spacing:0.1em;margin-left:auto;}
+section{margin-bottom:64px;scroll-margin-top:60px;}
+
+/* overview metrics */
+.metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:2px;
+  margin-bottom:32px;
+}
+.metric{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+}
+.metric-val{
+  font-family:'Syne',sans-serif;
+  font-size:22px;font-weight:800;
+  color:var(--teal);
+  margin-bottom:4px;
+}
+.metric-label{font-size:11px;color:var(--muted);letter-spacing:0.05em;}
+
+/* principle cards */
+.principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:2px;
+  margin-bottom:8px;
+}
+.principle{
+  background:var(--s1);
+  border:1px solid var(--border);
+  padding:16px 18px;
+  border-left:3px solid var(--teal);
+}
+.principle-title{
+  font-size:13px;font-weight:600;color:var(--teal);
+  margin-bottom:6px;
+}
+.principle-desc{font-size:12px;color:var(--muted2);line-height:1.6;}
+
+/* layers */
+.layer{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.layer-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.layer-hd:hover{background:var(--s2);}
+.l-accent{width:3px;height:32px;border-radius:2px;flex-shrink:0;}
+.l-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+.l-scale{font-size:11px;color:var(--muted);margin-left:8px;}
+.l-chevron{margin-left:auto;color:var(--muted);font-size:11px;transition:transform 0.2s;}
+.layer.open .l-chevron{transform:rotate(90deg);}
+.layer-bd{display:none;border-top:1px solid var(--border);padding:20px 18px;}
+.layer.open .layer-bd{display:block;}
+.comp-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:2px;
+}
+.comp{
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:14px 16px;
+  cursor:pointer;
+  transition:border-color 0.15s,background 0.15s;
+  border-radius:3px;
+}
+.comp:hover{border-color:var(--border2);background:var(--s2);}
+.comp-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.comp-icon{font-size:17px;}
+.comp-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;}
+.comp-role{font-size:11px;color:var(--teal);margin-bottom:6px;letter-spacing:0.05em;}
+.comp-detail{font-size:12px;color:var(--muted2);line-height:1.5;}
+
+/* state machine */
+.state-machine{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:24px;
+  overflow-x:auto;
+  margin-bottom:16px;
+}
+.sm-title{
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:700;
+  color:#fff;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
+}
+.sm-flow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:0;
+  align-items:flex-start;
+}
+.sm-col{
+  display:flex;flex-direction:column;
+  align-items:center;gap:0;
+}
+.state{
+  display:inline-flex;flex-direction:column;align-items:center;
+  padding:10px 16px;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  background:var(--bg);
+  min-width:140px;
+  text-align:center;
+}
+.state-name{font-size:12px;font-weight:600;color:#fff;margin-bottom:2px;}
+.state-desc{font-size:10px;color:var(--muted);}
+.state.terminal{border-color:rgba(239,68,68,0.4);}
+.state.terminal .state-name{color:var(--red);}
+.state.success{border-color:rgba(34,197,94,0.4);}
+.state.success .state-name{color:var(--green);}
+.state.warning{border-color:rgba(240,180,41,0.4);}
+.state.warning .state-name{color:var(--gold);}
+.state.active{border-color:rgba(0,150,136,0.4);}
+.state.active .state-name{color:var(--teal);}
+.sm-arrow{
+  font-size:20px;color:var(--muted);
+  padding:4px;text-align:center;
+}
+.sm-arrow.right{padding:0 8px;}
+.sm-branch{
+  display:flex;align-items:center;gap:4px;
+  margin:4px 0;
+}
+.branch-label{font-size:10px;color:var(--muted);letter-spacing:0.05em;}
+
+/* data flow */
+.flow-block{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin-bottom:3px;
+  overflow:hidden;
+}
+.flow-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.flow-hd:hover{background:var(--s2);}
+.flow-num{
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:800;
+  color:var(--teal);
+  background:rgba(0,150,136,0.1);
+  border:1px solid rgba(0,150,136,0.2);
+  padding:3px 10px;border-radius:2px;
+  flex-shrink:0;
+}
+.flow-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#fff;}
+.flow-meta{font-size:11px;color:var(--muted);margin-left:auto;}
+.flow-chevron{color:var(--muted);font-size:11px;transition:transform 0.2s;flex-shrink:0;}
+.flow-block.open .flow-chevron{transform:rotate(90deg);}
+.flow-bd{
+  display:none;
+  border-top:1px solid var(--border);
+}
+.flow-block.open .flow-bd{display:block;}
+.flow-steps{
+  display:flex;flex-direction:column;
+  gap:0;
+}
+.flow-step{
+  display:grid;
+  grid-template-columns:48px 140px 1fr 160px;
+  gap:0;
+  border-bottom:1px solid var(--border);
+}
+.flow-step:last-child{border-bottom:none;}
+.fs-num{
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:800;
+  color:var(--muted);
+  border-right:1px solid var(--border);
+  padding:12px 8px;
+}
+.fs-svc{
+  display:flex;align-items:center;
+  padding:12px 14px;
+  font-size:12px;font-weight:600;color:var(--teal);
+  border-right:1px solid var(--border);
+}
+.fs-action{
+  padding:12px 16px;
+  font-size:12px;color:var(--text);
+}
+.fs-note{
+  padding:12px 14px;
+  font-size:11px;color:var(--muted);
+  border-left:1px solid var(--border);
+  font-style:italic;
+}
+
+/* code blocks */
+.code-block{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:16px 18px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;
+  color:var(--text);
+  overflow-x:auto;
+  margin-bottom:12px;
+  line-height:1.7;
+}
+.code-block .kw{color:var(--teal);}
+.code-block .str{color:var(--green);}
+.code-block .cm{color:var(--muted);}
+.code-block .fn{color:var(--gold);}
+.code-block .num{color:var(--orange);}
+.code-label{
+  font-size:11px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+}
+.code-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* db section */
+.db-grid{display:flex;flex-direction:column;gap:3px;}
+.db-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;cursor:pointer;
+  transition:border-color 0.15s;
+}
+.db-card:hover,.db-card.open{border-color:var(--border2);}
+.db-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 18px;
+}
+.db-icon{font-size:20px;flex-shrink:0;}
+.db-title-wrap{flex:1;}
+.db-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+.db-meta-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px;}
+.db-badge{font-size:11px;padding:2px 8px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);}
+.db-badge.pg{border-color:rgba(0,150,136,0.4);color:var(--teal);}
+.db-badge.redis{border-color:rgba(239,68,68,0.4);color:var(--red);}
+.db-badge.kafka{border-color:rgba(240,180,41,0.4);color:var(--gold);}
+.db-badge.es{border-color:rgba(139,92,246,0.4);color:var(--purple);}
+.db-badge.cass{border-color:rgba(249,115,22,0.4);color:var(--orange);}
+.db-badge.s3{border-color:rgba(34,197,94,0.4);color:var(--green);}
+.db-scale-tag{margin-left:auto;font-size:11px;padding:2px 10px;border-radius:2px;border:1px solid var(--border2);color:var(--muted);flex-shrink:0;}
+.db-bd{display:none;border-top:1px solid var(--border);}
+.db-card.open .db-bd{display:block;}
+.db-inner{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:900px){.db-inner{grid-template-columns:1fr;}}
+.db-schema{border-right:1px solid var(--border);padding:20px 18px;background:var(--bg);}
+.db-schema:last-child{border-right:none;}
+.db-sec-label{font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--teal);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.db-sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.schema-block{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:14px 16px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;}
+.schema-table{font-size:12px;font-weight:600;color:var(--gold2);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.schema-table span{font-size:11px;font-weight:400;color:var(--muted);}
+.schema-col{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.schema-col:last-child{border-bottom:none;}
+.col-name{color:var(--text);}
+.col-name.pk{color:var(--gold);}
+.col-name.fk{color:var(--teal);}
+.col-name.idx{color:var(--teal);}
+.col-type{color:var(--muted);font-size:11px;}
+.col-note{color:var(--purple);font-size:11px;}
+.schema-indexes{margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;color:var(--muted2);line-height:1.7;}
+.schema-indexes strong{color:var(--muted);}
+.db-notes-list{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.db-notes-list li{font-size:13px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.db-notes-list li::before{content:'>';position:absolute;left:0;color:var(--teal);font-size:14px;line-height:1.5;}
+.db-notes-list li strong{color:var(--text);}
+.db-full{padding:20px 18px;background:var(--bg);}
+
+/* tradeoff matrix */
+.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2px;}
+.matrix-card{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:20px;}
+.mc-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;margin-bottom:14px;}
+.mc-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.mc-label{font-size:11px;color:var(--muted);width:140px;flex-shrink:0;}
+.mc-val{display:flex;gap:3px;}
+.bar{width:16px;height:8px;border-radius:1px;}
+.bar.fill{background:var(--teal);}
+.bar.empty{background:var(--border2);}
+.mc-verdict{
+  margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--border);
+  font-size:12px;color:var(--muted2);line-height:1.6;
+}
+.mc-verdict strong{color:var(--teal);}
+
+/* pitfalls */
+.pitfall-grid{display:flex;flex-direction:column;gap:3px;}
+.pitfall-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;
+}
+.pf-hd{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:16px 18px;
+}
+.pf-q{
+  flex:1;
+  font-size:13px;color:var(--gold2);line-height:1.5;
+  font-style:italic;
+}
+.pf-bd{
+  border-top:1px solid var(--border);
+  padding:16px 18px;
+  background:var(--bg);
+}
+.pf-ans{font-size:12px;color:var(--muted2);line-height:1.7;}
+.pf-ans strong{color:var(--teal);}
+.pf-steps{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.pf-steps li{font-size:12px;color:var(--muted2);padding-left:14px;position:relative;}
+.pf-steps li::before{content:'>';position:absolute;left:0;color:var(--teal);}
+.pf-steps li strong{color:var(--text);}
+
+/* detail panel */
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.6);
+  z-index:200;backdrop-filter:blur(4px);
+}
+.overlay.show{display:block;}
+.detail-panel{
+  position:fixed;right:0;top:0;bottom:0;
+  width:min(560px,90vw);
+  background:var(--s1);
+  border-left:1px solid var(--border);
+  z-index:300;
+  transform:translateX(100%);
+  transition:transform 0.25s cubic-bezier(0.2,0,0,1);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.detail-panel.open{transform:translateX(0);}
+.dp-header{
+  padding:24px 24px 18px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.dp-close{
+  position:absolute;top:18px;right:18px;
+  width:28px;height:28px;
+  border:1px solid var(--border2);
+  background:var(--bg);
+  color:var(--muted2);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;border-radius:2px;
+  transition:color 0.15s;
+}
+.dp-close:hover{color:#fff;}
+.dp-icon{font-size:28px;margin-bottom:8px;}
+.dp-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fff;margin-bottom:4px;}
+.dp-subtitle{font-size:12px;color:var(--muted);}
+.dp-body{flex:1;overflow-y:auto;padding:20px 24px;}
+.dp-section{margin-bottom:20px;}
+.dp-sec-title{
+  font-size:11px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--teal);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.dp-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.dp-text{font-size:13px;color:var(--muted2);line-height:1.7;}
+.dp-list{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.dp-list li{font-size:13px;color:var(--muted2);line-height:1.6;padding-left:14px;position:relative;}
+.dp-list li::before{content:'>';position:absolute;left:0;color:var(--teal);}
+.dp-code{
+  background:var(--bg);border:1px solid var(--border);border-radius:3px;
+  padding:12px 14px;font-size:12px;color:var(--text);
+  overflow-x:auto;line-height:1.7;margin-top:8px;
+}
+
+/* key-principles callout */
+.key-principles{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:2px;
+  margin-bottom:24px;
+}
+.kp{
+  background:var(--s1);border:1px solid var(--border);
+  border-left:3px solid var(--teal);
+  padding:14px 16px;
+}
+.kp-title{font-size:12px;font-weight:600;color:var(--blue2);margin-bottom:4px;}
+.kp-body{font-size:12px;color:var(--muted2);line-height:1.5;}
+
+/* scale table */
+.scale-table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+.scale-table th{
+  background:var(--s2);
+  padding:10px 14px;
+  text-align:left;
+  font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);border-bottom:2px solid var(--border);
+}
+.scale-table td{
+  padding:10px 14px;
+  font-size:12px;
+  border-bottom:1px solid var(--border);
+  vertical-align:top;
+}
+.scale-table td:first-child{color:var(--gold2);font-weight:600;}
+.scale-table td:nth-child(2){color:var(--teal);}
+.scale-table tr:last-child td{border-bottom:none;}
+.scale-table tr:hover td{background:var(--s2);}
+
+/* api contract section */
+.api-group{
+  background:var(--s1);border:1px solid var(--border);border-radius:4px;
+  margin-bottom:3px;overflow:hidden;
+}
+.api-group-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;cursor:pointer;transition:background 0.15s;
+}
+.api-group-hd:hover{background:var(--s2);}
+.api-group.open .api-chevron{transform:rotate(90deg);}
+.api-chevron{margin-left:auto;color:var(--muted);font-size:11px;transition:transform 0.2s;flex-shrink:0;}
+.api-group-bd{display:none;border-top:1px solid var(--border);padding:20px 18px;}
+.api-group.open .api-group-bd{display:block;}
+.api-endpoint{margin-bottom:20px;}
+.api-endpoint:last-child{margin-bottom:0;}
+.api-sig{
+  font-size:13px;font-weight:600;margin-bottom:10px;
+  display:flex;align-items:center;gap:10px;
+}
+.api-method{
+  font-size:11px;font-weight:700;padding:2px 8px;border-radius:2px;
+  letter-spacing:0.05em;
+}
+.api-method.get{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);}
+.api-method.post{background:rgba(0,150,136,0.15);color:var(--teal);border:1px solid rgba(0,150,136,0.3);}
+.api-method.put{background:rgba(249,115,22,0.15);color:var(--orange);border:1px solid rgba(249,115,22,0.3);}
+.api-method.delete{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);}
+.api-path{font-size:12px;color:var(--text);}
+.api-desc{font-size:11px;color:var(--muted);margin-left:auto;}
+.api-rr{display:grid;grid-template-columns:1fr 1fr;gap:2px;}
+@media(max-width:900px){.api-rr{grid-template-columns:1fr;}}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero,.metrics-grid,.principles{animation:fadeUp 0.4s ease both;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo" style="color:var(--teal)">GOOGLE DOCS</div>
+  <div class="nav-item active" onclick="scrollToSection('overview')">Overview</div>
+  <div class="nav-item" onclick="scrollToSection('architecture')">Architecture</div>
+  <div class="nav-item" onclick="scrollToSection('api')">API Contracts</div>
+  <div class="nav-item" onclick="scrollToSection('statemachine')">State Machine</div>
+  <div class="nav-item" onclick="scrollToSection('flows')">Data Flows</div>
+  <div class="nav-item" onclick="scrollToSection('databases')">Database Design</div>
+  <div class="nav-item" onclick="scrollToSection('otdeep')">OT Deep Dive</div>
+  <div class="nav-item" onclick="scrollToSection('scalability')">Scalability</div>
+  <div class="nav-item" onclick="scrollToSection('tradeoffs')">Tradeoffs</div>
+  <div class="nav-item" onclick="scrollToSection('pitfalls')">Pitfalls</div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="dp-header">
+    <button class="dp-close" onclick="closePanel()">X</button>
+    <div class="dp-icon" id="dp-icon"></div>
+    <div class="dp-title" id="dp-title"></div>
+    <div class="dp-subtitle" id="dp-subtitle"></div>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
+</div>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag" style="color:var(--teal)">Staff Engineer Reference</div>
+    <div class="hero-title">Google Docs<br><span style="color:var(--teal)">Real-Time Collaborative Editing</span></div>
+    <div class="hero-sub">OT Protocol + WebSocket + State Machines + Data Flows + Database Design + Scalability + Trade-offs + Pitfalls</div>
+    <div class="hero-pills">
+      <span class="pill hi">Server-Authoritative OT</span>
+      <span class="pill hi">Structured Document Model</span>
+      <span class="pill hi">One-Op-In-Flight</span>
+      <span class="pill hi">WAL + Checkpoint Recovery</span>
+      <span class="pill">Ephemeral Presence (Redis)</span>
+      <span class="pill hi">Append-Only Audit Trail</span>
+      <span class="pill">&lt;50ms OT p99 Latency</span>
+    </div>
+  </div>
+
+  <!-- 01 OVERVIEW -->
+  <section id="overview">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <span class="sec-title">System Overview</span>
+      <span class="sec-tag">Scale targets + Core principles</span>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric"><div class="metric-val">500M+</div><div class="metric-label">Documents</div></div>
+      <div class="metric"><div class="metric-val">10M+</div><div class="metric-label">Daily Active Users</div></div>
+      <div class="metric"><div class="metric-val">&lt;50ms</div><div class="metric-label">OT Latency p99</div></div>
+      <div class="metric"><div class="metric-val">200+</div><div class="metric-label">Concurrent Editors/Doc</div></div>
+      <div class="metric"><div class="metric-val">&lt;2s</div><div class="metric-label">Crash Recovery</div></div>
+      <div class="metric"><div class="metric-val">99.99%</div><div class="metric-label">Availability Target</div></div>
+    </div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Structured document model</div>
+        <div class="principle-desc">Documents represented as JSON/protobuf tree (paragraphs, styles, tables) — NOT binary file chunks. A 100-page Google Doc is one in-memory model (~1-5MB). OT operates on this semantic model.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Server-authoritative OT</div>
+        <div class="principle-desc">Single serialization point per document. Server assigns global sequence numbers. All clients converge to the same state via transform functions. No split-brain — one truth.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">One-operation-in-flight</div>
+        <div class="principle-desc">Client buffers while awaiting ACK. Only 1 unacknowledged op at a time. Additional keystrokes composed into a single buffered op. Prevents transform explosion.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">WAL + checkpoint</div>
+        <div class="principle-desc">Every op written to Kafka WAL before applying. Periodic checkpoint (serialize document model to S3 every 30s/100 ops). On crash: load last snapshot + replay WAL. Recovery &lt;2s.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Ephemeral presence</div>
+        <div class="principle-desc">Cursor positions and selection state stored in Redis, not persisted. Fire-and-forget over WebSocket. Heartbeat every 30s for session liveness. 5min idle timeout.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Append-only audit trail</div>
+        <div class="principle-desc">Every edit operation logged immutably. Enables: version history, undo/redo, compliance (SOC2, HIPAA), admin investigation. Never UPDATE or DELETE audit rows.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 ARCHITECTURE -->
+  <section id="architecture">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Architecture</span>
+      <span class="sec-tag">Click components for deep dives</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;">
+
+      <div class="layer open" id="l1">
+        <div class="layer-hd" onclick="toggleLayer('l1')">
+          <div class="l-accent" style="background:var(--teal)"></div>
+          <div class="l-name" style="color:var(--teal)">L1 — Client &amp; Edge</div>
+          <div class="l-scale">Document Editor + API Gateway + CDN</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('docclient')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4DD;</span><span class="comp-name">Document Editor Client</span></div>
+              <div class="comp-role">Rich text editor + local OT engine + WebSocket</div>
+              <div class="comp-detail">Renders document model. Captures edits as OT operations. Applies ops locally (optimistic). Sends to server via WebSocket. Buffers while awaiting ACK.</div>
+            </div>
+            <div class="comp" onclick="openPanel('gateway')">
+              <div class="comp-top"><span class="comp-icon">&#x1F6AA;</span><span class="comp-name">API Gateway</span></div>
+              <div class="comp-role">Auth + Rate limit + WebSocket upgrade</div>
+              <div class="comp-detail">OAuth2/JWT validation. WebSocket upgrade for collab sessions. HTTP for doc metadata. Routes to Collaboration Service based on doc_id hash.</div>
+            </div>
+            <div class="comp" onclick="openPanel('cdn')">
+              <div class="comp-top"><span class="comp-icon">&#x26A1;</span><span class="comp-name">CDN</span></div>
+              <div class="comp-role">Static assets + initial doc snapshot delivery</div>
+              <div class="comp-detail">Serves editor JS/CSS bundles. Caches initial document snapshots for fast first load. Geographic distribution reduces TTFB.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l2">
+        <div class="layer-hd" onclick="toggleLayer('l2')">
+          <div class="l-accent" style="background:var(--green)"></div>
+          <div class="l-name" style="color:var(--green)">L2 — Core Services</div>
+          <div class="l-scale">Collaboration + Document Metadata + Sharing</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('collab')">
+              <div class="comp-top"><span class="comp-icon">&#x1F91D;</span><span class="comp-name">Collaboration Service</span></div>
+              <div class="comp-role">PRIMARY — OT engine + WebSocket manager + in-memory doc state</div>
+              <div class="comp-detail">Heart of the system. Maintains in-memory document model per active doc. Receives ops via WebSocket, transforms against concurrent ops, broadcasts to all editors. Single-writer per document via consistent hashing.</div>
+            </div>
+            <div class="comp" onclick="openPanel('docmeta')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4C4;</span><span class="comp-name">Document Metadata Service</span></div>
+              <div class="comp-role">Doc info, ownership, version tracking</div>
+              <div class="comp-detail">Manages document titles, creation dates, last modified, owner, collaborators list. PostgreSQL sharded by owner_id. Separate from Collaboration Service for clean separation of concerns.</div>
+            </div>
+            <div class="comp" onclick="openPanel('sharing')">
+              <div class="comp-top"><span class="comp-icon">&#x1F465;</span><span class="comp-name">Sharing &amp; Permission Service</span></div>
+              <div class="comp-role">ACL + link sharing + access control</div>
+              <div class="comp-detail">Permission check on WebSocket connect (before joining collab session). Roles: OWNER > EDITOR > COMMENTER > VIEWER. Link sharing with optional restrictions.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l3">
+        <div class="layer-hd" onclick="toggleLayer('l3')">
+          <div class="l-accent" style="background:var(--gold)"></div>
+          <div class="l-name" style="color:var(--gold)">L3 — Storage Layer</div>
+          <div class="l-scale">S3 (Snapshots) + PostgreSQL (ops) + Redis (sessions) + Kafka (WAL)</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp" onclick="openPanel('docstore')">
+              <div class="comp-top"><span class="comp-icon">&#x1F5C4;</span><span class="comp-name">Object Store (S3)</span></div>
+              <div class="comp-role">Document snapshots as serialized blobs</div>
+              <div class="comp-detail">Stores checkpointed document model every 30s/100 ops. Key: {doc_id}/{revision}. Used for crash recovery + initial load. Old snapshots GC'd after N retained.</div>
+            </div>
+            <div class="comp" onclick="openPanel('metadb')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4BE;</span><span class="comp-name">PostgreSQL</span></div>
+              <div class="comp-role">doc_snapshots metadata + doc_ops log</div>
+              <div class="comp-detail">doc_snapshots: tracks {doc_id, revision, blob_url} for each checkpoint. doc_ops: append-only log of every operation per document. Partitioned by doc_id + month.</div>
+            </div>
+            <div class="comp" onclick="openPanel('cache')">
+              <div class="comp-top"><span class="comp-icon">&#x26A1;</span><span class="comp-name">Redis</span></div>
+              <div class="comp-role">Active sessions + cursor positions + presence</div>
+              <div class="comp-detail">Tracks who is editing which document. Stores cursor positions (fire-and-forget). Session heartbeat tracking. Pub/Sub for presence updates across server instances.</div>
+            </div>
+            <div class="comp" onclick="openPanel('mq')">
+              <div class="comp-top"><span class="comp-icon">&#x1F4E8;</span><span class="comp-name">Kafka</span></div>
+              <div class="comp-role">WAL — every op written before processing</div>
+              <div class="comp-detail">Write-ahead log for crash durability. Every op written to Kafka before applying to in-memory model. Partitioned by doc_id. Enables replay on crash recovery.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer open" id="l4">
+        <div class="layer-hd" onclick="toggleLayer('l4')">
+          <div class="l-accent" style="background:var(--purple)"></div>
+          <div class="l-name" style="color:var(--purple)">L4 — Async Layer</div>
+          <div class="l-scale">Notifications + Audit</div>
+          <div class="l-chevron">></div>
+        </div>
+        <div class="layer-bd">
+          <div class="comp-grid">
+            <div class="comp">
+              <div class="comp-top"><span class="comp-icon">&#x1F514;</span><span class="comp-name">Notification Service</span></div>
+              <div class="comp-role">Comment mentions + share notifications</div>
+              <div class="comp-detail">Kafka consumer on doc-events. Sends email/push for @mentions in comments, document shared, suggestion accepted/rejected. Batches rapid edits.</div>
+            </div>
+            <div class="comp">
+              <div class="comp-top"><span class="comp-icon">&#x1F4DC;</span><span class="comp-name">Audit Log Service</span></div>
+              <div class="comp-role">Immutable edit history + compliance</div>
+              <div class="comp-detail">Every operation logged to Cassandra. Enables version history ("See edit history"), compliance (SOC2, HIPAA), admin investigation. 7-year retention default.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>

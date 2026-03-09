@@ -493,8 +493,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
       <div class="cc-desc">Automatic OHLCV candle roll-ups for time-series data</div>
     </div>
     <div class="concept-card">
-      <div class="cc-title">REST over GraphQL</div>
-      <div class="cc-desc">URL-based CDN caching vs. persisted query infrastructure</div>
+      <div class="cc-title">GraphQL + Persisted Queries</div>
+      <div class="cc-desc">Composite explore page query &mdash; CDN-cacheable via hash-based URLs</div>
     </div>
     <div class="concept-card">
       <div class="cc-title">Market Health Aggregation</div>
@@ -644,93 +644,148 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   <div class="sec-head">
     <span class="sec-num">03</span>
     <span class="sec-title">API Design</span>
-    <span class="sec-tag">REST API + WebSocket</span>
+    <span class="sec-tag">GraphQL + REST + WebSocket</span>
   </div>
 
-  <h3 class="sub-head">REST API</h3>
+  <h3 class="sub-head">GraphQL API (Explore Page &mdash; Composite Query)</h3>
 
-  <!-- List Assets -->
+  <p class="body-text">The explore page needs <strong>multiple unrelated data sections</strong> in a single request: paginated asset list, market health stats, top gainers header, and featured asset (BTC/ETH) summaries. This is a <strong>composite page query</strong> &mdash; exactly what GraphQL is designed for.</p>
+
+  <div class="note-card" style="border-left-color:var(--red);">
+    <div class="note-label" style="color:var(--red);">Why Not REST?</div>
+    <div class="note-body">Stuffing <code>market_health</code>, <code>top_gainers</code>, and <code>btc_header</code> into a <code>GET /v1/assets</code> response is a REST <strong>anti-pattern</strong> &mdash; the resource is &ldquo;assets&rdquo; but the response contains unrelated market-level aggregate data. When a user paginates to page 2, they re-download identical market health and top gainers data. And each section can&rsquo;t be cached or invalidated independently. GraphQL makes the composite nature explicit: the client declares exactly what it needs, and each field maps to an independent resolver and cache key.</div>
+  </div>
+
+  <h3 class="sub-head-sm">Persisted Queries (CDN-Cacheable GraphQL)</h3>
+
+  <p class="body-text">Standard GraphQL uses <code>POST</code> with a query body, which CDNs can&rsquo;t cache. The solution is <strong>persisted queries</strong>: at build time, each GraphQL query is registered with the server and assigned a <code>sha256Hash</code>. At runtime, the client sends only the hash + variables as a <code>GET</code> request:</p>
+
   <div class="api-endpoint">
     <div class="api-sig">
       <span class="api-method get">GET</span>
-      <span class="api-path">/v1/assets?page=1&amp;page_size=10&amp;sort=rank&amp;order=asc&amp;filter=listed</span>
+      <span class="api-path">/graphql?hash=sha256:a3f2b8c1d4e5&amp;variables={"page":1,"filter":"LISTED","sort":"RANK"}</span>
     </div>
   </div>
 
-  <div class="code-block">{
-  "assets": [
-    {
-      "id": "bitcoin",
-      "slug": "bitcoin",
-      "symbol": "BTC",
-      "name": "Bitcoin",
-      "image_url": "https://...",
-      "color": "#F7931A",
-      "price_usd": "67287.395",
-      "percent_change": {
-        "hour": -0.45,
-        "day": -2.34,
-        "week": 5.12,
-        "month": 12.5,
-        "year": 85.3
-      },
-      "volume_24h_usd": "28450000000",
-      "market_cap_usd": "1345000000000",
-      "sparkline_day": [],
-      "is_tradable": true,
-      "is_dex": false,
-      "is_wallet": true,
-      "rank": 1
-    }
-  ],
-  "market_health": {
-    "market_cap": { "value": "2.45T", "percent_change": 1.2, "chart": [...] },
-    "trading_volume": { "value": "89.5B", "percent_change": -3.1, "chart": [...] },
-    "btc_dominance": { "value": "54.2%", "percent_change": 0.3, "chart": [...] },
-    "buy_sell_ratio": { "value": 1.15, "chart": [...] }
-  },
-  "top_gainers": ["Solana", "Chainlink", "Avalanche"],
-  "btc_header": { "market_cap": "1.34T", "volume_24h": "28.4B" },
-  "eth_header": { "market_cap": "420B", "volume_24h": "15.2B" },
-  "total_assets": 383,
-  "page": 1,
-  "page_size": 10,
-  "updated_at": "2026-03-07T12:00:32Z"
-}</div>
-
-  <h3 class="sub-head-sm">Filter &amp; Sort Parameters</h3>
-  <table class="scale-table">
-    <tr><th>Parameter</th><th>Values</th><th>Description</th></tr>
-    <tr><td>filter</td><td>listed (default), gainers, losers, trending, new, defi, layer1</td><td>Controls <em>which</em> assets appear</td></tr>
-    <tr><td>sort</td><td>rank (default), price, market_cap, volume, percent_change</td><td>Controls <em>ordering</em></td></tr>
-    <tr><td>order</td><td>asc (default), desc</td><td>Sort direction</td></tr>
-  </table>
-
-  <div class="note-card">
-    <div class="note-label">Design Note</div>
-    <div class="note-body">Coinbase's actual API separates filter from sort &mdash; <code>filter: "LISTED"</code> selects which assets, while <code>sort: "RANK"</code> + <code>order: "ASC"</code> controls ordering. Each filter+sort combination maps to a <strong>separate pre-computed page in Redis</strong>. When the user clicks &ldquo;Gainers&rdquo;, the client fetches <code>GET /v1/assets?filter=gainers&amp;sort=percent_change&amp;order=desc&amp;page=1</code>. This hits CDN &rarr; Redis key <code>asset_list:gainers:pct_desc:page:1</code> &mdash; a pre-built JSON blob. No on-demand sorting at request time.</div>
-  </div>
-
-  <div class="note-card">
-    <div class="note-label">Pre-Computed Pages</div>
-    <div class="note-body">Total number of pre-computed pages: ~7 filters &times; ~5 sort options &times; ~40 pages each &asymp; <strong>~1,400 Redis keys, ~15MB total</strong>. Negligible for Redis. Prices are <strong>decimal strings</strong> (e.g., <code>"67287.395"</code>), matching Coinbase's production API. Percent changes span <strong>5 time periods</strong> (hour, day, week, month, year). The response includes <strong>market-level aggregate data</strong> alongside the asset list &mdash; a single request loads the entire explore page.</div>
-  </div>
-
-  <!-- Why REST over GraphQL -->
-  <h3 class="sub-head">Why REST over GraphQL?</h3>
-
-  <p class="body-text">We use REST because the URL-based caching model is trivially CDN-friendly &mdash; each filter/sort/page combination is a unique URL that Cloudflare/Fastly can cache without any extra infrastructure. This is ideal for a read-heavy explore page where the response shape is fixed and predictable.</p>
-
-  <p class="body-text">That said, GraphQL is a valid alternative here. The key challenge with GraphQL is CDN caching &mdash; GraphQL typically uses POST requests with a query body, which CDNs can&rsquo;t cache by default. The solution is <strong>persisted queries</strong>: the client sends a <code>sha256Hash</code> of a pre-registered query instead of the full query string. The server maps hash &rarr; whitelisted query. This gives you:</p>
+  <p class="body-text">This restores <strong>REST-like CDN cacheability</strong> while keeping GraphQL&rsquo;s flexibility:</p>
 
   <ul class="body-text" style="margin-left:1.5rem;margin-bottom:1.2rem;color:var(--text);">
-    <li><strong>CDN cacheability</strong> &mdash; The hash-based URL is stable and cacheable, restoring REST-like caching behavior</li>
+    <li><strong>CDN cacheability</strong> &mdash; The hash-based URL is stable and cacheable (unique per filter/sort/page combination)</li>
     <li><strong>Security</strong> &mdash; Server only executes whitelisted queries (prevents arbitrary GraphQL abuse)</li>
     <li><strong>Bandwidth savings</strong> &mdash; No query string in every request</li>
     <li><strong>Client flexibility</strong> &mdash; Clients can request only the fields they need (e.g., <code>skipSparklines: true</code>)</li>
   </ul>
 
-  <p class="body-text">The trade-off is complexity: persisted queries require build-time query registration, hash management, and a query allowlist. For this explore page where we have a fixed number of well-defined queries, REST is simpler and achieves the same performance. The backend architecture is identical either way &mdash; pre-computed Redis lookups behind a CDN.</p>
+  <!-- Explore Page Query -->
+  <div class="code-label">Explore Page Query (GraphQL)</div>
+  <div class="code-block">query ExplorePageQuery(
+  $page: Int! = 1
+  $pageSize: Int! = 10
+  $filter: AssetFilter! = LISTED
+  $sort: AssetSort! = RANK
+  $order: SortOrder! = ASC
+  $skipSparklines: Boolean! = false
+) {
+  assets(page: $page, pageSize: $pageSize, filter: $filter, sort: $sort, order: $order) {
+    items {
+      id, slug, symbol, name, imageUrl, color
+      priceUsd
+      percentChange { hour day week month year }
+      volume24hUsd, marketCapUsd
+      sparklineDay @skip(if: $skipSparklines)
+      isTradable, isDex, isWallet, rank
+    }
+    totalAssets, page, pageSize
+  }
+  marketHealth {
+    marketCap { value percentChange chart }
+    tradingVolume { value percentChange chart }
+    btcDominance { value percentChange chart }
+    buySellRatio { value chart }
+  }
+  topGainers(limit: 3) { id symbol name percentChangeDay }
+  featuredAssets {
+    btc { marketCap volume24h }
+    eth { marketCap volume24h }
+  }
+  updatedAt
+}</div>
+
+  <div class="code-label">Response</div>
+  <div class="code-block">{
+  "data": {
+    "assets": {
+      "items": [
+        {
+          "id": "bitcoin",
+          "slug": "bitcoin",
+          "symbol": "BTC",
+          "name": "Bitcoin",
+          "imageUrl": "https://...",
+          "color": "#F7931A",
+          "priceUsd": "67287.395",
+          "percentChange": { "hour": -0.45, "day": -2.34, "week": 5.12, "month": 12.5, "year": 85.3 },
+          "volume24hUsd": "28450000000",
+          "marketCapUsd": "1345000000000",
+          "sparklineDay": [65000, 65200, ..., 67287],
+          "isTradable": true, "isDex": false, "isWallet": true, "rank": 1
+        }
+      ],
+      "totalAssets": 383, "page": 1, "pageSize": 10
+    },
+    "marketHealth": {
+      "marketCap": { "value": "2.45T", "percentChange": 1.2, "chart": [...] },
+      "tradingVolume": { "value": "89.5B", "percentChange": -3.1, "chart": [...] },
+      "btcDominance": { "value": "54.2%", "percentChange": 0.3, "chart": [...] },
+      "buySellRatio": { "value": 1.15, "chart": [...] }
+    },
+    "topGainers": [
+      { "id": "solana", "symbol": "SOL", "name": "Solana", "percentChangeDay": 18.45 }
+    ],
+    "featuredAssets": {
+      "btc": { "marketCap": "1.34T", "volume24h": "28.4B" },
+      "eth": { "marketCap": "420B", "volume24h": "15.2B" }
+    },
+    "updatedAt": "2026-03-07T12:00:32Z"
+  }
+}</div>
+
+  <h3 class="sub-head-sm">Filter &amp; Sort Variables</h3>
+  <table class="scale-table">
+    <tr><th>Variable</th><th>Values</th><th>Description</th></tr>
+    <tr><td>filter</td><td>LISTED (default), GAINERS, LOSERS, TRENDING, NEW, DEFI, LAYER1</td><td>Controls <em>which</em> assets appear</td></tr>
+    <tr><td>sort</td><td>RANK (default), PRICE, MARKET_CAP, VOLUME, PERCENT_CHANGE</td><td>Controls <em>ordering</em></td></tr>
+    <tr><td>order</td><td>ASC (default), DESC</td><td>Sort direction</td></tr>
+  </table>
+
+  <div class="note-card">
+    <div class="note-label">Design Note</div>
+    <div class="note-body">Each filter+sort+page combination maps to a <strong>separate CDN cache key</strong> (via the persisted query URL). Behind the CDN, each GraphQL resolver reads from its own pre-computed Redis key: <code>asset_list:gainers:pct_desc:page:1</code> for assets, <code>market_health</code> for market stats, <code>top_gainers</code> for top movers. No on-demand sorting at request time.</div>
+  </div>
+
+  <div class="note-card">
+    <div class="note-label">Pre-Computed Pages</div>
+    <div class="note-body">Total number of pre-computed asset list pages: ~7 filters &times; ~5 sort options &times; ~40 pages each &asymp; <strong>~1,400 Redis keys</strong>. Market health, top gainers, and featured assets are stored in <strong>their own Redis keys</strong> (not duplicated across 1,400 page blobs). Prices are <strong>decimal strings</strong> (e.g., <code>"67287.395"</code>), matching Coinbase's production API. Percent changes span <strong>5 time periods</strong> (hour, day, week, month, year).</div>
+  </div>
+
+  <!-- Why GraphQL -->
+  <h3 class="sub-head">Why GraphQL for the Explore Page?</h3>
+
+  <table class="scale-table">
+    <tr><th>Concern</th><th>REST (composite endpoint)</th><th>GraphQL (persisted queries)</th></tr>
+    <tr><td>Resource model</td><td>Anti-pattern: <code>/v1/assets</code> returns <code>market_health</code>, <code>top_gainers</code> &mdash; unrelated to &ldquo;assets&rdquo;</td><td>Clean: each field is a separate resolver, composite nature is explicit</td></tr>
+    <tr><td>CDN caching</td><td>Trivial (URL-based)</td><td>Equally trivial with persisted queries (hash-based URL)</td></tr>
+    <tr><td>Pagination waste</td><td>Page 2 re-downloads identical market_health, top_gainers</td><td>Client can omit unchanged sections from page 2+ queries</td></tr>
+    <tr><td>Client flexibility</td><td>Fixed response; mobile/web get same payload</td><td>Mobile can skip sparklines; web gets everything</td></tr>
+    <tr><td>Schema evolution</td><td>Add fields = break clients or version API</td><td>Add fields = no breakage (clients request only what they use)</td></tr>
+  </table>
+
+  <p class="body-text">For simple resource endpoints (search, individual asset detail), REST remains simpler and more appropriate.</p>
+
+  <!-- REST Endpoints -->
+  <h3 class="sub-head">REST API (Simple Resource Endpoints)</h3>
+
+  <p class="body-text">For simple resource endpoints &mdash; search, individual asset detail &mdash; REST is simpler and more appropriate than GraphQL. These are single-resource lookups with a fixed response shape and trivial CDN caching via URL.</p>
 
   <!-- Search -->
   <h3 class="sub-head">Search Assets</h3>
@@ -742,8 +797,8 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   </div>
   <div class="code-block">{
   "results": [
-    { "id": "ethereum", "symbol": "ETH", "name": "Ethereum", "price_usd": 345621, "rank": 2 },
-    { "id": "ethereum-classic", "symbol": "ETC", "name": "Ethereum Classic", "price_usd": 2543, "rank": 45 }
+    { "id": "ethereum", "symbol": "ETH", "name": "Ethereum", "price_usd": "3456.21", "rank": 2 },
+    { "id": "ethereum-classic", "symbol": "ETC", "name": "Ethereum Classic", "price_usd": "25.43", "rank": 45 }
   ]
 }</div>
 
@@ -765,19 +820,20 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   "symbol": "BTC",
   "name": "Bitcoin",
   "description": "...",
-  "price_usd": 6834521,
-  "price_change_24h_pct": -234,
-  "price_change_7d_pct": 512,
-  "volume_24h_usd": 2845000000,
-  "market_cap_usd": 134500000000,
-  "circulating_supply": 1960000000000000,
-  "max_supply": 2100000000000000,
-  "all_time_high_usd": 7384200,
+  "price_usd": "68345.21",
+  "percent_change": {
+    "hour": -0.45, "day": -2.34, "week": 5.12, "month": 12.5, "year": 85.3
+  },
+  "volume_24h_usd": "28450000000",
+  "market_cap_usd": "1345000000000",
+  "circulating_supply": "19600000",
+  "max_supply": "21000000",
+  "all_time_high_usd": "73842.00",
   "chart": {
     "period": "7d",
     "interval": "1h",
     "candles": [
-      { "t": 1709600000, "o": 6780000, "h": 6850000, "l": 6750000, "c": 6810000, "v": 120000000 }
+      { "t": 1709600000, "o": "67800.00", "h": "68500.00", "l": "67500.00", "c": "68100.00", "v": "1200000000" }
     ]
   },
   "updated_at": "2026-03-07T12:00:32Z"
@@ -807,7 +863,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
 
   <div class="note-card">
     <div class="note-label">Trending Note</div>
-    <div class="note-body">Trending lists are pre-computed every 60 seconds and cached at CDN with 60-second TTL. Lists available: <code>top_gainers</code>, <code>top_losers</code>, <code>trending</code>, <code>highest_volume</code>, <code>new_listings</code>. In Coinbase's actual API, top gainers are embedded in the main explore query response rather than as a separate endpoint &mdash; this reduces round trips.</div>
+    <div class="note-body">This REST endpoint exists for <strong>non-explore-page consumers</strong> (push notifications, email digests, third-party API clients). The explore page itself gets <code>topGainers</code> as part of the GraphQL query. Trending lists are pre-computed every 60 seconds and cached at CDN with 60-second TTL. Lists available: <code>top_gainers</code>, <code>top_losers</code>, <code>trending</code>, <code>highest_volume</code>, <code>new_listings</code>.</div>
   </div>
 
   <!-- WebSocket -->
@@ -927,7 +983,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
                       └──────┬─────────────────────┬───────────────┘
                              │                     │
                 ┌────────────▼──────┐    ┌─────────▼──────────────┐
-                │   REST API Fleet  │    │  WebSocket Gateway      │
+                │  API Fleet        │    │  WebSocket Gateway      │
                 │   (stateless)     │    │  Fleet                  │
                 │                   │    │  (detail page only)     │
                 │ • List assets     │    │                         │
@@ -989,7 +1045,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
         <span class="comp-name">Redis Cluster</span>
       </div>
       <div class="comp-role">PRIMARY READ STORE</div>
-      <div class="comp-detail">Stores pre-computed responses for every API endpoint so the REST API is a simple key lookup. Pre-built JSON responses, latest prices, sparkline data, trending lists. Cache hit rate &gt; 99%.</div>
+      <div class="comp-detail">Stores pre-computed data for every GraphQL resolver and REST endpoint. Asset list pages, market health, top gainers, featured assets, latest prices, sparkline data. Each resolver is a single Redis GET. Cache hit rate &gt; 99%.</div>
     </div>
     <div class="comp">
       <div class="comp-top">
@@ -1002,7 +1058,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
     <div class="comp">
       <div class="comp-top">
         <span class="comp-icon">&#128421;</span>
-        <span class="comp-name">REST API Fleet</span>
+        <span class="comp-name">API Fleet (GraphQL + REST)</span>
       </div>
       <div class="comp-role">STATELESS HTTP</div>
       <div class="comp-detail">All reads go to Redis (cache hit rate &gt; 99%). Cache misses fall through to TimescaleDB for chart data. CDN absorbs 70%+ of list page traffic before reaching the API fleet.</div>
@@ -1080,7 +1136,7 @@ section{margin-bottom:64px;scroll-margin-top:60px;}
   &rarr; Compute market health stats (total market cap, volume, BTC dominance, buy/sell ratio)
   &rarr; For EACH filter+sort combination:
       &rarr; Filter + sort the assets accordingly
-      &rarr; Write pre-built JSON responses (including market_health, top_gainers, btc/eth headers):
+      &rarr; Write pre-built asset list pages (assets only):
           asset_list:{filter}:{sort}:{order}:page:1 ... page:N
 
 Every 5 minutes:
@@ -1091,7 +1147,7 @@ Every 5 minutes:
 Every 60 seconds:
   &rarr; Recompute trending scores and top gainers list</div>
 
-  <p class="body-text">The REST API for <code>GET /v1/assets?filter=gainers&amp;sort=percent_change&amp;order=desc&amp;page=1</code> is literally:</p>
+  <p class="body-text">Each GraphQL resolver is a single Redis GET. For example, the <code>assets</code> resolver for filter=gainers:</p>
 
   <div class="code-block">return redis.get("asset_list:gainers:pct_desc:page:1")</div>
 
@@ -1122,7 +1178,7 @@ Every 60 seconds:
        │
        └── Cache MISS
            &rarr; Forward to API Gateway
-           &rarr; REST API does Redis GET("asset_list:mcap:page:1")
+           &rarr; GraphQL resolvers: Redis GET per field (assets, marketHealth, etc.)
            &rarr; Return response, CDN caches it
 
   After 60 seconds, client JS polls the same endpoint
@@ -1486,9 +1542,11 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
   <h3 class="sub-head-sm">Redis Cluster (Primary Read Store)</h3>
   <table class="scale-table">
     <tr><th>Key Pattern</th><th>Value</th><th>TTL</th><th>Update Frequency</th></tr>
-    <tr><td>asset_list:{filter}:{sort}:{order}:page:{n}</td><td>Pre-built JSON response (includes market health, top gainers, btc/eth headers)</td><td>60s</td><td>Every 10-30s</td></tr>
+    <tr><td>asset_list:{filter}:{sort}:{order}:page:{n}</td><td>Pre-built asset list page (assets only &mdash; no market health or top gainers)</td><td>60s</td><td>Every 10-30s</td></tr>
     <tr><td>price:{asset_id}</td><td>Latest price + percent changes (5 periods)</td><td>60s</td><td>Every 1-5s</td></tr>
     <tr><td>market_health</td><td>Aggregate market stats (market cap, volume, BTC dominance, buy/sell ratio + charts)</td><td>60s</td><td>Every 30s</td></tr>
+    <tr><td>top_gainers</td><td>Pre-computed top gainers list (top 10 by 24h % change)</td><td>60s</td><td>Every 60s</td></tr>
+    <tr><td>featured_assets</td><td>BTC + ETH summary (market cap, 24h volume)</td><td>60s</td><td>Every 30s</td></tr>
     <tr><td>sparkline:{asset_id}:day</td><td>Price data points for sparkline chart</td><td>10min</td><td>Every 5min</td></tr>
     <tr><td>asset_detail:{asset_id}</td><td>Full asset metadata + stats + color + platform flags</td><td>5min</td><td>Every 5min</td></tr>
     <tr><td>search_index</td><td>Sorted set for search</td><td>1h</td><td>On asset catalog change</td></tr>
@@ -1614,7 +1672,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
   <table class="scale-table">
     <tr><th>Component</th><th>Scale</th><th>Architecture</th></tr>
     <tr><td>CDN</td><td>Absorbs 95%+ of list page traffic</td><td>Global edge network</td></tr>
-    <tr><td>REST API</td><td>~50K QPS at origin (after CDN)</td><td>10-20 stateless instances</td></tr>
+    <tr><td>API Fleet (GraphQL + REST)</td><td>~50K QPS at origin (after CDN)</td><td>10-20 stateless instances</td></tr>
     <tr><td>WebSocket Gateway</td><td>200K-500K concurrent connections</td><td>5-10 instances</td></tr>
     <tr><td>Redis Cluster</td><td>~5K-50K ops/sec (after CDN)</td><td>6 nodes (3 primaries)</td></tr>
     <tr><td>Redis Pub/Sub</td><td>~500-1,000 msgs/sec (lazy emit)</td><td>Same Redis cluster</td></tr>
@@ -1635,7 +1693,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
     │ US-EAST │        │ EU-WEST │        │ AP-EAST │
     │         │        │         │        │         │
     │ CDN PoP │        │ CDN PoP │        │ CDN PoP │
-    │ REST API│        │ REST API│        │ REST API│
+    │ API     │        │ API     │        │ API     │
     │ WS GW   │        │ WS GW   │        │ WS GW   │
     │ Redis   │        │ Redis   │        │ Redis   │
     └────┬────┘        └────┬────┘        └────┬────┘
@@ -1659,7 +1717,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
 
   <ol class="step-list">
     <li><strong>Ingestion is centralized</strong> in one primary region (US-EAST). Exchange feed adapters and Price Aggregation Service run here. Avoids duplicate exchange connections and price divergence.</li>
-    <li><strong>Read layer is replicated</strong> to all regions. Price Aggregation writes to US-EAST Redis, which replicates to EU-WEST and AP-EAST. Each region's CDN and REST API read from local Redis.</li>
+    <li><strong>Read layer is replicated</strong> to all regions. Price Aggregation writes to US-EAST Redis, which replicates to EU-WEST and AP-EAST. Each region's CDN and API fleet read from local Redis.</li>
     <li><strong>Cross-region replication latency</strong>: ~50-100ms (US &rarr; EU), ~150-200ms (US &rarr; APAC). APAC users see prices ~200ms behind &mdash; imperceptible for a list page that refreshes every 30-60 seconds.</li>
   </ol>
 
@@ -1694,12 +1752,12 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
     <div class="summary-card">
       <div class="sc-num">02</div>
       <div class="sc-title">Pre-Computation Over On-Demand Calculation</div>
-      <div class="sc-desc">Sorted list pages, trending lists, sparklines, and market health stats are all pre-built by the aggregation service and stored as complete JSON responses in Redis. The REST API is a single Redis GET.</div>
+      <div class="sc-desc">Sorted list pages, trending lists, sparklines, and market health stats are all pre-built by the aggregation service and stored in Redis. Each GraphQL resolver is a single Redis GET.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">03</div>
-      <div class="sc-title">Single Response = Entire Page</div>
-      <div class="sc-desc">A single API call returns everything the explore page needs: asset list, market health stats, BTC/ETH headers, top gainers. Minimizes round trips.</div>
+      <div class="sc-title">GraphQL Composite Query</div>
+      <div class="sc-desc">The explore page uses GraphQL with persisted queries to compose assets + market health + top gainers + featured assets in a single CDN-cacheable request. Each resolver maps to its own Redis key &mdash; no data duplication across page blobs.</div>
     </div>
     <div class="summary-card">
       <div class="sc-num">04</div>
@@ -1729,7 +1787,7 @@ GROUP BY asset_id, time_bucket('1 hour', bucket_time);</div>
     <div class="summary-card">
       <div class="sc-num">09</div>
       <div class="sc-title">Simplicity as a Feature</div>
-      <div class="sc-desc">~400 assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). List page doesn't need WebSocket (CDN + polling). REST over GraphQL because URL-based CDN caching is trivial. The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
+      <div class="sc-desc">GraphQL with persisted queries for the composite explore page (CDN-cacheable via hash URLs). REST for simple resource endpoints. ~400 assets don't need Elasticsearch (use a trie). ~576K candle rows/day don't need sharding (single TimescaleDB). List page doesn't need WebSocket (CDN + polling). The hardest scaling problem is CDN cache management, not real-time fan-out.</div>
     </div>
   </div>
 </section>
